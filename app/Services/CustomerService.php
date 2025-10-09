@@ -45,8 +45,8 @@ class CustomerService implements CustomerServiceInterface
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'phone' => $data['phone'],
-                'address' => $data['address'],
-                'notes' => $data['notes'],
+                'address' => $data['address'] ?? null,
+                'notes' => $data['notes'] ?? null,
             ]);
 
             return $customer;
