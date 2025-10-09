@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DocumentationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,10 +17,7 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', function () {
-    return response()->json([
-        'success' => true,
-        'message' => 'Installment Manager API',
-        'version' => '1.0.0',
-        'documentation' => url('/api/documentation'),
-    ]);
+    return redirect('/documentation');
 });
+
+Route::get('/documentation', [DocumentationController::class, 'index'])->name('documentation');
