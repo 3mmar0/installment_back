@@ -18,51 +18,49 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Public routes
-Route::prefix('auth')->group(function () {
-    Route::post('login', [AuthController::class, 'login']);
-    Route::post('register', [AuthController::class, 'register']);
+Route::prefix('auth')->controller(AuthController::class)->group(function () {
+    Route::post('login', 'login');
+    Route::post('register', 'register');
 });
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
     // Auth routes
-    Route::prefix('auth')->group(function () {
-        Route::post('logout', [AuthController::class, 'logout']);
-        Route::get('me', [AuthController::class, 'me']);
-        Route::post('refresh', [AuthController::class, 'refresh']);
+    Route::prefix('auth')->controller(AuthController::class)->group(function () {
+        Route::post('logout', 'logout');
+        Route::get('me', 'me');
+        Route::post('refresh', 'refresh');
     });
 
     // Dashboard
     Route::get('dashboard', [InstallmentController::class, 'dashboard']);
 
     // Customer routes
-    Route::prefix('customers')->group(function () {
-        Route::get('/', [CustomerController::class, 'index']);
-        Route::post('/', [CustomerController::class, 'store']);
-        Route::get('{id}', [CustomerController::class, 'show']);
-        Route::put('{id}', [CustomerController::class, 'update']);
-        Route::delete('{id}', [CustomerController::class, 'destroy']);
-        Route::get('{id}/stats', [CustomerController::class, 'stats']);
+    Route::controller(CustomerController::class)->group(function () {
+        Route::get('customer-list', 'index');
+        Route::post('customer-create', 'store');
+        Route::get('customer-show/{id}', 'show');
+        Route::put('customer-update/{id}', 'update');
+        Route::delete('customer-delete/{id}', 'destroy');
+        Route::get('customer-stats/{id}', 'stats');
     });
 
     // Installment routes
-    Route::prefix('installments')->group(function () {
-        Route::get('/', [InstallmentController::class, 'index']);
-        Route::post('/', [InstallmentController::class, 'store']);
-        Route::get('overdue', [InstallmentController::class, 'overdue']);
-        Route::get('due-soon', [InstallmentController::class, 'dueSoon']);
-        Route::get('{id}', [InstallmentController::class, 'show']);
+    Route::controller(InstallmentController::class)->group(function () {
+        Route::get('installment-list', 'index');
+        Route::post('installment-create', 'store');
+        Route::get('installment-overdue', 'overdue');
+        Route::get('installment-due-soon', 'dueSoon');
+        Route::get('installment-show/{id}', 'show');
+        Route::post('installment-item-pay/{item}', 'markItemPaid');
     });
 
-    // Installment item routes
-    Route::post('installment-items/{item}/pay', [InstallmentController::class, 'markItemPaid']);
-
-    // Owner only routes
-    Route::middleware('owner')->prefix('users')->group(function () {
-        Route::get('/', [UserController::class, 'index']);
-        Route::post('/', [UserController::class, 'store']);
-        Route::get('{id}', [UserController::class, 'show']);
-        Route::put('{id}', [UserController::class, 'update']);
-        Route::delete('{id}', [UserController::class, 'destroy']);
+    // User routes (Owner only)
+    Route::middleware('role:owner')->controller(UserController::class)->group(function () {
+        Route::get('user-list', 'index');
+        Route::post('user-create', 'store');
+        Route::get('user-show/{id}', 'show');
+        Route::put('user-update/{id}', 'update');
+        Route::delete('user-delete/{id}', 'destroy');
     });
 });

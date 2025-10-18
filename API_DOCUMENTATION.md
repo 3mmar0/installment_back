@@ -128,7 +128,7 @@ Authorization: Bearer {token}
 ### List Customers
 
 ```http
-GET /api/customers
+GET /api/customer-list
 Authorization: Bearer {token}
 ```
 
@@ -160,7 +160,7 @@ Authorization: Bearer {token}
 ### Create Customer
 
 ```http
-POST /api/customers
+POST /api/customer-create
 Authorization: Bearer {token}
 Content-Type: application/json
 
@@ -176,14 +176,14 @@ Content-Type: application/json
 ### Get Customer
 
 ```http
-GET /api/customers/{id}
+GET /api/customer-show/{id}
 Authorization: Bearer {token}
 ```
 
 ### Update Customer
 
 ```http
-PUT /api/customers/{id}
+PUT /api/customer-update/{id}
 Authorization: Bearer {token}
 Content-Type: application/json
 
@@ -196,14 +196,14 @@ Content-Type: application/json
 ### Delete Customer
 
 ```http
-DELETE /api/customers/{id}
+DELETE /api/customer-delete/{id}
 Authorization: Bearer {token}
 ```
 
 ### Get Customer Statistics
 
 ```http
-GET /api/customers/{id}/stats
+GET /api/customer-stats/{id}
 Authorization: Bearer {token}
 ```
 
@@ -227,21 +227,24 @@ Authorization: Bearer {token}
 ### List Installments
 
 ```http
-GET /api/installments
+GET /api/installment-list
 Authorization: Bearer {token}
 ```
 
 ### Create Installment
 
 ```http
-POST /api/installments
+POST /api/installment-create
 Authorization: Bearer {token}
 Content-Type: application/json
 
 {
   "customer_id": 1,
   "total_amount": 1200.00,
-  "products": "Laptop, Mouse, Keyboard",
+  "products": [
+    {"name": "Laptop", "qty": 1, "price": 1000},
+    {"name": "Mouse", "qty": 1, "price": 200}
+  ],
   "start_date": "2024-01-01",
   "months": 12,
   "notes": "Monthly payment plan"
@@ -279,14 +282,14 @@ Content-Type: application/json
 ### Get Installment
 
 ```http
-GET /api/installments/{id}
+GET /api/installment-show/{id}
 Authorization: Bearer {token}
 ```
 
 ### Mark Installment Item as Paid
 
 ```http
-POST /api/installment-items/{item_id}/pay
+POST /api/installment-item-pay/{item}
 Authorization: Bearer {token}
 Content-Type: application/json
 
@@ -299,14 +302,14 @@ Content-Type: application/json
 ### Get Overdue Items
 
 ```http
-GET /api/installments/overdue
+GET /api/installment-overdue
 Authorization: Bearer {token}
 ```
 
 ### Get Due Soon Items
 
 ```http
-GET /api/installments/due-soon
+GET /api/installment-due-soon
 Authorization: Bearer {token}
 ```
 
@@ -340,14 +343,14 @@ Authorization: Bearer {token}
 ### List Users
 
 ```http
-GET /api/users
+GET /api/user-list
 Authorization: Bearer {token}
 ```
 
 ### Create User
 
 ```http
-POST /api/users
+POST /api/user-create
 Authorization: Bearer {token}
 Content-Type: application/json
 
@@ -362,14 +365,14 @@ Content-Type: application/json
 ### Get User
 
 ```http
-GET /api/users/{id}
+GET /api/user-show/{id}
 Authorization: Bearer {token}
 ```
 
 ### Update User
 
 ```http
-PUT /api/users/{id}
+PUT /api/user-update/{id}
 Authorization: Bearer {token}
 Content-Type: application/json
 
@@ -382,18 +385,19 @@ Content-Type: application/json
 ### Delete User
 
 ```http
-DELETE /api/users/{id}
+DELETE /api/user-delete/{id}
 Authorization: Bearer {token}
 ```
 
 ## Error Responses
 
-All errors follow a consistent format:
+All errors follow a consistent format with standardized error codes:
 
 ```json
 {
     "success": false,
     "message": "Error message",
+    "error_code": "AUTH_001",
     "errors": {
         "field": ["Error details"]
     }
@@ -410,6 +414,124 @@ All errors follow a consistent format:
 -   `404` - Not Found
 -   `422` - Validation Error
 -   `500` - Server Error
+
+### Error Code Categories
+
+The API uses a comprehensive error code system organized by functionality:
+
+#### Authentication & Authorization (AUTH\_\*)
+
+-   `AUTH_001` - Invalid Credentials
+-   `AUTH_002` - Token Expired
+-   `AUTH_003` - Token Invalid
+-   `AUTH_004` - Access Denied
+-   `AUTH_005` - Insufficient Permissions
+-   `AUTH_006` - Account Disabled
+-   `AUTH_007` - Email Not Verified
+
+#### Validation Errors (VAL\_\*)
+
+-   `VAL_001` - Validation Failed
+-   `VAL_002` - Required Field Missing
+-   `VAL_003` - Invalid Email Format
+-   `VAL_004` - Password Too Weak
+-   `VAL_005` - Invalid Date Format
+-   `VAL_006` - Invalid Numeric Value
+-   `VAL_007` - Value Out Of Range
+-   `VAL_008` - Duplicate Entry
+
+#### Customer Management (CUST\_\*)
+
+-   `CUST_001` - Customer Not Found
+-   `CUST_002` - Customer Already Exists
+-   `CUST_003` - Customer Update Failed
+-   `CUST_004` - Customer Delete Failed
+-   `CUST_005` - Customer Access Denied
+
+#### Installment Management (INST\_\*)
+
+-   `INST_001` - Installment Not Found
+-   `INST_002` - Installment Creation Failed
+-   `INST_003` - Installment Update Failed
+-   `INST_004` - Installment Delete Failed
+-   `INST_005` - Installment Access Denied
+-   `INST_006` - Invalid Installment Amount
+-   `INST_007` - Invalid Installment Period
+-   `INST_008` - Installment Already Completed
+-   `INST_009` - Installment Item Not Found
+-   `INST_010` - Installment Item Already Paid
+-   `INST_011` - Payment Amount Mismatch
+-   `INST_012` - Payment Date Invalid
+
+#### User Management (USER\_\*)
+
+-   `USER_001` - User Not Found
+-   `USER_002` - User Already Exists
+-   `USER_003` - User Creation Failed
+-   `USER_004` - User Update Failed
+-   `USER_005` - User Delete Failed
+-   `USER_006` - User Access Denied
+-   `USER_007` - Invalid User Role
+
+#### Database Errors (DB\_\*)
+
+-   `DB_001` - Database Connection Failed
+-   `DB_002` - Database Query Failed
+-   `DB_003` - Database Transaction Failed
+-   `DB_004` - Database Constraint Violation
+
+#### Business Logic (BIZ\_\*)
+
+-   `BIZ_001` - Business Rule Violation
+-   `BIZ_002` - Insufficient Funds
+-   `BIZ_003` - Operation Not Allowed
+-   `BIZ_004` - Resource In Use
+-   `BIZ_005` - Invalid Operation
+
+#### System Errors (SYS\_\*)
+
+-   `SYS_001` - System Maintenance
+-   `SYS_002` - Configuration Error
+-   `SYS_003` - Service Unavailable
+
+### Error Response Examples
+
+#### Authentication Error
+
+```json
+{
+    "success": false,
+    "message": "Invalid credentials",
+    "error_code": "AUTH_001",
+    "status_code": 401
+}
+```
+
+#### Validation Error
+
+```json
+{
+    "success": false,
+    "message": "Validation failed",
+    "error_code": "VAL_001",
+    "status_code": 422,
+    "errors": {
+        "email": ["The email field is required."],
+        "password": ["The password must be at least 8 characters."]
+    }
+}
+```
+
+#### Business Logic Error
+
+```json
+{
+    "success": false,
+    "message": "Installment item already paid",
+    "error_code": "INST_010",
+    "status_code": 400
+}
+```
 
 ## Rate Limiting
 

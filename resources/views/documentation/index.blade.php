@@ -486,7 +486,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method get">GET</span>
-                            <span class="endpoint-url">/api/customers</span>
+                            <span class="endpoint-url">/api/customer-list</span>
                         </div>
                         <p><strong>List all customers (paginated)</strong></p>
                     </div>
@@ -494,10 +494,10 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method post">POST</span>
-                            <span class="endpoint-url">/api/customers</span>
+                            <span class="endpoint-url">/api/customer-create</span>
                         </div>
                         <p><strong>Create a new customer</strong></p>
-                        <div class="code-block">POST /api/customers
+                        <div class="code-block">POST /api/customer-create
                             Authorization: Bearer {token}
                             Content-Type: application/json
 
@@ -513,7 +513,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method get">GET</span>
-                            <span class="endpoint-url">/api/customers/{id}</span>
+                            <span class="endpoint-url">/api/customer-show/{id}</span>
                         </div>
                         <p><strong>Get customer details</strong></p>
                     </div>
@@ -521,7 +521,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method put">PUT</span>
-                            <span class="endpoint-url">/api/customers/{id}</span>
+                            <span class="endpoint-url">/api/customer-update/{id}</span>
                         </div>
                         <p><strong>Update customer</strong></p>
                     </div>
@@ -529,7 +529,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method delete">DELETE</span>
-                            <span class="endpoint-url">/api/customers/{id}</span>
+                            <span class="endpoint-url">/api/customer-delete/{id}</span>
                         </div>
                         <p><strong>Delete customer</strong></p>
                     </div>
@@ -537,7 +537,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method get">GET</span>
-                            <span class="endpoint-url">/api/customers/{id}/stats</span>
+                            <span class="endpoint-url">/api/customer-stats/{id}</span>
                         </div>
                         <p><strong>Get customer statistics</strong></p>
                     </div>
@@ -550,7 +550,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method get">GET</span>
-                            <span class="endpoint-url">/api/installments</span>
+                            <span class="endpoint-url">/api/installment-list</span>
                         </div>
                         <p><strong>List all installments (paginated)</strong></p>
                     </div>
@@ -558,10 +558,10 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method post">POST</span>
-                            <span class="endpoint-url">/api/installments</span>
+                            <span class="endpoint-url">/api/installment-create</span>
                         </div>
                         <p><strong>Create a new installment plan</strong></p>
-                        <div class="code-block">POST /api/installments
+                        <div class="code-block">POST /api/installment-create
                             Authorization: Bearer {token}
                             Content-Type: application/json
 
@@ -581,7 +581,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method get">GET</span>
-                            <span class="endpoint-url">/api/installments/{id}</span>
+                            <span class="endpoint-url">/api/installment-show/{id}</span>
                         </div>
                         <p><strong>Get installment details</strong></p>
                     </div>
@@ -589,10 +589,10 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method post">POST</span>
-                            <span class="endpoint-url">/api/installment-items/{item}/pay</span>
+                            <span class="endpoint-url">/api/installment-item-pay/{item}</span>
                         </div>
                         <p><strong>Mark installment item as paid</strong></p>
-                        <div class="code-block">POST /api/installment-items/{item_id}/pay
+                        <div class="code-block">POST /api/installment-item-pay/{item}
                             Authorization: Bearer {token}
                             Content-Type: application/json
 
@@ -605,7 +605,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method get">GET</span>
-                            <span class="endpoint-url">/api/installments/overdue</span>
+                            <span class="endpoint-url">/api/installment-overdue</span>
                         </div>
                         <p><strong>Get overdue installment items</strong></p>
                     </div>
@@ -613,7 +613,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method get">GET</span>
-                            <span class="endpoint-url">/api/installments/due-soon</span>
+                            <span class="endpoint-url">/api/installment-due-soon</span>
                         </div>
                         <p><strong>Get items due soon (within 7 days)</strong></p>
                     </div>
@@ -650,7 +650,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method get">GET</span>
-                            <span class="endpoint-url">/api/users</span>
+                            <span class="endpoint-url">/api/user-list</span>
                         </div>
                         <p><strong>List all users</strong></p>
                     </div>
@@ -658,7 +658,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method post">POST</span>
-                            <span class="endpoint-url">/api/users</span>
+                            <span class="endpoint-url">/api/user-create</span>
                         </div>
                         <p><strong>Create a new user</strong></p>
                     </div>
@@ -666,7 +666,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method get">GET</span>
-                            <span class="endpoint-url">/api/users/{id}</span>
+                            <span class="endpoint-url">/api/user-show/{id}</span>
                         </div>
                         <p><strong>Get user details</strong></p>
                     </div>
@@ -674,7 +674,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method put">PUT</span>
-                            <span class="endpoint-url">/api/users/{id}</span>
+                            <span class="endpoint-url">/api/user-update/{id}</span>
                         </div>
                         <p><strong>Update user</strong></p>
                     </div>
@@ -682,7 +682,7 @@
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method delete">DELETE</span>
-                            <span class="endpoint-url">/api/users/{id}</span>
+                            <span class="endpoint-url">/api/user-delete/{id}</span>
                         </div>
                         <p><strong>Delete user</strong></p>
                     </div>
@@ -691,10 +691,11 @@
                 <!-- Error Handling Section -->
                 <section id="errors" class="section">
                     <h2>Error Handling</h2>
-                    <p>All errors follow a consistent JSON format:</p>
+                    <p>All errors follow a consistent JSON format with standardized error codes:</p>
                     <div class="code-block json">{
                         "success": false,
                         "message": "Error message",
+                        "error_code": "AUTH_001",
                         "errors": {
                         "field": ["Error details"]
                         }
@@ -711,6 +712,106 @@
                         <div class="status-code error">422 - Validation Error</div>
                         <div class="status-code error">500 - Server Error</div>
                     </div>
+
+                    <h3>Error Code Categories</h3>
+                    <p>The API uses a comprehensive error code system organized by functionality:</p>
+
+                    <h4>Authentication & Authorization (AUTH_*)</h4>
+                    <div class="code-block">AUTH_001 - Invalid Credentials
+                        AUTH_002 - Token Expired
+                        AUTH_003 - Token Invalid
+                        AUTH_004 - Access Denied
+                        AUTH_005 - Insufficient Permissions
+                        AUTH_006 - Account Disabled
+                        AUTH_007 - Email Not Verified</div>
+
+                    <h4>Validation Errors (VAL_*)</h4>
+                    <div class="code-block">VAL_001 - Validation Failed
+                        VAL_002 - Required Field Missing
+                        VAL_003 - Invalid Email Format
+                        VAL_004 - Password Too Weak
+                        VAL_005 - Invalid Date Format
+                        VAL_006 - Invalid Numeric Value
+                        VAL_007 - Value Out Of Range
+                        VAL_008 - Duplicate Entry</div>
+
+                    <h4>Customer Management (CUST_*)</h4>
+                    <div class="code-block">CUST_001 - Customer Not Found
+                        CUST_002 - Customer Already Exists
+                        CUST_003 - Customer Update Failed
+                        CUST_004 - Customer Delete Failed
+                        CUST_005 - Customer Access Denied</div>
+
+                    <h4>Installment Management (INST_*)</h4>
+                    <div class="code-block">INST_001 - Installment Not Found
+                        INST_002 - Installment Creation Failed
+                        INST_003 - Installment Update Failed
+                        INST_004 - Installment Delete Failed
+                        INST_005 - Installment Access Denied
+                        INST_006 - Invalid Installment Amount
+                        INST_007 - Invalid Installment Period
+                        INST_008 - Installment Already Completed
+                        INST_009 - Installment Item Not Found
+                        INST_010 - Installment Item Already Paid
+                        INST_011 - Payment Amount Mismatch
+                        INST_012 - Payment Date Invalid</div>
+
+                    <h4>User Management (USER_*)</h4>
+                    <div class="code-block">USER_001 - User Not Found
+                        USER_002 - User Already Exists
+                        USER_003 - User Creation Failed
+                        USER_004 - User Update Failed
+                        USER_005 - User Delete Failed
+                        USER_006 - User Access Denied
+                        USER_007 - Invalid User Role</div>
+
+                    <h4>Database Errors (DB_*)</h4>
+                    <div class="code-block">DB_001 - Database Connection Failed
+                        DB_002 - Database Query Failed
+                        DB_003 - Database Transaction Failed
+                        DB_004 - Database Constraint Violation</div>
+
+                    <h4>Business Logic (BIZ_*)</h4>
+                    <div class="code-block">BIZ_001 - Business Rule Violation
+                        BIZ_002 - Insufficient Funds
+                        BIZ_003 - Operation Not Allowed
+                        BIZ_004 - Resource In Use
+                        BIZ_005 - Invalid Operation</div>
+
+                    <h4>System Errors (SYS_*)</h4>
+                    <div class="code-block">SYS_001 - System Maintenance
+                        SYS_002 - Configuration Error
+                        SYS_003 - Service Unavailable</div>
+
+                    <h3>Error Response Examples</h3>
+
+                    <h4>Authentication Error</h4>
+                    <div class="code-block json">{
+                        "success": false,
+                        "message": "Invalid credentials",
+                        "error_code": "AUTH_001",
+                        "status_code": 401
+                        }</div>
+
+                    <h4>Validation Error</h4>
+                    <div class="code-block json">{
+                        "success": false,
+                        "message": "Validation failed",
+                        "error_code": "VAL_001",
+                        "status_code": 422,
+                        "errors": {
+                        "email": ["The email field is required."],
+                        "password": ["The password must be at least 8 characters."]
+                        }
+                        }</div>
+
+                    <h4>Business Logic Error</h4>
+                    <div class="code-block json">{
+                        "success": false,
+                        "message": "Installment item already paid",
+                        "error_code": "INST_010",
+                        "status_code": 400
+                        }</div>
                 </section>
 
                 <!-- Setup Section -->

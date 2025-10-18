@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use App\Enums\ErrorCodes;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -26,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (AuthenticationException $e, Request $request) {
             if ($request->is('api/*')) {
                 return response()->json([
+                    'error_code' => ErrorCodes::Unauthorized->value,
                     'success' => false,
                     'message' => 'Unauthenticated',
                 ], 401);
@@ -35,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (AccessDeniedHttpException $e, Request $request) {
             if ($request->is('api/*')) {
                 return response()->json([
+                    'error_code' => ErrorCodes::Forbidden->value,
                     'success' => false,
                     'message' => $e->getMessage() ?: 'Forbidden',
                 ], 403);
@@ -44,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (NotFoundHttpException $e, Request $request) {
             if ($request->is('api/*')) {
                 return response()->json([
+                    'error_code' => ErrorCodes::NotFound->value,
                     'success' => false,
                     'message' => 'Resource not found',
                 ], 404);
@@ -53,6 +57,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (ValidationException $e, Request $request) {
             if ($request->is('api/*')) {
                 return response()->json([
+                    'error_code' => ErrorCodes::ValidationFailed->value,
                     'success' => false,
                     'message' => 'Validation failed',
                     'errors' => $e->errors(),
@@ -70,6 +75,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 }
 
                 return response()->json([
+                    'error_code' => ErrorCodes::InternalServerError->value,
                     'success' => false,
                     'message' => $e->getMessage() ?: 'An error occurred',
                     'error' => config('app.debug') ? [
