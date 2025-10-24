@@ -56,7 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // User routes (Owner only)
-    Route::middleware('role:owner')->controller(UserController::class)->group(function () {
+    Route::middleware('owner')->controller(UserController::class)->group(function () {
         Route::get('user-list', 'index');
         Route::post('user-create', 'store');
         Route::get('user-show/{id}', 'show');

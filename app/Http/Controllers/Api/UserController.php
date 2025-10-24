@@ -26,7 +26,7 @@ class UserController extends Controller
         $users = $this->userService->getAllUsers();
 
         return $this->successResponse(
-            UserResource::collection($users),
+            UserResource::collection($users)->response()->getData(true),
             'Users retrieved successfully'
         );
     }
