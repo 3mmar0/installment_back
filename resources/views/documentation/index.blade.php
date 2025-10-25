@@ -287,6 +287,52 @@
             margin: 15px 0;
         }
 
+        .frontend-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 30px;
+            margin: 20px 0;
+        }
+
+        .frontend-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #007bff;
+        }
+
+        .code-example {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-item {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
         @media (max-width: 968px) {
             .content {
                 grid-template-columns: 1fr;
@@ -355,6 +401,7 @@
                     <li><a href="#dashboard">Dashboard</a></li>
                     <li><a href="#users">Users</a></li>
                     <li><a href="#errors">Error Handling</a></li>
+                    <li><a href="#frontend">Frontend Integration</a></li>
                     <li><a href="#setup">Development Setup</a></li>
                 </ul>
             </aside>
@@ -628,17 +675,42 @@
                             <span class="method get">GET</span>
                             <span class="endpoint-url">/api/dashboard</span>
                         </div>
-                        <p><strong>Get dashboard analytics</strong></p>
+                        <p><strong>Get comprehensive dashboard analytics</strong></p>
                         <div class="response-example">
-                            <div class="response-label">Returns:</div>
+                            <div class="response-label">Returns detailed analytics including:</div>
                             <ul class="features">
-                                <li>Due soon count</li>
-                                <li>Overdue count</li>
-                                <li>Outstanding amount</li>
-                                <li>Collected this month</li>
-                                <li>Upcoming payments</li>
+                                <li>Summary statistics (due soon, overdue, outstanding amounts)</li>
+                                <li>Customer and installment counts</li>
+                                <li>Monthly collection trends and growth</li>
+                                <li>Detailed upcoming payments table</li>
+                                <li>Overdue payments with customer contact info</li>
+                                <li>Recent payments history</li>
+                                <li>Top customers by outstanding amount</li>
+                                <li>6-month collection trend data</li>
                             </ul>
                         </div>
+                        <div class="code-block json">{
+                            "success": true,
+                            "message": "Dashboard analytics retrieved successfully",
+                            "data": {
+                            "dueSoon": 5,
+                            "overdue": 2,
+                            "outstanding": 3500.0,
+                            "collectedThisMonth": 1200.0,
+                            "totalInstallments": 25,
+                            "activeInstallments": 18,
+                            "completedInstallments": 7,
+                            "totalCustomers": 12,
+                            "activeCustomers": 10,
+                            "collectedLastMonth": 950.0,
+                            "collectionGrowth": 26.32,
+                            "upcoming": [...],
+                            "overduePayments": [...],
+                            "recentPayments": [...],
+                            "topCustomers": [...],
+                            "monthlyTrend": [...]
+                            }
+                            }</div>
                     </div>
                 </section>
 
@@ -812,6 +884,169 @@
                         "error_code": "INST_010",
                         "status_code": 400
                         }</div>
+                </section>
+
+                <!-- Frontend Integration Section -->
+                <section id="frontend" class="section">
+                    <h2>Frontend Integration</h2>
+                    <p>Comprehensive guides for integrating with popular frontend frameworks and mobile platforms.</p>
+
+                    <div class="frontend-section">
+                        <div class="highlight">
+                            <strong>🚀 Ready-to-use code examples</strong> with complete implementations for both web and mobile development.
+                        </div>
+
+                    <h3>React Integration</h3>
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">📚</span>
+                            <span class="endpoint-url">Complete React Guide</span>
+                        </div>
+                        <p><strong>Full-featured React application with:</strong></p>
+                        <ul class="features">
+                            <li>Complete API service setup with Axios</li>
+                            <li>Authentication context and hooks</li>
+                            <li>Dashboard components with data tables</li>
+                            <li>Customer and installment management</li>
+                            <li>Error handling and loading states</li>
+                            <li>Ant Design components</li>
+                            <li>React Query for data fetching</li>
+                            <li>Responsive design</li>
+                        </ul>
+                        <div class="code-block">// Example: Dashboard Stats Component
+import React from 'react';
+import { Card, Row, Col, Statistic } from 'antd';
+
+const DashboardStats = ({ data }) => {
+  const stats = [
+    {
+      title: 'Due Soon',
+      value: data?.dueSoon || 0,
+      icon: <CalendarOutlined />,
+      color: '#1890ff',
+    },
+    // ... more stats
+  ];
+
+  return (
+    <Row gutter={[16, 16]}>
+      {stats.map((stat, index) => (
+        <Col xs={24} sm={12} lg={6} key={index}>
+          <Card>
+            <Statistic
+              title={stat.title}
+              value={stat.value}
+              prefix={stat.icon}
+              valueStyle={{ color: stat.color }}
+            />
+          </Card>
+        </Col>
+      ))}
+    </Row>
+  );
+};</div>
+                    </div>
+
+                    <h3>Flutter Integration</h3>
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">📱</span>
+                            <span class="endpoint-url">Complete Flutter Guide</span>
+                        </div>
+                        <p><strong>Full-featured Flutter mobile app with:</strong></p>
+                        <ul class="features">
+                            <li>Complete API service with Dio</li>
+                            <li>State management with Riverpod</li>
+                            <li>Dashboard screens with data tables</li>
+                            <li>Customer and installment management</li>
+                            <li>Error handling and loading states</li>
+                            <li>Material Design components</li>
+                            <li>JSON serialization with code generation</li>
+                            <li>Mobile-optimized UI</li>
+                        </ul>
+                        <div class="code-block">// Example: Dashboard Stats Card
+class DashboardStatsCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: EdgeInsets.all(16.w),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: color, size: 24.sp),
+                SizedBox(width: 8.w),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 24.sp,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}</div>
+                    </div>
+
+                    <h3>Key Features</h3>
+                    <div class="solid-principles">
+                        <div class="principle-card">
+                            <h4>📊 Rich Dashboard Data</h4>
+                            <p>Comprehensive analytics with summary stats, detailed tables, and trend data for complete business insights.</p>
+                        </div>
+                        <div class="principle-card">
+                            <h4>🔐 Complete Authentication</h4>
+                            <p>Full auth flow with login, register, logout, token management, and role-based access control.</p>
+                        </div>
+                        <div class="principle-card">
+                            <h4>📱 Mobile Ready</h4>
+                            <p>Responsive design and mobile-optimized components for both web and mobile applications.</p>
+                        </div>
+                        <div class="principle-card">
+                            <h4>⚡ Production Ready</h4>
+                            <p>Error handling, loading states, form validation, and best practices for production deployment.</p>
+                        </div>
+                    </div>
+
+                    <h3>Quick Start</h3>
+                    <div class="code-block"># React Setup
+npx create-react-app installment-manager
+cd installment-manager
+npm install axios react-query @tanstack/react-query antd
+
+# Flutter Setup
+flutter create installment_manager_app
+cd installment_manager_app
+flutter pub add dio riverpod flutter_riverpod shared_preferences</div>
+
+                        <div class="highlight">
+                            <strong>📖 Documentation:</strong> See <code>FRONTEND_INTEGRATION_REACT.md</code> and <code>FRONTEND_INTEGRATION_FLUTTER.md</code> for complete implementation guides with copy-paste ready code.
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Setup Section -->

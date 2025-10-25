@@ -326,15 +326,90 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "success": true,
-  "message": "Dashboard analytics retrieved successfully",
-  "data": {
-    "dueSoon": 5,
-    "overdue": 2,
-    "outstanding": 3500.00,
-    "collectedThisMonth": 1200.00,
-    "upcoming": [...]
-  }
+    "success": true,
+    "message": "Dashboard analytics retrieved successfully",
+    "data": {
+        "dueSoon": 5,
+        "overdue": 2,
+        "outstanding": 3500.0,
+        "collectedThisMonth": 1200.0,
+        "totalInstallments": 25,
+        "activeInstallments": 18,
+        "completedInstallments": 7,
+        "totalCustomers": 12,
+        "activeCustomers": 10,
+        "collectedLastMonth": 950.0,
+        "collectionGrowth": 26.32,
+        "upcoming": [
+            {
+                "installment_id": 1,
+                "customer_name": "John Doe",
+                "customer_email": "john@example.com",
+                "customer_phone": "+1234567890",
+                "total_amount": 1200.0,
+                "months": 12,
+                "due_date": "2024-01-15",
+                "amount": 100.0,
+                "status": "active",
+                "item_status": "pending",
+                "created_at": "2024-01-01T00:00:00.000000Z",
+                "days_until_due": 3
+            }
+        ],
+        "overduePayments": [
+            {
+                "installment_id": 2,
+                "customer_name": "Jane Smith",
+                "customer_email": "jane@example.com",
+                "customer_phone": "+0987654321",
+                "total_amount": 800.0,
+                "months": 8,
+                "due_date": "2024-01-05",
+                "amount": 100.0,
+                "status": "active",
+                "item_status": "pending",
+                "created_at": "2023-12-01T00:00:00.000000Z",
+                "days_overdue": 5
+            }
+        ],
+        "recentPayments": [
+            {
+                "installment_id": 3,
+                "customer_name": "Bob Johnson",
+                "customer_email": "bob@example.com",
+                "due_date": "2024-01-10",
+                "amount": 150.0,
+                "paid_amount": 150.0,
+                "paid_at": "2024-01-10T14:30:00.000000Z",
+                "reference": "PAY-001",
+                "days_since_paid": 2
+            }
+        ],
+        "topCustomers": [
+            {
+                "id": 1,
+                "name": "John Doe",
+                "email": "john@example.com",
+                "phone": "+1234567890",
+                "active_installments": 3,
+                "total_outstanding": 1200.0
+            }
+        ],
+        "monthlyTrend": [
+            {
+                "month": "Aug 2023",
+                "amount": 800.0,
+                "year": 2023,
+                "month_number": 8
+            },
+            {
+                "month": "Sep 2023",
+                "amount": 950.0,
+                "year": 2023,
+                "month_number": 9
+            }
+        ]
+    }
 }
 ```
 
@@ -635,6 +710,30 @@ DB_PASSWORD=
 
 SANCTUM_STATEFUL_DOMAINS=localhost,127.0.0.1
 ```
+
+## Frontend Integration Guides
+
+### React Integration
+
+For React developers, see [FRONTEND_INTEGRATION_REACT.md](./FRONTEND_INTEGRATION_REACT.md) for comprehensive examples including:
+
+-   Complete API service setup with Axios
+-   Authentication context and hooks
+-   Dashboard components with tables and charts
+-   Customer and installment management
+-   Error handling and loading states
+-   Ready-to-use components and screens
+
+### Flutter Integration
+
+For Flutter developers, see [FRONTEND_INTEGRATION_FLUTTER.md](./FRONTEND_INTEGRATION_FLUTTER.md) for mobile app development including:
+
+-   Complete API service with Dio
+-   State management with Riverpod
+-   Dashboard screens with data tables
+-   Customer and installment management
+-   Error handling and loading states
+-   Mobile-optimized UI components
 
 ## Support
 
