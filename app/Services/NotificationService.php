@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\InstallmentItem;
 use App\Models\Notification;
 use App\Models\User;
-use App\Models\InstallmentItem;
 use Illuminate\Support\Collection;
 
 class NotificationService
@@ -117,6 +117,28 @@ class NotificationService
                 'item_id' => $item->id,
                 'paid_amount' => $paidAmount,
                 'customer_name' => $customerName,
+            ]
+        );
+    }
+
+    /**
+     * Notify about installment creation.
+     */
+    public function notifyInstallmentCreated(User $user, \App\Models\Installment $installment): Notification
+    {
+        $customerName = $installment->customer->name;
+
+        return $this->create(
+            $user,
+            'installment_created',
+            "New Installment Created",
+            "New installment plan created for {$customerName} - Total: $" . number_format($installment->total_amount, 2) . " over {$installment->months} " . ($installment->months == 1 ? 'month' : 'months'),
+            [
+                'installment_id' => $installment->id,
+                'customer_id' => $installment->customer_id,
+                'customer_name' => $customerName,
+                'total_amount' => $installment->total_amount,
+                'months' => $installment->months,
             ]
         );
     }

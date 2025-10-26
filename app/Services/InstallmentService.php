@@ -71,7 +71,16 @@ class InstallmentService implements InstallmentServiceInterface
                 ]);
             }
 
-            return $installment->load(['customer', 'items']);
+            $installment->refresh()->load(['customer', 'items']);
+
+            // Send notification
+            app(NotificationService::class)->notifyInstallmentCreated($user, $installment);
+
+            // Send email notification
+            app(\App\Services\EmailNotificationService::class)
+                ->sendInstallmentCreatedNotification($installment, $user);
+
+            return $installment;
         });
     }
 

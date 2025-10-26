@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Mail\InstallmentCreated;
 use App\Mail\PaymentDueReminder;
 use App\Mail\PaymentOverdueNotice;
 use App\Mail\PaymentReceivedConfirmation;
+use App\Models\Installment;
 use App\Models\InstallmentItem;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
@@ -127,6 +129,35 @@ class EmailNotificationService
         } catch (\Exception $e) {
             Log::error('Failed to send payment received confirmation email', [
                 'item_id' => $item->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Send installment created notification to customer and owner.
+     */
+    public function sendInstallmentCreatedNotification(Installment $installment, User $user): void
+    {
+        try {
+            // Send to customer
+            Mail::to($installment->customer->email)
+                ->send(new InstallmentCreated(
+                    $installment,
+                    $installment->customer->email
+                ));
+
+            // Send to owner
+            if ($user->email) {
+                Mail::to($user->email)
+                    ->send(new InstallmentCreated(
+                        $installment,
+                        $user->email
+                    ));
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to send installment created email', [
+                'installment_id' => $installment->id,
                 'error' => $e->getMessage()
             ]);
         }
