@@ -10,6 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use App\Services\NotificationService;
 
 class InstallmentService implements InstallmentServiceInterface
 {
@@ -84,11 +85,17 @@ class InstallmentService implements InstallmentServiceInterface
             abort(403, 'Unauthorized to update this installment item');
         }
 
-        return DB::transaction(function () use ($item, $data) {
+        return DB::transaction(function () use ($item, $data, $user) {
+            $paidAmount = (float) $data['paid_amount'];
+
             $item->markPaid(
-                (float) $data['paid_amount'],
+                $paidAmount,
                 $data['reference'] ?? null
             );
+
+            // Send payment received notification
+            app(\App\Services\NotificationService::class)
+                ->notifyPaymentReceived($user, $item->refresh(), $paidAmount);
 
             // Check if all items are paid
             $installment = $item->installment;

@@ -64,4 +64,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(Installment::class);
     }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function unreadNotifications()
+    {
+        return $this->notifications()->whereNull('read_at');
+    }
 }

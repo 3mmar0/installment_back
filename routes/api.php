@@ -35,6 +35,16 @@ Route::middleware('auth:sanctum')->group(function () {
     // Dashboard
     Route::get('dashboard', [InstallmentController::class, 'dashboard']);
 
+    // Notifications
+    Route::controller(\App\Http\Controllers\Api\NotificationController::class)->group(function () {
+        Route::get('notification-list', 'index');
+        Route::get('notification-count', 'count');
+        Route::post('notification-mark-read/{id}', 'markAsRead');
+        Route::post('notification-mark-all-read', 'markAllAsRead');
+        Route::post('notification-generate', 'generate');
+        Route::delete('notification-delete/{id}', 'destroy');
+    });
+
     // Customer routes
     Route::controller(CustomerController::class)->group(function () {
         Route::get('customer-list', 'index');
