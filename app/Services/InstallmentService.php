@@ -117,23 +117,29 @@ class InstallmentService implements InstallmentServiceInterface
         $dueSoon = $baseQuery->clone()
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
             ->whereNull('installment_items.paid_at')
+            ->where('installment_items.status', '!=', 'paid')
+            ->where('installments.status', 'active')
             ->whereBetween('installment_items.due_date', [$now, $soon])
             ->count('installment_items.id');
 
         $overdue = $baseQuery->clone()
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
             ->whereNull('installment_items.paid_at')
+            ->where('installment_items.status', '!=', 'paid')
+            ->where('installments.status', 'active')
             ->where('installment_items.due_date', '<', $now)
             ->count('installment_items.id');
 
         $outstanding = $baseQuery->clone()
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
             ->whereNull('installment_items.paid_at')
+            ->where('installments.status', 'active')
             ->sum('installment_items.amount');
 
         $collectedThisMonth = $baseQuery->clone()
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
             ->whereNotNull('installment_items.paid_at')
+            ->where('installments.status', 'active')
             ->whereMonth('installment_items.paid_at', $now->month)
             ->whereYear('installment_items.paid_at', $now->year)
             ->sum('installment_items.paid_amount');
@@ -153,6 +159,7 @@ class InstallmentService implements InstallmentServiceInterface
         $collectedLastMonth = $baseQuery->clone()
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
             ->whereNotNull('installment_items.paid_at')
+            ->where('installments.status', 'active')
             ->whereMonth('installment_items.paid_at', $lastMonth->month)
             ->whereYear('installment_items.paid_at', $lastMonth->year)
             ->sum('installment_items.paid_amount');
@@ -164,6 +171,8 @@ class InstallmentService implements InstallmentServiceInterface
             ->with(['customer:id,name,email,phone'])
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
             ->whereNull('installment_items.paid_at')
+            ->where('installment_items.status', '!=', 'paid')
+            ->where('installments.status', 'active')
             ->whereBetween('installment_items.due_date', [$now, $soon])
             ->orderBy('installment_items.due_date')
             ->select(
@@ -201,6 +210,8 @@ class InstallmentService implements InstallmentServiceInterface
             ->with(['customer:id,name,email,phone'])
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
             ->whereNull('installment_items.paid_at')
+            ->where('installment_items.status', '!=', 'paid')
+            ->where('installments.status', 'active')
             ->where('installment_items.due_date', '<', $now)
             ->orderBy('installment_items.due_date')
             ->select(
@@ -238,6 +249,7 @@ class InstallmentService implements InstallmentServiceInterface
             ->with(['customer:id,name,email'])
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
             ->whereNotNull('installment_items.paid_at')
+            ->where('installments.status', 'active')
             ->orderBy('installment_items.paid_at', 'desc')
             ->select(
                 'installments.id as installment_id',
@@ -268,12 +280,13 @@ class InstallmentService implements InstallmentServiceInterface
         // Top customers by outstanding amount
         $topCustomers = $user->customers()
             ->withCount(['installments' => function ($query) {
-                $query->where('status', 'active');
+                $query->where('installments.status', 'active');
             }])
             ->withSum(['installments as total_outstanding' => function ($query) {
-                $query->where('status', 'active')
+                $query->where('installments.status', 'active')
                     ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
-                    ->whereNull('installment_items.paid_at');
+                    ->whereNull('installment_items.paid_at')
+                    ->where('installment_items.status', '!=', 'paid');
             }], 'installment_items.amount')
             ->having('total_outstanding', '>', 0)
             ->orderBy('total_outstanding', 'desc')
@@ -297,6 +310,7 @@ class InstallmentService implements InstallmentServiceInterface
             $monthlyCollection = $baseQuery->clone()
                 ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
                 ->whereNotNull('installment_items.paid_at')
+                ->where('installments.status', 'active')
                 ->whereMonth('installment_items.paid_at', $month->month)
                 ->whereYear('installment_items.paid_at', $month->year)
                 ->sum('installment_items.paid_amount');
