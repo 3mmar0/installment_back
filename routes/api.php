@@ -35,13 +35,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Dashboard
     Route::get('dashboard', [InstallmentController::class, 'dashboard']);
 
-    // Notifications
+    // Notifications & Emails
     Route::controller(\App\Http\Controllers\Api\NotificationController::class)->group(function () {
         Route::get('notification-list', 'index');
         Route::get('notification-count', 'count');
         Route::post('notification-mark-read/{id}', 'markAsRead');
         Route::post('notification-mark-all-read', 'markAllAsRead');
         Route::post('notification-generate', 'generate');
+        Route::post('notification-send-emails', 'sendReminderEmails');
         Route::delete('notification-delete/{id}', 'destroy');
     });
 

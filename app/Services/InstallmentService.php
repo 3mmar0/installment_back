@@ -94,8 +94,13 @@ class InstallmentService implements InstallmentServiceInterface
             );
 
             // Send payment received notification
+            $refreshedItem = $item->refresh();
             app(\App\Services\NotificationService::class)
-                ->notifyPaymentReceived($user, $item->refresh(), $paidAmount);
+                ->notifyPaymentReceived($user, $refreshedItem, $paidAmount);
+
+            // Send payment received email to customer and owner
+            app(\App\Services\EmailNotificationService::class)
+                ->sendPaymentReceivedConfirmation($refreshedItem, $paidAmount, $user);
 
             // Check if all items are paid
             $installment = $item->installment;

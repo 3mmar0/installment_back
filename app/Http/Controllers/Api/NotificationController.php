@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\NotificationResource;
 use App\Http\Traits\ApiResponse;
+use App\Services\EmailNotificationService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,7 +15,8 @@ class NotificationController extends Controller
     use ApiResponse;
 
     public function __construct(
-        private readonly NotificationService $notificationService
+        private readonly NotificationService $notificationService,
+        private readonly EmailNotificationService $emailNotificationService
     ) {}
 
     /**
@@ -90,5 +92,18 @@ class NotificationController extends Controller
         $request->user()->notifications()->findOrFail($id)->delete();
 
         return $this->deletedResponse('Notification deleted successfully');
+    }
+
+    /**
+     * Send payment reminder emails.
+     */
+    public function sendReminderEmails(Request $request): JsonResponse
+    {
+        $result = $this->emailNotificationService->sendAllPaymentReminders($request->user());
+
+        return $this->successResponse(
+            $result,
+            "Sent {$result['total_emails']} reminder emails successfully"
+        );
     }
 }
