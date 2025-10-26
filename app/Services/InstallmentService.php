@@ -168,8 +168,8 @@ class InstallmentService implements InstallmentServiceInterface
 
         // Detailed upcoming payments table
         $upcoming = $baseQuery->clone()
-            ->with(['customer:id,name,email,phone'])
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
+            ->join('customers', 'customers.id', '=', 'installments.customer_id')
             ->whereNull('installment_items.paid_at')
             ->where('installment_items.status', '!=', 'paid')
             ->where('installments.status', 'active')
@@ -184,16 +184,19 @@ class InstallmentService implements InstallmentServiceInterface
                 'installment_items.id as item_id',
                 'installment_items.due_date',
                 'installment_items.amount',
-                'installment_items.status as item_status'
+                'installment_items.status as item_status',
+                'customers.name as customer_name',
+                'customers.email as customer_email',
+                'customers.phone as customer_phone'
             )
             ->limit(20)
             ->get()
             ->map(function ($item) {
                 return [
                     'installment_id' => $item->installment_id,
-                    'customer_name' => $item->customer->name,
-                    'customer_email' => $item->customer->email,
-                    'customer_phone' => $item->customer->phone,
+                    'customer_name' => $item->customer_name,
+                    'customer_email' => $item->customer_email,
+                    'customer_phone' => $item->customer_phone,
                     'total_amount' => $item->total_amount,
                     'months' => $item->months,
                     'due_date' => $item->due_date,
@@ -207,8 +210,8 @@ class InstallmentService implements InstallmentServiceInterface
 
         // Overdue payments table
         $overduePayments = $baseQuery->clone()
-            ->with(['customer:id,name,email,phone'])
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
+            ->join('customers', 'customers.id', '=', 'installments.customer_id')
             ->whereNull('installment_items.paid_at')
             ->where('installment_items.status', '!=', 'paid')
             ->where('installments.status', 'active')
@@ -223,16 +226,19 @@ class InstallmentService implements InstallmentServiceInterface
                 'installment_items.id as item_id',
                 'installment_items.due_date',
                 'installment_items.amount',
-                'installment_items.status as item_status'
+                'installment_items.status as item_status',
+                'customers.name as customer_name',
+                'customers.email as customer_email',
+                'customers.phone as customer_phone'
             )
             ->limit(20)
             ->get()
             ->map(function ($item) {
                 return [
                     'installment_id' => $item->installment_id,
-                    'customer_name' => $item->customer->name,
-                    'customer_email' => $item->customer->email,
-                    'customer_phone' => $item->customer->phone,
+                    'customer_name' => $item->customer_name,
+                    'customer_email' => $item->customer_email,
+                    'customer_phone' => $item->customer_phone,
                     'total_amount' => $item->total_amount,
                     'months' => $item->months,
                     'due_date' => $item->due_date,
@@ -246,8 +252,8 @@ class InstallmentService implements InstallmentServiceInterface
 
         // Recent payments table
         $recentPayments = $baseQuery->clone()
-            ->with(['customer:id,name,email'])
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
+            ->join('customers', 'customers.id', '=', 'installments.customer_id')
             ->whereNotNull('installment_items.paid_at')
             ->where('installments.status', 'active')
             ->orderBy('installment_items.paid_at', 'desc')
@@ -259,15 +265,17 @@ class InstallmentService implements InstallmentServiceInterface
                 'installment_items.amount',
                 'installment_items.paid_amount',
                 'installment_items.paid_at',
-                'installment_items.reference'
+                'installment_items.reference',
+                'customers.name as customer_name',
+                'customers.email as customer_email'
             )
             ->limit(15)
             ->get()
             ->map(function ($item) {
                 return [
                     'installment_id' => $item->installment_id,
-                    'customer_name' => $item->customer->name,
-                    'customer_email' => $item->customer->email,
+                    'customer_name' => $item->customer_name,
+                    'customer_email' => $item->customer_email,
                     'due_date' => $item->due_date,
                     'amount' => $item->amount,
                     'paid_amount' => $item->paid_amount,
