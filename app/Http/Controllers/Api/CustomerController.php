@@ -52,7 +52,7 @@ class CustomerController extends Controller
     }
 
     /**
-     * Get a specific customer.
+     * Get a specific customer with installments.
      */
     public function show(int $id, Request $request): JsonResponse
     {
@@ -66,6 +66,9 @@ class CustomerController extends Controller
         if (!$request->user()->isOwner() && $customer->user_id !== $request->user()->id) {
             return $this->forbiddenResponse('You are not authorized to view this customer');
         }
+
+        // Load installments with their items
+        $customer->load(['installments.items', 'user']);
 
         return $this->successResponse(
             new CustomerResource($customer),

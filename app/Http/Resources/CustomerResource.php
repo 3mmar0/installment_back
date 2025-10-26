@@ -23,6 +23,7 @@ class CustomerResource extends JsonResource
             'notes' => $this->notes,
             'user' => new UserResource($this->whenLoaded('user')),
             'installments_count' => $this->whenCounted('installments'),
+            'installments' => InstallmentResource::collection($this->whenLoaded('installments')),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];
