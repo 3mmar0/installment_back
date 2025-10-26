@@ -145,14 +145,14 @@ class InstallmentService implements InstallmentServiceInterface
             ->sum('installment_items.paid_amount');
 
         // Additional analytics
-        $totalInstallments = $baseQuery->count();
-        $activeInstallments = $baseQuery->where('status', 'active')->count();
-        $completedInstallments = $baseQuery->where('status', 'completed')->count();
+        $totalInstallments = $baseQuery->clone()->count();
+        $activeInstallments = $baseQuery->clone()->where('installments.status', 'active')->count();
+        $completedInstallments = $baseQuery->clone()->where('installments.status', 'completed')->count();
 
         $totalCustomers = $user->customers()->count();
         $activeCustomers = $user->customers()
             ->whereHas('installments', function ($query) {
-                $query->where('status', 'active');
+                $query->where('installments.status', 'active');
             })->count();
 
         // Monthly collection comparison
