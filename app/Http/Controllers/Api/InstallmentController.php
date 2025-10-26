@@ -111,6 +111,30 @@ class InstallmentController extends Controller
     }
 
     /**
+     * Get installment statistics.
+     */
+    public function stats(int $id, Request $request): JsonResponse
+    {
+        $stats = $this->installmentService->getInstallmentStats($id, $request->user());
+
+        if (empty($stats)) {
+            return $this->notFoundResponse('Installment not found or unauthorized');
+        }
+
+        return $this->successResponse($stats, 'Installment statistics retrieved successfully');
+    }
+
+    /**
+     * Get all installments statistics summary.
+     */
+    public function allStats(Request $request): JsonResponse
+    {
+        $stats = $this->installmentService->getAllInstallmentsStats($request->user());
+
+        return $this->successResponse($stats, 'All installments statistics retrieved successfully');
+    }
+
+    /**
      * Get overdue installment items.
      */
     public function overdue(Request $request): JsonResponse

@@ -44,4 +44,14 @@ interface InstallmentServiceInterface
      * Get due soon items for a user.
      */
     public function getDueSoonItems(User $user): Collection;
+
+    /**
+     * Get installment statistics.
+     */
+    public function getInstallmentStats(int $installmentId, User $user): array;
+
+    /**
+     * Get all installments statistics summary.
+     */
+    public function getAllInstallmentsStats(User $user): array;
 }

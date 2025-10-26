@@ -367,6 +367,140 @@ class InstallmentService implements InstallmentServiceInterface
     }
 
     /**
+     * Get installment statistics.
+     */
+    public function getInstallmentStats(int $installmentId, User $user): array
+    {
+        $installment = $this->findInstallmentById($installmentId);
+
+        if (!$installment) {
+            return [];
+        }
+
+        // Check authorization
+        if (!$user->isOwner() && $installment->user_id !== $user->id) {
+            return [];
+        }
+
+        // Load items with payment data
+        $items = $installment->items()->get();
+
+        $totalItems = $items->count();
+        $paidItems = $items->where('status', 'paid')->count();
+        $pendingItems = $items->where('status', 'pending')->count();
+
+        $totalAmount = $installment->total_amount;
+        $paidAmount = $items->where('status', 'paid')->sum('paid_amount') ?? 0;
+        $remainingAmount = $totalAmount - $paidAmount;
+        $completionPercentage = $totalAmount > 0 ? ($paidAmount / $totalAmount) * 100 : 0;
+
+        // Calculate payment progress
+        $nextPayment = $items->where('status', 'pending')->sortBy('due_date')->first();
+        $lastPayment = $items->where('status', 'paid')->sortByDesc('paid_at')->first();
+
+        // Get overdue count
+        $overdueCount = $items
+            ->where('status', 'pending')
+            ->where('due_date', '<', now()->startOfDay())
+            ->count();
+
+        // Get due soon count (within 7 days)
+        $dueSoonCount = $items
+            ->where('status', 'pending')
+            ->whereBetween('due_date', [now()->startOfDay(), now()->addDays(7)->endOfDay()])
+            ->count();
+
+        return [
+            'installment_id' => $installment->id,
+            'total_amount' => $totalAmount,
+            'paid_amount' => $paidAmount,
+            'remaining_amount' => $remainingAmount,
+            'completion_percentage' => round($completionPercentage, 2),
+            'total_items' => $totalItems,
+            'paid_items' => $paidItems,
+            'pending_items' => $pendingItems,
+            'overdue_count' => $overdueCount,
+            'due_soon_count' => $dueSoonCount,
+            'next_payment_date' => $nextPayment?->due_date?->format('Y-m-d'),
+            'next_payment_amount' => $nextPayment?->amount,
+            'last_payment_date' => $lastPayment?->paid_at?->format('Y-m-d'),
+            'last_payment_amount' => $lastPayment?->paid_amount,
+            'status' => $installment->status,
+            'start_date' => $installment->start_date->format('Y-m-d'),
+            'end_date' => $installment->end_date?->format('Y-m-d'),
+            'months' => $installment->months,
+            'customer_id' => $installment->customer_id,
+            'customer_name' => $installment->customer->name ?? null,
+        ];
+    }
+
+    /**
+     * Get all installments statistics summary.
+     */
+    public function getAllInstallmentsStats(User $user): array
+    {
+        $baseQuery = Installment::query()->forUser($user)->with('items');
+
+        // Get all installments
+        $allInstallments = $baseQuery->get();
+
+        $stats = [
+            'total_installments' => $allInstallments->count(),
+            'active_installments' => $allInstallments->where('status', 'active')->count(),
+            'completed_installments' => $allInstallments->where('status', 'completed')->count(),
+            'total_amount' => $allInstallments->sum('total_amount'),
+            'total_items' => 0,
+            'paid_items' => 0,
+            'pending_items' => 0,
+            'overdue_items' => 0,
+            'due_soon_items' => 0,
+            'total_paid_amount' => 0,
+            'total_remaining_amount' => 0,
+            'overall_completion_percentage' => 0,
+        ];
+
+        foreach ($allInstallments as $installment) {
+            $items = $installment->items;
+
+            $stats['total_items'] += $items->count();
+            $stats['paid_items'] += $items->where('status', 'paid')->count();
+            $stats['pending_items'] += $items->where('status', 'pending')->count();
+            $stats['overdue_items'] += $items
+                ->where('status', 'pending')
+                ->where('due_date', '<', now()->startOfDay())
+                ->count();
+            $stats['due_soon_items'] += $items
+                ->where('status', 'pending')
+                ->whereBetween('due_date', [now()->startOfDay(), now()->addDays(7)->endOfDay()])
+                ->count();
+            $stats['total_paid_amount'] += $items->where('status', 'paid')->sum('paid_amount') ?? 0;
+        }
+
+        $stats['total_remaining_amount'] = $stats['total_amount'] - $stats['total_paid_amount'];
+
+        if ($stats['total_amount'] > 0) {
+            $stats['overall_completion_percentage'] = round(
+                ($stats['total_paid_amount'] / $stats['total_amount']) * 100,
+                2
+            );
+        }
+
+        // Add breakdown by status
+        $stats['breakdown'] = [
+            'active' => [
+                'count' => $allInstallments->where('status', 'active')->count(),
+                'total_amount' => $allInstallments->where('status', 'active')->sum('total_amount'),
+            ],
+            'completed' => [
+                'count' => $allInstallments->where('status', 'completed')->count(),
+                'total_amount' => $allInstallments->where('status', 'completed')->sum('total_amount'),
+            ],
+        ];
+
+        return $stats;
+    }
+
+    /**
      * Get overdue items for a user.
      */
     public function getOverdueItems(User $user): Collection
