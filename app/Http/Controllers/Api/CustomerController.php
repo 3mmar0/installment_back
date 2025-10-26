@@ -141,4 +141,27 @@ class CustomerController extends Controller
 
         return $this->successResponse($stats, 'Customer statistics retrieved successfully');
     }
+
+    /**
+     * Get customers for select input (lightweight).
+     */
+    public function forSelect(Request $request): JsonResponse
+    {
+        $customers = $this->customerService->getCustomersForUser($request->user());
+
+        // Map to simple array format for select inputs
+        $selectData = $customers->getCollection()->map(function ($customer) {
+            return [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'email' => $customer->email,
+                'phone' => $customer->phone,
+                'label' => "{$customer->name} ({$customer->email})", // For display in select
+            ];
+        });
+
+        return $this->successResponse([
+            'data' => $selectData->values(),
+        ], 'Customers retrieved successfully');
+    }
 }

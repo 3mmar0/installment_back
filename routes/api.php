@@ -49,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Customer routes
     Route::controller(CustomerController::class)->group(function () {
         Route::get('customer-list', 'index');
+        Route::get('customer-for-select', 'forSelect');
         Route::post('customer-create', 'store');
         Route::get('customer-show/{id}', 'show');
         Route::put('customer-update/{id}', 'update');
