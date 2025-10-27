@@ -930,14 +930,14 @@ const DashboardStats = ({ data }) => {
 
   return (
     <Row gutter={[16, 16]}>
-      {stats.map((stat, index) => (
+      {stats.map((item, index) => (
         <Col xs={24} sm={12} lg={6} key={index}>
           <Card>
             <Statistic
-              title={stat.title}
-              value={stat.value}
-              prefix={stat.icon}
-              valueStyle={{ color: stat.color }}
+              title={item.title}
+              value={item.value}
+              prefix={item.icon}
+              valueStyle={{ color: item?.color }}
             />
           </Card>
         </Col>
