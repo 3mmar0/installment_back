@@ -299,7 +299,7 @@
             border-radius: 8px;
             padding: 20px;
             margin: 15px 0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             border-left: 4px solid #007bff;
         }
 
@@ -324,7 +324,7 @@
             background: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             text-align: center;
         }
 
@@ -893,26 +893,28 @@
 
                     <div class="frontend-section">
                         <div class="highlight">
-                            <strong>🚀 Ready-to-use code examples</strong> with complete implementations for both web and mobile development.
+                            <strong>🚀 Ready-to-use code examples</strong> with complete implementations for both web
+                            and mobile development.
                         </div>
 
-                    <h3>React Integration</h3>
-                    <div class="endpoint">
-                        <div class="endpoint-header">
-                            <span class="method get">📚</span>
-                            <span class="endpoint-url">Complete React Guide</span>
-                        </div>
-                        <p><strong>Full-featured React application with:</strong></p>
-                        <ul class="features">
-                            <li>Complete API service setup with Axios</li>
-                            <li>Authentication context and hooks</li>
-                            <li>Dashboard components with data tables</li>
-                            <li>Customer and installment management</li>
-                            <li>Error handling and loading states</li>
-                            <li>Ant Design components</li>
-                            <li>React Query for data fetching</li>
-                            <li>Responsive design</li>
-                        </ul>
+                        <h3>React Integration</h3>
+                        <div class="endpoint">
+                            <div class="endpoint-header">
+                                <span class="method get">📚</span>
+                                <span class="endpoint-url">Complete React Guide</span>
+                            </div>
+                            <p><strong>Full-featured React application with:</strong></p>
+                            <ul class="features">
+                                <li>Complete API service setup with Axios</li>
+                                <li>Authentication context and hooks</li>
+                                <li>Dashboard components with data tables</li>
+                                <li>Customer and installment management</li>
+                                <li>Error handling and loading states</li>
+                                <li>Ant Design components</li>
+                                <li>React Query for data fetching</li>
+                                <li>Responsive design</li>
+                            </ul>
+                            @verbatim
                         <div class="code-block">// Example: Dashboard Stats Component
 import React from 'react';
 import { Card, Row, Col, Statistic } from 'antd';
@@ -945,106 +947,113 @@ const DashboardStats = ({ data }) => {
     </Row>
   );
 };</div>
-                    </div>
-
-                    <h3>Flutter Integration</h3>
-                    <div class="endpoint">
-                        <div class="endpoint-header">
-                            <span class="method get">📱</span>
-                            <span class="endpoint-url">Complete Flutter Guide</span>
+                        @endverbatim
                         </div>
-                        <p><strong>Full-featured Flutter mobile app with:</strong></p>
-                        <ul class="features">
-                            <li>Complete API service with Dio</li>
-                            <li>State management with Riverpod</li>
-                            <li>Dashboard screens with data tables</li>
-                            <li>Customer and installment management</li>
-                            <li>Error handling and loading states</li>
-                            <li>Material Design components</li>
-                            <li>JSON serialization with code generation</li>
-                            <li>Mobile-optimized UI</li>
-                        </ul>
-                        <div class="code-block">// Example: Dashboard Stats Card
-class DashboardStatsCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
 
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: EdgeInsets.all(16.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: color, size: 24.sp),
-                SizedBox(width: 8.w),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 8.h),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 24.sp,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}</div>
-                    </div>
+                        <h3>Flutter Integration</h3>
+                        <div class="endpoint">
+                            <div class="endpoint-header">
+                                <span class="method get">📱</span>
+                                <span class="endpoint-url">Complete Flutter Guide</span>
+                            </div>
+                            <p><strong>Full-featured Flutter mobile app with:</strong></p>
+                            <ul class="features">
+                                <li>Complete API service with Dio</li>
+                                <li>State management with Riverpod</li>
+                                <li>Dashboard screens with data tables</li>
+                                <li>Customer and installment management</li>
+                                <li>Error handling and loading states</li>
+                                <li>Material Design components</li>
+                                <li>JSON serialization with code generation</li>
+                                <li>Mobile-optimized UI</li>
+                            </ul>
+                            <div class="code-block">// Example: Dashboard Stats Card
+                                class DashboardStatsCard extends StatelessWidget {
+                                final String title;
+                                final String value;
+                                final IconData icon;
+                                final Color color;
 
-                    <h3>Key Features</h3>
-                    <div class="solid-principles">
-                        <div class="principle-card">
-                            <h4>📊 Rich Dashboard Data</h4>
-                            <p>Comprehensive analytics with summary stats, detailed tables, and trend data for complete business insights.</p>
+                                @override
+                                Widget build(BuildContext context) {
+                                return Card(
+                                elevation: 4,
+                                child: Padding(
+                                padding: EdgeInsets.all(16.w),
+                                child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                Row(
+                                children: [
+                                Icon(icon, color: color, size: 24.sp),
+                                SizedBox(width: 8.w),
+                                Expanded(
+                                child: Text(
+                                title,
+                                style: TextStyle(
+                                fontSize: 14.sp,
+                                color: Colors.grey[600],
+                                ),
+                                ),
+                                ),
+                                ],
+                                ),
+                                SizedBox(height: 8.h),
+                                Text(
+                                value,
+                                style: TextStyle(
+                                fontSize: 24.sp,
+                                fontWeight: FontWeight.bold,
+                                color: color,
+                                ),
+                                ),
+                                ],
+                                ),
+                                ),
+                                );
+                                }
+                                }</div>
                         </div>
-                        <div class="principle-card">
-                            <h4>🔐 Complete Authentication</h4>
-                            <p>Full auth flow with login, register, logout, token management, and role-based access control.</p>
-                        </div>
-                        <div class="principle-card">
-                            <h4>📱 Mobile Ready</h4>
-                            <p>Responsive design and mobile-optimized components for both web and mobile applications.</p>
-                        </div>
-                        <div class="principle-card">
-                            <h4>⚡ Production Ready</h4>
-                            <p>Error handling, loading states, form validation, and best practices for production deployment.</p>
-                        </div>
-                    </div>
 
-                    <h3>Quick Start</h3>
-                    <div class="code-block"># React Setup
-npx create-react-app installment-manager
-cd installment-manager
-npm install axios react-query @tanstack/react-query antd
+                        <h3>Key Features</h3>
+                        <div class="solid-principles">
+                            <div class="principle-card">
+                                <h4>📊 Rich Dashboard Data</h4>
+                                <p>Comprehensive analytics with summary stats, detailed tables, and trend data for
+                                    complete business insights.</p>
+                            </div>
+                            <div class="principle-card">
+                                <h4>🔐 Complete Authentication</h4>
+                                <p>Full auth flow with login, register, logout, token management, and role-based access
+                                    control.</p>
+                            </div>
+                            <div class="principle-card">
+                                <h4>📱 Mobile Ready</h4>
+                                <p>Responsive design and mobile-optimized components for both web and mobile
+                                    applications.</p>
+                            </div>
+                            <div class="principle-card">
+                                <h4>⚡ Production Ready</h4>
+                                <p>Error handling, loading states, form validation, and best practices for production
+                                    deployment.</p>
+                            </div>
+                        </div>
 
-# Flutter Setup
-flutter create installment_manager_app
-cd installment_manager_app
-flutter pub add dio riverpod flutter_riverpod shared_preferences</div>
+                        <h3>Quick Start</h3>
+                        <div class="code-block"># React Setup
+                            npx create-react-app installment-manager
+                            cd installment-manager
+                            npm install axios react-query @tanstack/react-query antd
+
+                            # Flutter Setup
+                            flutter create installment_manager_app
+                            cd installment_manager_app
+                            flutter pub add dio riverpod flutter_riverpod shared_preferences</div>
 
                         <div class="highlight">
-                            <strong>📖 Documentation:</strong> See <code>FRONTEND_INTEGRATION_REACT.md</code> and <code>FRONTEND_INTEGRATION_FLUTTER.md</code> for complete implementation guides with copy-paste ready code.
+                            <strong>📖 Documentation:</strong> See <code>FRONTEND_INTEGRATION_REACT.md</code> and
+                            <code>FRONTEND_INTEGRATION_FLUTTER.md</code> for complete implementation guides with
+                            copy-paste ready code.
                         </div>
                     </div>
                 </section>
