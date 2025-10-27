@@ -750,9 +750,24 @@ Authorization: Bearer {token}</pre>
                             <span class="endpoint-url">/api/customer-list</span>
                         </div>
                         <p><strong>List all customers (paginated)</strong></p>
-                        <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block">{
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/customer-list
+Authorization: Bearer {token}
+Accept: application/json
+
+Query Parameters (Optional):
+  - page: Page number (default: 1)
+  - per_page: Items per page (default: 15)
+  - search: Search by name, email, or phone</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
   "success": true,
   "data": {
     "current_page": 1,
@@ -767,12 +782,45 @@ Authorization: Bearer {token}</pre>
         "user_id": 1,
         "created_at": "2024-01-15T10:30:00.000000Z",
         "updated_at": "2024-01-15T10:30:00.000000Z"
+      },
+      {
+        "id": 2,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "phone": "+0987654321",
+        "address": "456 Oak Ave",
+        "notes": null,
+        "user_id": 1,
+        "created_at": "2024-01-16T10:30:00.000000Z",
+        "updated_at": "2024-01-16T10:30:00.000000Z"
       }
     ],
+    "first_page_url": "/api/customer-list?page=1",
+    "from": 1,
+    "last_page": 4,
+    "last_page_url": "/api/customer-list?page=4",
+    "links": [
+      {
+        "url": null,
+        "label": "&laquo; Previous",
+        "active": false
+      },
+      {
+        "url": "/api/customer-list?page=1",
+        "label": "1",
+        "active": true
+      }
+    ],
+    "next_page_url": "/api/customer-list?page=2",
+    "path": "/api/customer-list",
     "per_page": 15,
+    "prev_page_url": null,
+    "to": 15,
     "total": 50
   }
-}</div>
+}</pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -851,9 +899,19 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/customer-show/{id}</span>
                         </div>
                         <p><strong>Get customer details with installments</strong></p>
-                        <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block">{
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/customer-show/1
+Authorization: Bearer {token}
+Accept: application/json</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
   "success": true,
   "data": {
     "id": 1,
@@ -862,17 +920,38 @@ Content-Type: application/json
     "phone": "+1234567890",
     "address": "123 Main St",
     "notes": "VIP Customer",
+    "user_id": 1,
+    "created_at": "2024-01-15T10:30:00.000000Z",
+    "updated_at": "2024-01-15T10:30:00.000000Z",
     "installments": [
       {
         "id": 1,
+        "customer_id": 1,
         "total_amount": "1200.00",
         "months": 12,
+        "start_date": "2024-01-01",
+        "end_date": "2024-12-31",
         "status": "active",
-        "items": [...]
+        "notes": "Monthly payment plan",
+        "created_at": "2024-01-01T10:00:00.000000Z",
+        "items": [
+          {
+            "id": 1,
+            "installment_id": 1,
+            "amount": "100.00",
+            "paid_amount": "100.00",
+            "due_date": "2024-01-01",
+            "paid_at": "2024-01-01T10:00:00.000000Z",
+            "reference": "PAY-001",
+            "status": "paid"
+          }
+        ]
       }
     ]
   }
-}</div>
+}</pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -938,19 +1017,39 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/customer-stats/{id}</span>
                         </div>
                         <p><strong>Get customer statistics</strong></p>
-                        <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block">{
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/customer-stats/1
+Authorization: Bearer {token}
+Accept: application/json</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
   "success": true,
   "data": {
+    "customer_id": 1,
+    "customer_name": "Jane Smith",
     "total_installments": 3,
     "active_installments": 2,
+    "completed_installments": 1,
     "total_amount": "5000.00",
     "paid_amount": "2500.00",
     "outstanding_amount": "2500.00",
-    "last_payment_date": "2024-01-15"
+    "total_items": 36,
+    "paid_items": 18,
+    "pending_items": 18,
+    "last_payment_date": "2024-01-15",
+    "last_payment_amount": "100.00",
+    "completion_percentage": 50.00
   }
-}</div>
+}</pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -965,9 +1064,25 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/installment-list</span>
                         </div>
                         <p><strong>List all installments (paginated)</strong></p>
-                        <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block">{
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/installment-list
+Authorization: Bearer {token}
+Accept: application/json
+
+Query Parameters (Optional):
+  - page: Page number (default: 1)
+  - per_page: Items per page (default: 15)
+  - status: Filter by status (active, completed, cancelled)
+  - customer_id: Filter by customer ID</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
   "success": true,
   "data": {
     "current_page": 1,
@@ -977,14 +1092,34 @@ Content-Type: application/json
         "customer_id": 1,
         "total_amount": "1200.00",
         "months": 12,
+        "start_date": "2024-01-01",
+        "end_date": "2024-12-31",
         "status": "active",
-        "created_at": "2024-01-01T10:00:00.000000Z"
+        "notes": "Monthly payment plan",
+        "created_at": "2024-01-01T10:00:00.000000Z",
+        "updated_at": "2024-01-01T10:00:00.000000Z",
+        "customer": {
+          "id": 1,
+          "name": "Jane Smith",
+          "email": "jane@example.com"
+        }
       }
     ],
+    "first_page_url": "/api/installment-list?page=1",
+    "from": 1,
+    "last_page": 2,
+    "last_page_url": "/api/installment-list?page=2",
+    "links": [...],
+    "next_page_url": "/api/installment-list?page=2",
+    "path": "/api/installment-list",
     "per_page": 15,
+    "prev_page_url": null,
+    "to": 15,
     "total": 20
   }
-}</div>
+}</pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1060,9 +1195,19 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/installment-show/{id}</span>
                         </div>
                         <p><strong>Get installment details</strong></p>
-                        <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block">{
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/installment-show/1
+Authorization: Bearer {token}
+Accept: application/json</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
   "success": true,
   "data": {
     "id": 1,
@@ -1072,18 +1217,41 @@ Content-Type: application/json
     "start_date": "2024-01-01",
     "end_date": "2024-12-31",
     "status": "active",
+    "notes": "Monthly payment plan",
+    "created_at": "2024-01-01T10:00:00.000000Z",
+    "updated_at": "2024-01-01T10:00:00.000000Z",
+    "customer": {
+      "id": 1,
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "phone": "+1234567890"
+    },
     "items": [
       {
         "id": 1,
+        "installment_id": 1,
         "amount": "100.00",
+        "paid_amount": "100.00",
         "due_date": "2024-01-01",
-        "status": "paid",
-        "paid_at": "2024-01-01T10:00:00.000000Z"
+        "paid_at": "2024-01-01T10:00:00.000000Z",
+        "reference": "PAY-001",
+        "status": "paid"
+      },
+      {
+        "id": 2,
+        "installment_id": 1,
+        "amount": "100.00",
+        "paid_amount": null,
+        "due_date": "2024-02-01",
+        "paid_at": null,
+        "reference": null,
+        "status": "pending"
       }
-    ],
-    "customer": {...}
+    ]
   }
-}</div>
+}</pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1192,21 +1360,41 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/installment-stats/{id}</span>
                         </div>
                         <p><strong>Get statistics for a specific installment</strong></p>
-                        <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block">{
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/installment-stats/1
+Authorization: Bearer {token}
+Accept: application/json</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
   "success": true,
   "data": {
     "installment_id": 1,
+    "customer_id": 1,
+    "customer_name": "Jane Smith",
+    "total_amount": "1200.00",
+    "months": 12,
+    "start_date": "2024-01-01",
+    "end_date": "2024-12-31",
+    "status": "active",
     "total_items": 12,
     "paid_items": 5,
     "pending_items": 7,
-    "total_amount": "1200.00",
     "paid_amount": "500.00",
     "remaining_amount": "700.00",
-    "completion_percentage": 41.67
+    "completion_percentage": 41.67,
+    "next_payment_date": "2024-02-01",
+    "last_payment_date": "2024-01-01"
   }
-}</div>
+}</pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1216,19 +1404,38 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/installment-all-stats</span>
                         </div>
                         <p><strong>Get statistics for all installments</strong></p>
-                        <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block">{
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/installment-all-stats
+Authorization: Bearer {token}
+Accept: application/json</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
   "success": true,
   "data": {
     "total_installments": 20,
     "active_installments": 15,
+    "completed_installments": 4,
+    "cancelled_installments": 1,
     "total_amount": "50000.00",
     "paid_amount": "25000.00",
     "outstanding_amount": "25000.00",
-    "completion_percentage": 50.00
+    "total_items": 240,
+    "paid_items": 120,
+    "pending_items": 120,
+    "completion_percentage": 50.00,
+    "average_installment_amount": "2500.00",
+    "total_customers": 18
   }
-}</div>
+}</pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -1458,10 +1665,22 @@ Query Parameters:
                             <span class="method get">GET</span>
                             <span class="endpoint-url">/api/user-list</span>
                         </div>
-                        <p><strong>List all users</strong></p>
-                        <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block">{
+                        <p><strong>List all users (Owner only)</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/user-list
+Authorization: Bearer {owner_token}
+Accept: application/json
+
+Note: Requires owner role</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
   "success": true,
   "data": [
     {
@@ -1469,10 +1688,23 @@ Query Parameters:
       "name": "John Doe",
       "email": "john@example.com",
       "role": "user",
-      "created_at": "2024-01-01T10:00:00.000000Z"
+      "email_verified_at": "2024-01-01T10:00:00.000000Z",
+      "created_at": "2024-01-01T10:00:00.000000Z",
+      "updated_at": "2024-01-01T10:00:00.000000Z"
+    },
+    {
+      "id": 2,
+      "name": "Admin User",
+      "email": "admin@example.com",
+      "role": "owner",
+      "email_verified_at": "2024-01-15T10:00:00.000000Z",
+      "created_at": "2024-01-15T10:00:00.000000Z",
+      "updated_at": "2024-01-15T10:00:00.000000Z"
     }
   ]
-}</div>
+}</pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
