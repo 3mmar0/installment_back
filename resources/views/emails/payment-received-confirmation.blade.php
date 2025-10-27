@@ -1,20 +1,24 @@
 @component('mail::message')
-    # Payment Received - Thank You
+    # Payment Receipt
 
     Dear {{ $item->installment->customer->name }},
 
-    We have successfully received your payment. Thank you.
+    We have successfully received your payment. This email serves as your receipt.
 
-    ## Payment Confirmation
+    ---
 
-    **Amount Received:** ${{ number_format($paidAmount, 2) }}
-    **Date Received:** {{ $item->paid_at ? \Carbon\Carbon::parse($item->paid_at)->format('F d, Y') : date('F d, Y') }}
+    ## Payment Details
+
+    **Payment Amount:** ${{ number_format($paidAmount, 2) }}
+    **Payment Date:** {{ $item->paid_at ? \Carbon\Carbon::parse($item->paid_at)->format('F d, Y') : date('F d, Y') }}
     @if ($item->reference)
-        **Reference:** {{ $item->reference }}
+        **Reference Number:** {{ $item->reference }}
     @endif
     **Installment ID:** {{ $item->installment_id }}
 
-    ## Installment Status
+    ---
+
+    ## Installment Summary
 
     **Total Amount:** ${{ number_format($item->installment->total_amount, 2) }}
     **Payment Schedule:** {{ $item->installment->months }} months
@@ -25,15 +29,16 @@
 
     Your payment has been processed and your account has been updated.
 
-    We appreciate your business.
+    Please keep this email for your records.
 
     Best regards,
     **{{ config('mail.from.name') }}**
     {{ config('app.name') }}
+    {{ config('mail.from.address') }}
 
     ---
 
     <small style="color: #9ca3af;">
-        For questions, contact us at {{ config('mail.from.address') }}
+        This is your payment receipt. For questions, contact {{ config('mail.from.address') }}
     </small>
 @endcomponent
