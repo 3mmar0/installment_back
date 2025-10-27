@@ -656,8 +656,31 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/auth/me</span>
                         </div>
                         <p><strong>Get authenticated user</strong></p>
-                        <div class="code-block">GET /api/auth/me
-                            Authorization: Bearer {token}</div>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/auth/me
+Authorization: Bearer {token}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "role": "user",
+    "email_verified_at": "2024-01-01T10:00:00.000000Z",
+    "created_at": "2024-01-01T10:00:00.000000Z"
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -666,6 +689,24 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/auth/logout</span>
                         </div>
                         <p><strong>Logout and revoke tokens</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/auth/logout
+Authorization: Bearer {token}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Logged out successfully"
+}</pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -674,6 +715,28 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/auth/refresh</span>
                         </div>
                         <p><strong>Refresh access token</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/auth/refresh
+Authorization: Bearer {token}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Token refreshed successfully",
+  "data": {
+    "token": "3|xxxxxxxxxxxxxxxxxxxxx",
+    "token_type": "Bearer"
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -687,6 +750,30 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/customer-list</span>
                         </div>
                         <p><strong>List all customers (paginated)</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": {
+    "current_page": 1,
+    "data": [
+      {
+        "id": 1,
+        "name": "Jane Smith",
+        "email": "jane@example.com",
+        "phone": "+1234567890",
+        "address": "123 Main St",
+        "notes": "VIP Customer",
+        "user_id": 1,
+        "created_at": "2024-01-15T10:30:00.000000Z",
+        "updated_at": "2024-01-15T10:30:00.000000Z"
+      }
+    ],
+    "per_page": 15,
+    "total": 50
+  }
+}</div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -763,7 +850,30 @@ Content-Type: application/json
                             <span class="method get">GET</span>
                             <span class="endpoint-url">/api/customer-show/{id}</span>
                         </div>
-                        <p><strong>Get customer details</strong></p>
+                        <p><strong>Get customer details with installments</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "phone": "+1234567890",
+    "address": "123 Main St",
+    "notes": "VIP Customer",
+    "installments": [
+      {
+        "id": 1,
+        "total_amount": "1200.00",
+        "months": 12,
+        "status": "active",
+        "items": [...]
+      }
+    ]
+  }
+}</div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -772,6 +882,39 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/customer-update/{id}</span>
                         </div>
                         <p><strong>Update customer</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>PUT /api/customer-update/1
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "name": "Jane Smith Updated",
+  "phone": "+9876543210",
+  "address": "456 New St"
+}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Customer updated successfully",
+  "data": {
+    "id": 1,
+    "name": "Jane Smith Updated",
+    "email": "jane@example.com",
+    "phone": "+9876543210",
+    "address": "456 New St",
+    "updated_at": "2024-01-15T14:30:00.000000Z"
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -780,6 +923,13 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/customer-delete/{id}</span>
                         </div>
                         <p><strong>Delete customer</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "message": "Customer deleted successfully"
+}</div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -788,6 +938,20 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/customer-stats/{id}</span>
                         </div>
                         <p><strong>Get customer statistics</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": {
+    "total_installments": 3,
+    "active_installments": 2,
+    "total_amount": "5000.00",
+    "paid_amount": "2500.00",
+    "outstanding_amount": "2500.00",
+    "last_payment_date": "2024-01-15"
+  }
+}</div>
+                        </div>
                     </div>
                 </section>
 
@@ -801,6 +965,27 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/installment-list</span>
                         </div>
                         <p><strong>List all installments (paginated)</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": {
+    "current_page": 1,
+    "data": [
+      {
+        "id": 1,
+        "customer_id": 1,
+        "total_amount": "1200.00",
+        "months": 12,
+        "status": "active",
+        "created_at": "2024-01-01T10:00:00.000000Z"
+      }
+    ],
+    "per_page": 15,
+    "total": 20
+  }
+}</div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -875,6 +1060,31 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/installment-show/{id}</span>
                         </div>
                         <p><strong>Get installment details</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": {
+    "id": 1,
+    "customer_id": 1,
+    "total_amount": "1200.00",
+    "months": 12,
+    "start_date": "2024-01-01",
+    "end_date": "2024-12-31",
+    "status": "active",
+    "items": [
+      {
+        "id": 1,
+        "amount": "100.00",
+        "due_date": "2024-01-01",
+        "status": "paid",
+        "paid_at": "2024-01-01T10:00:00.000000Z"
+      }
+    ],
+    "customer": {...}
+  }
+}</div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -924,6 +1134,27 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/installment-overdue</span>
                         </div>
                         <p><strong>Get overdue installment items</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "installment_id": 1,
+      "amount": "100.00",
+      "due_date": "2024-01-10",
+      "status": "overdue",
+      "days_overdue": 5,
+      "customer": {
+        "id": 1,
+        "name": "Jane Smith",
+        "email": "jane@example.com"
+      }
+    }
+  ]
+}</div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -932,6 +1163,73 @@ Content-Type: application/json
                             <span class="endpoint-url">/api/installment-due-soon</span>
                         </div>
                         <p><strong>Get items due soon (within 7 days)</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": [
+    {
+      "id": 2,
+      "installment_id": 1,
+      "amount": "100.00",
+      "due_date": "2024-01-22",
+      "status": "pending",
+      "days_remaining": 3,
+      "customer": {
+        "id": 1,
+        "name": "Jane Smith",
+        "email": "jane@example.com"
+      }
+    }
+  ]
+}</div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <span class="endpoint-url">/api/installment-stats/{id}</span>
+                        </div>
+                        <p><strong>Get statistics for a specific installment</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": {
+    "installment_id": 1,
+    "total_items": 12,
+    "paid_items": 5,
+    "pending_items": 7,
+    "total_amount": "1200.00",
+    "paid_amount": "500.00",
+    "remaining_amount": "700.00",
+    "completion_percentage": 41.67
+  }
+}</div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <span class="endpoint-url">/api/installment-all-stats</span>
+                        </div>
+                        <p><strong>Get statistics for all installments</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": {
+    "total_installments": 20,
+    "active_installments": 15,
+    "total_amount": "50000.00",
+    "paid_amount": "25000.00",
+    "outstanding_amount": "25000.00",
+    "completion_percentage": 50.00
+  }
+}</div>
+                        </div>
                     </div>
                 </section>
 
@@ -1061,6 +1359,17 @@ Query Parameters:
                             <span class="endpoint-url">/api/notification-mark-read/{id}</span>
                         </div>
                         <p><strong>Mark a notification as read</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "message": "Notification marked as read",
+  "data": {
+    "id": 1,
+    "read_at": "2024-01-15T14:30:00.000000Z"
+  }
+}</div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -1069,6 +1378,16 @@ Query Parameters:
                             <span class="endpoint-url">/api/notification-mark-all-read</span>
                         </div>
                         <p><strong>Mark all notifications as read</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "message": "All notifications marked as read",
+  "data": {
+    "updated_count": 5
+  }
+}</div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -1115,6 +1434,13 @@ Query Parameters:
                             <span class="endpoint-url">/api/notification-delete/{id}</span>
                         </div>
                         <p><strong>Delete a notification</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "message": "Notification deleted successfully"
+}</div>
+                        </div>
                     </div>
 
                     <div class="highlight">
@@ -1133,6 +1459,21 @@ Query Parameters:
                             <span class="endpoint-url">/api/user-list</span>
                         </div>
                         <p><strong>List all users</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "user",
+      "created_at": "2024-01-01T10:00:00.000000Z"
+    }
+  ]
+}</div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -1140,7 +1481,41 @@ Query Parameters:
                             <span class="method post">POST</span>
                             <span class="endpoint-url">/api/user-create</span>
                         </div>
-                        <p><strong>Create a new user</strong></p>
+                        <p><strong>Create a new user (Owner only)</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/user-create
+Authorization: Bearer {owner_token}
+Content-Type: application/json
+
+{
+  "name": "New User",
+  "email": "newuser@example.com",
+  "password": "password123",
+  "password_confirmation": "password123",
+  "role": "user"
+}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (201 Created)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "User created successfully",
+  "data": {
+    "id": 2,
+    "name": "New User",
+    "email": "newuser@example.com",
+    "role": "user",
+    "created_at": "2024-01-15T10:00:00.000000Z"
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -1149,6 +1524,19 @@ Query Parameters:
                             <span class="endpoint-url">/api/user-show/{id}</span>
                         </div>
                         <p><strong>Get user details</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "role": "user",
+    "created_at": "2024-01-01T10:00:00.000000Z"
+  }
+}</div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -1157,6 +1545,37 @@ Query Parameters:
                             <span class="endpoint-url">/api/user-update/{id}</span>
                         </div>
                         <p><strong>Update user</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>PUT /api/user-update/1
+Authorization: Bearer {owner_token}
+Content-Type: application/json
+
+{
+  "name": "John Doe Updated",
+  "role": "admin"
+}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "User updated successfully",
+  "data": {
+    "id": 1,
+    "name": "John Doe Updated",
+    "email": "john@example.com",
+    "role": "admin",
+    "updated_at": "2024-01-15T14:00:00.000000Z"
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -1165,6 +1584,13 @@ Query Parameters:
                             <span class="endpoint-url">/api/user-delete/{id}</span>
                         </div>
                         <p><strong>Delete user</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "message": "User deleted successfully"
+}</div>
+                        </div>
                     </div>
                 </section>
 
