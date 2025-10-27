@@ -1,59 +1,34 @@
 @component('mail::message')
-    # ⏰ Payment Reminder
+    # Payment Reminder
 
-    Dear **{{ $item->installment->customer->name }}**,
+    Dear {{ $item->installment->customer->name }},
 
-    This is a **friendly reminder** that your installment payment will be due in **{{ $daysRemaining }}
+    This is a friendly reminder that your payment is due in **{{ $daysRemaining }}
     {{ Str::plural('day', $daysRemaining) }}**.
 
-    ---
+    ## Payment Details
 
-    ## 💳 Payment Details
-
-    @component('mail::panel')
-        **Payment Information:**
-
-        - **Amount Due:** **${{ number_format($item->amount, 2) }}**
-        - **Due Date:** **{{ \Carbon\Carbon::parse($item->due_date)->format('l, F d, Y') }}**
-        - **Days Remaining:** {{ $daysRemaining }} {{ Str::plural('day', $daysRemaining) }}
-        - **Installment Plan #:** {{ $item->installment_id }}
-        - **Total Installment:** ${{ number_format($item->installment->total_amount, 2) }}
-    @endcomponent
+    **Amount Due:** ${{ number_format($item->amount, 2) }}
+    **Due Date:** {{ \Carbon\Carbon::parse($item->due_date)->format('F d, Y') }}
+    **Installment ID:** {{ $item->installment_id }}
 
     ---
 
-    ## ✅ Action Required
+    Please make your payment by the due date to avoid late fees.
 
-    To ensure smooth processing and avoid any late fees, please make your payment **before the due date**.
+    If you have already made this payment, please ignore this reminder.
 
-    @component('mail::panel', ['color' => '#f59e0b'])
-        ### 📝 Important Note
+    For questions or assistance, contact us at **{{ config('mail.from.address') }}**.
 
-        If you have already made this payment, please **ignore this reminder**.
-        If you are unable to make payment by the due date, please contact us immediately.
-    @endcomponent
-
-    ---
-
-    ## 📞 Need Assistance?
-
-    We're here to help! For any questions or concerns:
-
-    - **Email:** {{ config('mail.from.address') }}
-    - **Support Hours:** Monday - Friday, 9:00 AM - 5:00 PM
-    - **Installment ID:** #{{ $item->installment_id }}
-
-    Thank you for your prompt attention to this matter.
+    Thank you for your prompt attention.
 
     Best regards,
     **{{ config('mail.from.name') }}**
     {{ config('app.name') }}
-    {{ config('mail.from.address') }}
 
     ---
 
-    <small style="color: #6b7280;">
-        This is an automated reminder. Please do not reply to this email.
-        For inquiries, please contact us at {{ config('mail.from.address') }}
+    <small style="color: #9ca3af;">
+        For inquiries, contact us at {{ config('mail.from.address') }}
     </small>
 @endcomponent
