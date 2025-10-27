@@ -189,19 +189,93 @@
         }
 
         .code-block {
-            background: #282c34;
-            color: #abb2bf;
+            background: #1e1e1e;
+            color: #d4d4d4;
             padding: 20px;
             border-radius: 8px;
             overflow-x: auto;
             margin: 15px 0;
-            font-family: 'Courier New', monospace;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             font-size: 0.9rem;
-            line-height: 1.5;
+            line-height: 1.6;
+            position: relative;
+        }
+
+        .code-block pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
 
         .code-block.json {
-            color: #98c379;
+            background: #1e1e1e;
+        }
+
+        .code-block .comment {
+            color: #6a9955;
+        }
+
+        .code-block .string {
+            color: #ce9178;
+        }
+
+        .code-block .keyword {
+            color: #569cd6;
+        }
+
+        .code-block .number {
+            color: #b5cea8;
+        }
+
+        .request-response {
+            display: grid;
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .code-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .code-section-header {
+            background: #667eea;
+            color: white;
+            padding: 12px 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .code-section-body {
+            padding: 15px;
+            background: #1e1e1e;
+        }
+
+        .code-section-body pre {
+            margin: 0;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+
+        .json-key {
+            color: #9cdcfe;
+        }
+
+        .json-string {
+            color: #ce9178;
+        }
+
+        .json-number {
+            color: #b5cea8;
+        }
+
+        .json-boolean {
+            color: #569cd6;
         }
 
         .solid-principles {
@@ -399,6 +473,7 @@
                     <li><a href="#customers">Customers</a></li>
                     <li><a href="#installments">Installments</a></li>
                     <li><a href="#dashboard">Dashboard</a></li>
+                    <li><a href="#notifications">Notifications</a></li>
                     <li><a href="#users">Users</a></li>
                     <li><a href="#errors">Error Handling</a></li>
                     <li><a href="#frontend">Frontend Integration</a></li>
@@ -415,6 +490,40 @@
 
                     <div class="highlight">
                         <strong>Base URL:</strong> <code>{{ url('/api') }}</code>
+                    </div>
+
+                    <h3>🎯 Key Features</h3>
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <div class="feature-icon">🔐</div>
+                            <h4>Token Authentication</h4>
+                            <p>Laravel Sanctum for secure API access</p>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">👥</div>
+                            <h4>Customer Management</h4>
+                            <p>Full CRUD operations with statistics</p>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">💳</div>
+                            <h4>Installment Tracking</h4>
+                            <p>Payment plans with automatic scheduling</p>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">📊</div>
+                            <h4>Dashboard Analytics</h4>
+                            <p>Comprehensive business insights</p>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">🔔</div>
+                            <h4>Notifications</h4>
+                            <p>In-app and email notifications</p>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">📧</div>
+                            <h4>Arabic Emails</h4>
+                            <p>Professional RTL email templates</p>
+                        </div>
                     </div>
                 </section>
 
@@ -461,15 +570,41 @@
                             <span class="endpoint-url">/api/auth/register</span>
                         </div>
                         <p><strong>Register a new user</strong></p>
-                        <div class="code-block">POST /api/auth/register
-                            Content-Type: application/json
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/auth/register
+Content-Type: application/json
 
-                            {
-                            "name": "John Doe",
-                            "email": "john@example.com",
-                            "password": "password123",
-                            "password_confirmation": "password123"
-                            }</div>
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "password123",
+  "password_confirmation": "password123"
+}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Registration successful",
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "user"
+    },
+    "token": "2|xxxxxxxxxxxxxxxxxxxxx",
+    "token_type": "Bearer"
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -478,24 +613,40 @@
                             <span class="endpoint-url">/api/auth/login</span>
                         </div>
                         <p><strong>Login and get access token</strong></p>
-                        <div class="code-block">POST /api/auth/login
-                            Content-Type: application/json
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/auth/login
+Content-Type: application/json
 
-                            {
-                            "email": "john@example.com",
-                            "password": "password123"
-                            }</div>
-                        <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block json">{
-                                "success": true,
-                                "message": "Login successful",
-                                "data": {
-                                "user": {...},
-                                "token": "2|xxxxxxxxxxxxxxxxxxxxx",
-                                "token_type": "Bearer"
-                                }
-                                }</div>
+{
+  "email": "john@example.com",
+  "password": "password123"
+}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "user",
+      "email_verified_at": "2024-01-01T10:00:00.000000Z",
+      "created_at": "2024-01-01T10:00:00.000000Z"
+    },
+    "token": "2|xxxxxxxxxxxxxxxxxxxxx",
+    "token_type": "Bearer"
+  }
+}</pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -540,21 +691,71 @@
 
                     <div class="endpoint">
                         <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <span class="endpoint-url">/api/customer-for-select</span>
+                        </div>
+                        <p><strong>Get lightweight customer list for select inputs</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "phone": "+1234567890",
+      "label": "Jane Smith - jane@example.com"
+    }
+  ]
+}</div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
                             <span class="method post">POST</span>
                             <span class="endpoint-url">/api/customer-create</span>
                         </div>
                         <p><strong>Create a new customer</strong></p>
-                        <div class="code-block">POST /api/customer-create
-                            Authorization: Bearer {token}
-                            Content-Type: application/json
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/customer-create
+Authorization: Bearer {token}
+Content-Type: application/json
 
-                            {
-                            "name": "Jane Smith",
-                            "email": "jane@example.com",
-                            "phone": "+1234567890",
-                            "address": "123 Main St",
-                            "notes": "VIP Customer"
-                            }</div>
+{
+  "name": "Jane Smith",
+  "email": "jane@example.com",
+  "phone": "+1234567890",
+  "address": "123 Main St",
+  "notes": "VIP Customer"
+}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (201 Created)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Customer created successfully",
+  "data": {
+    "id": 1,
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "phone": "+1234567890",
+    "address": "123 Main St",
+    "notes": "VIP Customer",
+    "user_id": 1,
+    "created_at": "2024-01-15T10:30:00.000000Z",
+    "updated_at": "2024-01-15T10:30:00.000000Z"
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -608,21 +809,64 @@
                             <span class="endpoint-url">/api/installment-create</span>
                         </div>
                         <p><strong>Create a new installment plan</strong></p>
-                        <div class="code-block">POST /api/installment-create
-                            Authorization: Bearer {token}
-                            Content-Type: application/json
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/installment-create
+Authorization: Bearer {token}
+Content-Type: application/json
 
-                            {
-                            "customer_id": 1,
-                            "total_amount": 1200.00,
-                            "products": [
-                            {"name": "Laptop", "qty": 1, "price": 1000},
-                            {"name": "Mouse", "qty": 1, "price": 200}
-                            ],
-                            "start_date": "2024-01-01",
-                            "months": 12,
-                            "notes": "Monthly payment plan"
-                            }</div>
+{
+  "customer_id": 1,
+  "total_amount": 1200.00,
+  "products": [
+    {
+      "name": "Laptop",
+      "qty": 1,
+      "price": 1000
+    },
+    {
+      "name": "Mouse",
+      "qty": 1,
+      "price": 200
+    }
+  ],
+  "start_date": "2024-01-01",
+  "months": 12,
+  "notes": "Monthly payment plan"
+}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (201 Created)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Installment created successfully",
+  "data": {
+    "id": 1,
+    "customer_id": 1,
+    "total_amount": "1200.00",
+    "months": 12,
+    "start_date": "2024-01-01",
+    "end_date": "2024-12-31",
+    "status": "active",
+    "notes": "Monthly payment plan",
+    "items": [
+      {
+        "id": 1,
+        "amount": "100.00",
+        "due_date": "2024-01-01",
+        "status": "pending"
+      }
+    ],
+    "created_at": "2024-01-01T10:00:00.000000Z"
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -639,14 +883,39 @@
                             <span class="endpoint-url">/api/installment-item-pay/{item}</span>
                         </div>
                         <p><strong>Mark installment item as paid</strong></p>
-                        <div class="code-block">POST /api/installment-item-pay/{item}
-                            Authorization: Bearer {token}
-                            Content-Type: application/json
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/installment-item-pay/1
+Authorization: Bearer {token}
+Content-Type: application/json
 
-                            {
-                            "paid_amount": 100.00,
-                            "reference": "PAYMENT-001"
-                            }</div>
+{
+  "paid_amount": 100.00,
+  "reference": "PAYMENT-001"
+}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Payment recorded successfully",
+  "data": {
+    "id": 1,
+    "installment_id": 1,
+    "amount": "100.00",
+    "paid_amount": "100.00",
+    "paid_at": "2024-01-15T14:30:00.000000Z",
+    "reference": "PAYMENT-001",
+    "status": "paid"
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="endpoint">
@@ -711,6 +980,145 @@
                             "monthlyTrend": [...]
                             }
                             }</div>
+                    </div>
+                </section>
+
+                <!-- Notifications Section -->
+                <section id="notifications" class="section">
+                    <h2>🔔 Notifications</h2>
+                    <p>Manage in-app notifications and email notifications for payment reminders and updates.</p>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <span class="endpoint-url">/api/notification-list</span>
+                        </div>
+                        <p><strong>List all notifications (paginated)</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/notification-list
+Authorization: Bearer {token}
+Accept: application/json
+
+Query Parameters:
+  - page: Page number (optional)
+  - per_page: Items per page (default: 15)
+  - type: Filter by type (optional)
+  - read: Filter by read status (true/false)</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">Response</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Notifications retrieved successfully",
+  "data": {
+    "current_page": 1,
+    "data": [
+      {
+        "id": 1,
+        "type": "overdue",
+        "title": "Payment Overdue",
+        "message": "Payment of $100.00 is 3 days overdue",
+        "data": {...},
+        "read_at": null,
+        "created_at": "2024-01-15T10:30:00.000000Z",
+        "is_read": false
+      }
+    ],
+    "per_page": 15,
+    "total": 25
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <span class="endpoint-url">/api/notification-count</span>
+                        </div>
+                        <p><strong>Get unread notification count</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "data": {
+    "unread_count": 5
+  }
+}</div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method post">POST</span>
+                            <span class="endpoint-url">/api/notification-mark-read/{id}</span>
+                        </div>
+                        <p><strong>Mark a notification as read</strong></p>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method post">POST</span>
+                            <span class="endpoint-url">/api/notification-mark-all-read</span>
+                        </div>
+                        <p><strong>Mark all notifications as read</strong></p>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method post">POST</span>
+                            <span class="endpoint-url">/api/notification-generate</span>
+                        </div>
+                        <p><strong>Generate overdue and due soon notifications</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "message": "Notifications generated successfully",
+  "data": {
+    "overdue_notifications": 3,
+    "due_soon_notifications": 5
+  }
+}</div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method post">POST</span>
+                            <span class="endpoint-url">/api/notification-send-emails</span>
+                        </div>
+                        <p><strong>Send email reminders for due soon and overdue payments</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Response:</div>
+                            <div class="code-block">{
+  "success": true,
+  "message": "Emails sent successfully",
+  "data": {
+    "due_soon_emails": 8,
+    "overdue_emails": 3
+  }
+}</div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method delete">DELETE</span>
+                            <span class="endpoint-url">/api/notification-delete/{id}</span>
+                        </div>
+                        <p><strong>Delete a notification</strong></p>
+                    </div>
+
+                    <div class="highlight">
+                        <strong>📧 Email Notifications:</strong> The system automatically sends professional Arabic email templates for payment due reminders, overdue notices, payment confirmations, and installment creation notifications.
                     </div>
                 </section>
 
