@@ -37,7 +37,7 @@ class PaymentDueReminder extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.payment-due-reminder',
+            view: 'emails.payment-due-reminder-custom',
         );
     }
 

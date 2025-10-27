@@ -37,7 +37,7 @@ class PaymentOverdueNotice extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.payment-overdue-notice',
+            view: 'emails.payment-overdue-notice-custom',
         );
     }
 

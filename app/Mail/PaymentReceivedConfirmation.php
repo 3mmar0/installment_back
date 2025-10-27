@@ -38,7 +38,7 @@ class PaymentReceivedConfirmation extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.payment-received-confirmation',
+            view: 'emails.payment-received-confirmation-custom',
         );
     }
 

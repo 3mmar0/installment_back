@@ -37,7 +37,7 @@ class InstallmentCreated extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.installment-created',
+            view: 'emails.installment-created-custom',
         );
     }
 
