@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Overdue - {{ config('app.name') }}</title>
+    <title>تأخر في الدفع - {{ config('app.name') }}</title>
     <style>
         * {
             margin: 0;
@@ -13,10 +13,12 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
+            font-family: 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+            line-height: 1.8;
             color: #333;
             background-color: #f4f6f8;
+            direction: rtl;
+            text-align: right;
         }
 
         .email-container {
@@ -185,58 +187,58 @@
     <div class="email-container">
         <!-- Header -->
         <div class="header">
-            <div class="header-title">⚠️ Payment Overdue</div>
-            <div class="header-subtitle">Action required</div>
+            <div class="header-title">⚠️ تأخر في الدفع</div>
+            <div class="header-subtitle">إجراء مطلوب</div>
         </div>
 
         <!-- Content -->
         <div class="content">
             <div class="greeting">
-                Hello {{ $item->installment->customer->name }},
+                مرحباً {{ $item->installment->customer->name }}،
             </div>
 
             <p style="margin-bottom: 20px; color: #4a5568;">
-                Your payment has been overdue for **{{ $daysOverdue }} {{ Str::plural('day', $daysOverdue) }}**.
+                دفعتك متأخرة لمدة **{{ $daysOverdue }} {{ $daysOverdue == 1 ? 'يوم' : 'أيام' }}**.
             </p>
 
             <div class="critical-box">
-                <div class="critical-title">🚨 URGENT PAYMENT REQUIRED</div>
-                <div class="critical-text">Please make this payment immediately to avoid additional fees or
-                    restrictions.</div>
+                <div class="critical-title">🚨 دفع عاجل مطلوب</div>
+                <div class="critical-text">يرجى سداد هذه الدفعة فوراً لتجنب رسوم إضافية أو قيود على الحساب.</div>
             </div>
 
             <!-- Overdue Payment Details -->
             <div class="payment-card">
-                <div class="payment-label">Amount Overdue</div>
+                <div class="payment-label">المبلغ المتأخر</div>
                 <div class="payment-amount">${{ number_format($item->amount, 2) }}</div>
                 <div class="payment-details">
-                    Was Due: {{ \Carbon\Carbon::parse($item->due_date)->format('F d, Y') }}<br>
-                    <span style="color: #ef4444; font-weight: 600;">{{ $daysOverdue }} days overdue</span><br>
-                    Plan: #{{ $item->installment_id }}
+                    كان مستحق: {{ \Carbon\Carbon::parse($item->due_date)->format('d/m/Y') }}<br>
+                    <span style="color: #ef4444; font-weight: 600;">{{ $daysOverdue }}
+                        {{ $daysOverdue == 1 ? 'يوم' : 'أيام' }} متأخر</span><br>
+                    رقم الخطة: #{{ $item->installment_id }}
                 </div>
             </div>
 
             <!-- Action Required -->
             <div class="action-box">
-                <div class="action-title">📋 What You Need to Do</div>
-                <ul class="action-list" style="list-style: none; padding-left: 0;">
-                    <li>✓ Make payment immediately</li>
-                    <li>✓ Contact us if you're facing financial difficulties</li>
-                    <li>✓ We can help find a solution</li>
+                <div class="action-title">📋 ما تحتاج لفعله</div>
+                <ul class="action-list" style="list-style: none; padding-right: 0;">
+                    <li>✓ سدد الدفعة فوراً</li>
+                    <li>✓ تواصل معنا إذا كنت تواجه صعوبات مالية</li>
+                    <li>✓ يمكننا مساعدتك في إيجاد حل</li>
                 </ul>
             </div>
 
             <p style="margin: 25px 0; color: #4a5568; text-align: center;">
-                <strong>If you've already paid,</strong> please contact us at
-                <strong>{{ config('mail.from.address') }}</strong> to update your account.
+                <strong>إذا كنت قد دفعت بالفعل،</strong> يرجى التواصل معنا على
+                <strong>{{ config('mail.from.address') }}</strong> لتحديث حسابك.
             </p>
 
             <p style="color: #4a5568;">
-                We understand circumstances can be difficult. Contact us to discuss payment options.
+                نحن نفهم أن الظروف قد تكون صعبة. تواصل معنا لمناقشة خيارات الدفع.
             </p>
 
             <p style="margin-top: 20px; color: #4a5568;">
-                Contact us: <strong>{{ config('mail.from.address') }}</strong>
+                تواصل معنا: <strong>{{ config('mail.from.address') }}</strong>
             </p>
         </div>
 
@@ -244,11 +246,11 @@
         <div class="footer">
             <div class="footer-logo">{{ config('app.name') }}</div>
             <div class="footer-text">
-                Professional installment management system
+                نظام إدارة التقسيط الاحترافي
             </div>
             <div class="copyright">
-                © {{ date('Y') }} {{ config('app.name') }}. All rights reserved.<br>
-                This is an urgent notice.
+                © {{ date('Y') }} {{ config('app.name') }}. جميع الحقوق محفوظة.<br>
+                هذه إشعار عاجل.
             </div>
         </div>
     </div>

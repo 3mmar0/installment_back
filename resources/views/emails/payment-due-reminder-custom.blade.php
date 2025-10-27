@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 
 <head>
     <meta charset="UTF-8">
@@ -13,10 +13,12 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
+            font-family: 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+            line-height: 1.8;
             color: #333;
             background-color: #f4f6f8;
+            direction: rtl;
+            text-align: right;
         }
 
         .email-container {
@@ -160,46 +162,45 @@
     <div class="email-container">
         <!-- Header -->
         <div class="header">
-            <div class="header-title">⏰ Payment Due Reminder</div>
-            <div class="header-subtitle">Your payment is due soon</div>
+            <div class="header-title">⏰ تذكير بموعد الدفع</div>
+            <div class="header-subtitle">موعد الدفع الخاص بك قريب</div>
         </div>
 
         <!-- Content -->
         <div class="content">
             <div class="greeting">
-                Hello {{ $item->installment->customer->name }},
+                مرحباً {{ $item->installment->customer->name }}،
             </div>
 
             <p style="margin-bottom: 20px; color: #4a5568;">
-                This is a friendly reminder that your payment is due in **{{ $daysRemaining }}
-                {{ Str::plural('day', $daysRemaining) }}**.
+                هذا تذكير ودود بأن موعد الدفع خلال {{ $daysRemaining }} {{ $daysRemaining == 1 ? 'يوم' : 'أيام' }}.
             </p>
 
             <div class="urgent-box">
-                <div class="urgent-title">⏰ Payment Reminder</div>
-                <div class="urgent-text">Please make your payment before the due date to avoid late fees.</div>
+                <div class="urgent-title">⏰ تذكير الدفع</div>
+                <div class="urgent-text">يرجى سداد الدفعة قبل تاريخ الاستحقاق لتجنب أي رسوم تأخير.</div>
             </div>
 
             <!-- Payment Details -->
             <div class="payment-card">
-                <div class="payment-label">Amount Due</div>
+                <div class="payment-label">المبلغ المستحق</div>
                 <div class="payment-amount">${{ number_format($item->amount, 2) }}</div>
                 <div class="payment-details">
-                    Due: {{ \Carbon\Carbon::parse($item->due_date)->format('F d, Y') }}<br>
-                    Plan: #{{ $item->installment_id }}
+                    موعد الاستحقاق: {{ \Carbon\Carbon::parse($item->due_date)->format('d/m/Y') }}<br>
+                    رقم الخطة: #{{ $item->installment_id }}
                 </div>
             </div>
 
             <p style="margin: 25px 0; color: #4a5568; text-align: center;">
-                <strong>If you've already paid, please ignore this reminder.</strong>
+                <strong>إذا كنت قد دفعت بالفعل، يرجى تجاهل هذا التذكير.</strong>
             </p>
 
             <p style="margin: 20px 0; color: #4a5568;">
-                Need help? Contact us at <strong>{{ config('mail.from.address') }}</strong>
+                تحتاج مساعدة؟ تواصل معنا على <strong>{{ config('mail.from.address') }}</strong>
             </p>
 
             <p style="color: #4a5568;">
-                Thank you!
+                شكراً لك!
             </p>
         </div>
 
@@ -207,11 +208,11 @@
         <div class="footer">
             <div class="footer-logo">{{ config('app.name') }}</div>
             <div class="footer-text">
-                Professional installment management system
+                نظام إدارة التقسيط الاحترافي
             </div>
             <div class="copyright">
-                © {{ date('Y') }} {{ config('app.name') }}. All rights reserved.<br>
-                This email was sent automatically, please do not reply.
+                © {{ date('Y') }} {{ config('app.name') }}. جميع الحقوق محفوظة.<br>
+                تم إرسال هذا البريد الإلكتروني تلقائياً، يرجى عدم الرد عليه.
             </div>
         </div>
     </div>

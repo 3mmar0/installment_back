@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Received - {{ config('app.name') }}</title>
+    <title>تم استلام الدفعة - {{ config('app.name') }}</title>
     <style>
         * {
             margin: 0;
@@ -13,10 +13,12 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
+            font-family: 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+            line-height: 1.8;
             color: #333;
             background-color: #f4f6f8;
+            direction: rtl;
+            text-align: right;
         }
 
         .email-container {
@@ -193,58 +195,59 @@
     <div class="email-container">
         <!-- Header -->
         <div class="header">
-            <div class="header-title">✅ Payment Received</div>
-            <div class="header-subtitle">Thank you for your payment</div>
+            <div class="header-title">✅ تم استلام الدفعة</div>
+            <div class="header-subtitle">شكراً لك على الدفع</div>
         </div>
 
         <!-- Content -->
         <div class="content">
             <div class="greeting">
-                Hello {{ $item->installment->customer->name }},
+                مرحباً {{ $item->installment->customer->name }}،
             </div>
 
             <p style="margin-bottom: 20px; color: #4a5568;">
-                We have successfully received your payment. This email serves as your payment receipt.
+                لقد استلمنا دفعتك بنجاح. هذا البريد الإلكتروني بمثابة إيصال الدفع الخاص بك.
             </p>
 
             <div class="success-box">
-                <div class="success-title">✓ Payment Confirmed</div>
-                <div class="success-text">Your payment has been processed and your account has been updated.</div>
+                <div class="success-title">✓ تم تأكيد الدفع</div>
+                <div class="success-text">تمت معالجة دفعتك وتحديث حسابك.</div>
             </div>
 
             <!-- Payment Amount -->
             <div class="receipt-box">
-                <div class="receipt-label">Amount Received</div>
+                <div class="receipt-label">المبلغ المستلم</div>
                 <div class="receipt-amount">${{ number_format($paidAmount, 2) }}</div>
                 <div class="receipt-details">
-                    Date:
-                    {{ $item->paid_at ? \Carbon\Carbon::parse($item->paid_at)->format('M d, Y') : date('M d, Y') }}<br>
+                    التاريخ:
+                    {{ $item->paid_at ? \Carbon\Carbon::parse($item->paid_at)->format('d/m/Y') : date('d/m/Y') }}<br>
                     @if ($item->reference)
-                        Ref: {{ $item->reference }}<br>
+                        المرجع: {{ $item->reference }}<br>
                     @endif
-                    Plan ID: #{{ $item->installment_id }}
+                    رقم الخطة: #{{ $item->installment_id }}
                 </div>
             </div>
 
             <!-- Account Summary -->
-            <h3 style="color: #2d3748; margin: 25px 0 15px; font-size: 18px;">Account Summary</h3>
+            <h3 style="color: #2d3748; margin: 25px 0 15px; font-size: 18px;">ملخص الحساب</h3>
             <div class="info-grid">
                 <div class="info-item">
-                    <div class="info-label">Total Amount</div>
+                    <div class="info-label">المبلغ الإجمالي</div>
                     <div class="info-value">${{ number_format($item->installment->total_amount, 2) }}</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Payment Period</div>
-                    <div class="info-value">{{ $item->installment->months }} months</div>
+                    <div class="info-label">فترة الدفع</div>
+                    <div class="info-value">{{ $item->installment->months }}
+                        {{ $item->installment->months == 1 ? 'شهر' : 'أشهر' }}</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Paid</div>
+                    <div class="info-label">المدفوع</div>
                     <div class="info-value success">
                         ${{ number_format($item->installment->items()->whereNotNull('paid_at')->sum('paid_amount'), 2) }}
                     </div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Remaining</div>
+                    <div class="info-label">المتبقي</div>
                     <div class="info-value">
                         ${{ number_format($item->installment->total_amount - $item->installment->items()->whereNotNull('paid_at')->sum('paid_amount'), 2) }}
                     </div>
@@ -252,11 +255,11 @@
             </div>
 
             <p style="margin: 25px 0; color: #4a5568; text-align: center; font-weight: 600;">
-                Please keep this email for your records.
+                يرجى الاحتفاظ بهذا البريد الإلكتروني للمحفوظات.
             </p>
 
             <p style="color: #4a5568;">
-                Thank you for your business!
+                شكراً لك على عملك!
             </p>
         </div>
 
@@ -264,11 +267,11 @@
         <div class="footer">
             <div class="footer-logo">{{ config('app.name') }}</div>
             <div class="footer-text">
-                Professional installment management system
+                نظام إدارة التقسيط الاحترافي
             </div>
             <div class="copyright">
-                © {{ date('Y') }} {{ config('app.name') }}. All rights reserved.<br>
-                This is your payment receipt.
+                © {{ date('Y') }} {{ config('app.name') }}. جميع الحقوق محفوظة.<br>
+                هذا إيصال الدفع الخاص بك.
             </div>
         </div>
     </div>

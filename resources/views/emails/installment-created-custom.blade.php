@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 
 <head>
     <meta charset="UTF-8">
@@ -225,45 +225,45 @@
     <div class="email-container">
         <!-- Header -->
         <div class="header">
-            <div class="header-title">🎉 Your Installment Plan is Ready</div>
-            <div class="header-subtitle">We're excited to have you on board</div>
+            <div class="header-title">🎉 تم إنشاء خطة التقسيط بنجاح</div>
+            <div class="header-subtitle">نحن سعداء بانضمامك إلينا</div>
         </div>
 
         <!-- Content -->
         <div class="content">
             <div class="greeting">
-                Hello {{ $installment->customer->name }},
+                مرحباً {{ $installment->customer->name }}،
             </div>
 
             <p style="margin-bottom: 20px; color: #4a5568;">
-                Your installment plan has been successfully created and activated. Below are your payment details.
+                تم إنشاء خطة التقسيط الخاصة بك بنجاح وتفعيلها. فيما يلي تفاصيل الدفع الخاصة بك.
             </p>
 
             <!-- Plan Overview -->
             <div class="info-box">
                 <div class="info-row">
-                    <span class="info-label">Total Amount</span>
+                    <span class="info-label">المبلغ الإجمالي</span>
                     <span class="info-value"
                         style="color: #667eea;">${{ number_format($installment->total_amount, 2) }}</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">Duration</span>
+                    <span class="info-label">المدة</span>
                     <span class="info-value">{{ $installment->months }}
-                        {{ Str::plural('month', $installment->months) }}</span>
+                        {{ $installment->months == 1 ? 'شهر' : 'أشهر' }}</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">Start Date</span>
-                    <span class="info-value">{{ $installment->start_date->format('M d, Y') }}</span>
+                    <span class="info-label">تاريخ البداية</span>
+                    <span class="info-value">{{ $installment->start_date->format('d/m/Y') }}</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">End Date</span>
-                    <span class="info-value">{{ $installment->end_date->format('M d, Y') }}</span>
+                    <span class="info-label">تاريخ الانتهاء</span>
+                    <span class="info-value">{{ $installment->end_date->format('d/m/Y') }}</span>
                 </div>
             </div>
 
             @if ($installment->products)
                 <div style="margin: 25px 0;">
-                    <h3 style="color: #2d3748; margin-bottom: 15px; font-size: 18px;">Products & Services</h3>
+                    <h3 style="color: #2d3748; margin-bottom: 15px; font-size: 18px;">المنتجات والخدمات</h3>
                     @foreach ($installment->products as $product)
                         <div style="padding: 8px 0; color: #4a5568;">✓ {{ $product }}</div>
                     @endforeach
@@ -271,21 +271,21 @@
             @endif
 
             <!-- Payment Schedule -->
-            <h3 style="color: #2d3748; margin: 30px 0 15px; font-size: 18px;">Payment Schedule</h3>
+            <h3 style="color: #2d3748; margin: 30px 0 15px; font-size: 18px;">جدول الدفع</h3>
             <table class="payment-table">
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Due Date</th>
-                        <th style="text-align: right;">Amount</th>
+                        <th>تاريخ الاستحقاق</th>
+                        <th style="text-align: left;">المبلغ</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach ($installment->items as $index => $item)
                         <tr>
                             <td>{{ $index + 1 }}</td>
-                            <td>{{ \Carbon\Carbon::parse($item->due_date)->format('M d, Y') }}</td>
-                            <td style="text-align: right; font-weight: 600; color: #667eea;">
+                            <td>{{ \Carbon\Carbon::parse($item->due_date)->format('d/m/Y') }}</td>
+                            <td style="text-align: left; font-weight: 600; color: #667eea;">
                                 ${{ number_format($item->amount, 2) }}</td>
                         </tr>
                     @endforeach
@@ -294,28 +294,29 @@
 
             <!-- Next Payment Highlight -->
             <div class="highlight-box">
-                <div class="highlight-label">Your Next Payment</div>
+                <div class="highlight-label">القسط القادم</div>
                 <div class="highlight-amount">${{ number_format($installment->items->first()->amount ?? 0, 2) }}</div>
-                <div class="highlight-date">Due {{ $installment->items->first()?->due_date->format('M d, Y') }}</div>
+                <div class="highlight-date">مستحق بتاريخ {{ $installment->items->first()?->due_date->format('d/m/Y') }}
+                </div>
             </div>
 
             <!-- Important Information -->
             <div class="reminder-box">
-                <div class="reminder-title">📋 Important Information</div>
-                <ul class="reminder-list" style="list-style: none; padding-left: 0;">
-                    <li>✓ Make payments on or before the due date</li>
-                    <li>✓ Late payments may incur additional fees</li>
-                    <li>✓ Keep this email for your records</li>
-                    <li>✓ Contact us anytime you need help</li>
+                <div class="reminder-title">📋 معلومات مهمة</div>
+                <ul class="reminder-list" style="list-style: none; padding-right: 0;">
+                    <li>✓ قم بالدفع في أو قبل تاريخ الاستحقاق</li>
+                    <li>✓ قد يؤدي التأخير في الدفع إلى رسوم إضافية</li>
+                    <li>✓ احتفظ بهذا البريد الإلكتروني للمحفوظات</li>
+                    <li>✓ تواصل معنا في أي وقت تحتاج فيه المساعدة</li>
                 </ul>
             </div>
 
             <p style="margin: 25px 0; color: #4a5568; text-align: center;">
-                Questions? We're here to help at <strong>{{ config('mail.from.address') }}</strong>
+                لديك أسئلة؟ نحن هنا لمساعدتك على <strong>{{ config('mail.from.address') }}</strong>
             </p>
 
             <p style="color: #4a5568; margin-top: 20px;">
-                Thanks for choosing {{ config('app.name') }}!
+                شكراً لاختيارك {{ config('app.name') }}!
             </p>
         </div>
 
@@ -323,11 +324,11 @@
         <div class="footer">
             <div class="footer-logo">{{ config('app.name') }}</div>
             <div class="footer-text">
-                Professional installment management system
+                نظام إدارة التقسيط الاحترافي
             </div>
             <div class="copyright">
-                © {{ date('Y') }} {{ config('app.name') }}. All rights reserved.<br>
-                This email was sent automatically, please do not reply.
+                © {{ date('Y') }} {{ config('app.name') }}. جميع الحقوق محفوظة.<br>
+                تم إرسال هذا البريد الإلكتروني تلقائياً، يرجى عدم الرد عليه.
             </div>
         </div>
     </div>
