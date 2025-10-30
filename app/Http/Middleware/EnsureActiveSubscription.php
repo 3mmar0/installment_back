@@ -18,6 +18,11 @@ class EnsureActiveSubscription
             return $this->unauthorizedResponse();
         }
 
+        // Owners bypass subscription checks
+        if (method_exists($user, 'isOwner') && $user->isOwner()) {
+            return $next($request);
+        }
+
         $subscription = $user->latestSubscription;
         if (!$subscription) {
             return $this->errorResponse('Subscription required', 402);
