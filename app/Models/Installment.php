@@ -42,6 +42,6 @@ class Installment extends Model
 
     public function scopeForUser($query, User $user)
     {
-        return $user->isOwner() ? $query : $query->where('user_id', $user->id);
+        return $user->isOwner() ? $query : $query->where('installments.user_id', $user->id);
     }
 }

@@ -37,52 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('refresh', 'refresh');
     });
 
-    // Dashboard
-    Route::get('dashboard', [InstallmentController::class, 'dashboard']);
-
-    // Notifications & Emails
-    Route::controller(\App\Http\Controllers\Api\NotificationController::class)->group(function () {
-        Route::get('notification-list', 'index');
-        Route::get('notification-count', 'count');
-        Route::post('notification-mark-read/{id}', 'markAsRead');
-        Route::post('notification-mark-all-read', 'markAllAsRead');
-        Route::post('notification-generate', 'generate');
-        Route::post('notification-send-emails', 'sendReminderEmails');
-        Route::delete('notification-delete/{id}', 'destroy');
-    });
-
-    // Customer routes
-    Route::controller(CustomerController::class)->group(function () {
-        Route::get('customer-list', 'index');
-        Route::get('customer-for-select', 'forSelect');
-        Route::post('customer-create', 'store');
-        Route::get('customer-show/{id}', 'show');
-        Route::put('customer-update/{id}', 'update');
-        Route::delete('customer-delete/{id}', 'destroy');
-        Route::get('customer-stats/{id}', 'stats');
-    });
-
-    // Installment routes
-    Route::controller(InstallmentController::class)->group(function () {
-        Route::get('installment-list', 'index');
-        Route::post('installment-create', 'store');
-        Route::get('installment-overdue', 'overdue');
-        Route::get('installment-due-soon', 'dueSoon');
-        Route::get('installment-show/{id}', 'show');
-        Route::get('installment-stats/{id}', 'stats');
-        Route::get('installment-all-stats', 'allStats');
-        Route::post('installment-item-pay/{item}', 'markItemPaid');
-    });
-
-    // Owner Plan routes
-    Route::middleware('owner')->controller(PlanController::class)->group(function () {
-        Route::get('plans/admin', 'adminIndex');
-        Route::post('plans', 'store');
-        Route::put('plans/{plan}', 'update');
-        Route::delete('plans/{plan}', 'destroy');
-    });
-
-    // Subscriptions
+    // Subscriptions (management of subscription itself should not require active subscription)
     Route::controller(SubscriptionController::class)->group(function () {
         Route::get('subscriptions/current', 'current');
         Route::post('subscriptions/subscribe', 'subscribe');
@@ -90,6 +45,46 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('subscriptions/change-plan', 'changePlan');
         Route::get('subscriptions/payments', 'paymentsIndex');
         Route::post('subscriptions/record-payment', 'recordPayment');
+    });
+
+    // Routes below require an active subscription
+    Route::middleware(\App\Http\Middleware\EnsureActiveSubscription::class)->group(function () {
+        // Dashboard
+        Route::get('dashboard', [InstallmentController::class, 'dashboard']);
+
+        // Notifications & Emails
+        Route::controller(\App\Http\Controllers\Api\NotificationController::class)->group(function () {
+            Route::get('notification-list', 'index');
+            Route::get('notification-count', 'count');
+            Route::post('notification-mark-read/{id}', 'markAsRead');
+            Route::post('notification-mark-all-read', 'markAllAsRead');
+            Route::post('notification-generate', 'generate');
+            Route::post('notification-send-emails', 'sendReminderEmails');
+            Route::delete('notification-delete/{id}', 'destroy');
+        });
+
+        // Customer routes
+        Route::controller(CustomerController::class)->group(function () {
+            Route::get('customer-list', 'index');
+            Route::get('customer-for-select', 'forSelect');
+            Route::post('customer-create', 'store');
+            Route::get('customer-show/{id}', 'show');
+            Route::put('customer-update/{id}', 'update');
+            Route::delete('customer-delete/{id}', 'destroy');
+            Route::get('customer-stats/{id}', 'stats');
+        });
+
+        // Installment routes
+        Route::controller(InstallmentController::class)->group(function () {
+            Route::get('installment-list', 'index');
+            Route::post('installment-create', 'store');
+            Route::get('installment-overdue', 'overdue');
+            Route::get('installment-due-soon', 'dueSoon');
+            Route::get('installment-show/{id}', 'show');
+            Route::get('installment-stats/{id}', 'stats');
+            Route::get('installment-all-stats', 'allStats');
+            Route::post('installment-item-pay/{item}', 'markItemPaid');
+        });
     });
 
     // User routes (Owner only)

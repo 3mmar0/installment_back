@@ -24,6 +24,24 @@ class NotificationService
     }
 
     /**
+     * Notify owners about a new user registration.
+     */
+    public function notifyNewUserRegistered(User $owner, User $newUser): Notification
+    {
+        return $this->create(
+            $owner,
+            'new_user',
+            'New User Registered',
+            "A new user has registered: {$newUser->name} ({$newUser->email})",
+            [
+                'new_user_id' => $newUser->id,
+                'new_user_email' => $newUser->email,
+                'new_user_name' => $newUser->name,
+            ]
+        );
+    }
+
+    /**
      * Notify about upcoming payments (due in 3 days or less).
      */
     public function notifyUpcomingPayments(User $user): int

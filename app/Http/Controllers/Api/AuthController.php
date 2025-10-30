@@ -8,6 +8,9 @@ use App\Http\Resources\UserResource;
 use App\Http\Traits\ApiResponse;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Models\User;
+use App\Enums\UserRole;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules\Password;
@@ -19,7 +22,8 @@ class AuthController extends Controller
     use ApiResponse;
 
     public function __construct(
-        private readonly AuthServiceInterface $authService
+        private readonly AuthServiceInterface $authService,
+        private readonly NotificationService $notificationService
     ) {}
 
     /**
@@ -59,6 +63,13 @@ class AuthController extends Controller
         ]);
 
         $result = $this->authService->register($data);
+        $newUser = $result['user'];
+
+        // Notify owners about the new user
+        $owners = User::where('role', UserRole::Owner)->get();
+        foreach ($owners as $owner) {
+            $this->notificationService->notifyNewUserRegistered($owner, $newUser);
+        }
 
         // Optionally create a subscription if plan_id provided (with optional free_trial)
         if (!empty($data['plan_id'])) {
