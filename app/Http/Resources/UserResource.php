@@ -24,17 +24,17 @@ class UserResource extends JsonResource
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
             'current_subscription' => $latestSubscription ? [
-                'id' => $latestSubscription->id,
-                'status' => $latestSubscription->status,
-                'starts_at' => $latestSubscription->starts_at?->toISOString(),
-                'ends_at' => $latestSubscription->ends_at?->toISOString(),
-                'next_due_at' => $latestSubscription->next_due_at?->toISOString(),
-                'amount_cents' => $latestSubscription->amount_cents,
-                'paid_cents' => $latestSubscription->paid_cents,
-                'plan' => $latestSubscription->relationLoaded('plan') ? [
-                    'id' => $latestSubscription->plan->id,
-                    'name' => $latestSubscription->plan->name,
-                    'interval' => $latestSubscription->plan->interval,
+                'id' => $latestSubscription?->id,
+                'status' => $latestSubscription?->status,
+                'starts_at' => $latestSubscription?->starts_at?->toISOString(),
+                'ends_at' => $latestSubscription?->ends_at?->toISOString(),
+                'next_due_at' => $latestSubscription?->next_due_at?->toISOString(),
+                'amount_cents' => $latestSubscription?->amount_cents,
+                'paid_cents' => $latestSubscription?->paid_cents,
+                'plan' => $latestSubscription?->relationLoaded('plan') ? [
+                    'id' => $latestSubscription?->plan->id,
+                    'name' => $latestSubscription?->plan->name,
+                    'interval' => $latestSubscription?->plan->interval,
                 ] : null,
             ] : null,
         ];
