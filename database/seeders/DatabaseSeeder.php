@@ -22,5 +22,9 @@ class DatabaseSeeder extends Seeder
                 'role' => UserRole::Owner,
             ]);
         }
+
+        $this->call([
+            PlanSeeder::class,
+        ]);
     }
 }

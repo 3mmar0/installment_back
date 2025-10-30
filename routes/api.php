@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\InstallmentController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\PlanController;
+use App\Http\Controllers\Api\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -22,6 +24,9 @@ Route::prefix('auth')->controller(AuthController::class)->group(function () {
     Route::post('login', 'login');
     Route::post('register', 'register');
 });
+
+// Public Plans
+Route::get('plans', [PlanController::class, 'index']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -67,6 +72,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('installment-stats/{id}', 'stats');
         Route::get('installment-all-stats', 'allStats');
         Route::post('installment-item-pay/{item}', 'markItemPaid');
+    });
+
+    // Owner Plan routes
+    Route::middleware('owner')->controller(PlanController::class)->group(function () {
+        Route::get('plans/admin', 'adminIndex');
+        Route::post('plans', 'store');
+        Route::put('plans/{plan}', 'update');
+        Route::delete('plans/{plan}', 'destroy');
+    });
+
+    // Subscriptions
+    Route::controller(SubscriptionController::class)->group(function () {
+        Route::get('subscriptions/current', 'current');
+        Route::post('subscriptions/subscribe', 'subscribe');
+        Route::post('subscriptions/cancel', 'cancel');
+        Route::post('subscriptions/change-plan', 'changePlan');
+        Route::get('subscriptions/payments', 'paymentsIndex');
+        Route::post('subscriptions/record-payment', 'recordPayment');
     });
 
     // User routes (Owner only)

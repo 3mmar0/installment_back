@@ -16,7 +16,7 @@ class UserService implements UserServiceInterface
      */
     public function getAllUsers(): Collection
     {
-        return User::latest()->get();
+        return User::with(['latestSubscription.plan'])->latest()->get();
     }
 
     /**
@@ -39,7 +39,7 @@ class UserService implements UserServiceInterface
      */
     public function findUserById(int $id): ?User
     {
-        return User::find($id);
+        return User::with(['latestSubscription.plan'])->find($id);
     }
 
     /**
@@ -64,7 +64,7 @@ class UserService implements UserServiceInterface
             }
 
             $user->update($updateData);
-            return $user->fresh();
+            return $user->fresh(['latestSubscription.plan']);
         });
     }
 
@@ -91,6 +91,7 @@ class UserService implements UserServiceInterface
     public function getUsersForOwner()
     {
         return User::where('role', UserRole::User)
+            ->with(['latestSubscription.plan'])
             ->latest()
             ->paginate(20);
     }

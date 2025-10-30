@@ -470,6 +470,8 @@
                     <li><a href="#overview">Overview</a></li>
                     <li><a href="#architecture">Architecture</a></li>
                     <li><a href="#authentication">Authentication</a></li>
+                    <li><a href="#plans">Plans</a></li>
+                    <li><a href="#subscriptions">Subscriptions</a></li>
                     <li><a href="#customers">Customers</a></li>
                     <li><a href="#installments">Installments</a></li>
                     <li><a href="#dashboard">Dashboard</a></li>
@@ -500,6 +502,11 @@
                             <p>Laravel Sanctum for secure API access</p>
                         </div>
                         <div class="feature-item">
+                            <div class="feature-icon">📦</div>
+                            <h4>Plans & Subscriptions</h4>
+                            <p>Browse plans, subscribe, cancel, record offline payments</p>
+                        </div>
+                        <div class="feature-item">
                             <div class="feature-icon">👥</div>
                             <h4>Customer Management</h4>
                             <p>Full CRUD operations with statistics</p>
@@ -518,11 +525,6 @@
                             <div class="feature-icon">🔔</div>
                             <h4>Notifications</h4>
                             <p>In-app and email notifications</p>
-                        </div>
-                        <div class="feature-item">
-                            <div class="feature-icon">📧</div>
-                            <h4>Arabic Emails</h4>
-                            <p>Professional RTL email templates</p>
                         </div>
                     </div>
                 </section>
@@ -569,7 +571,7 @@
                             <span class="method post">POST</span>
                             <span class="endpoint-url">/api/auth/register</span>
                         </div>
-                        <p><strong>Register a new user</strong></p>
+                        <p><strong>Register a new user (supports plan selection or free trial)</strong></p>
                         <div class="request-response">
                             <div class="code-section">
                                 <div class="code-section-header">📤 Request</div>
@@ -581,12 +583,14 @@ Content-Type: application/json
   "name": "John Doe",
   "email": "john@example.com",
   "password": "password123",
-  "password_confirmation": "password123"
+  "password_confirmation": "password123",
+  "plan_id": 1,            // optional
+  "free_trial": true        // optional
 }</pre>
                                 </div>
                             </div>
                             <div class="code-section">
-                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-header">📥 Response (201 Created)</div>
                                 <div class="code-section-body">
                                     <pre>{
   "success": true,
@@ -596,7 +600,20 @@ Content-Type: application/json
       "id": 1,
       "name": "John Doe",
       "email": "john@example.com",
-      "role": "user"
+      "role": "user",
+      "current_subscription": {
+        "id": 10,
+        "status": "active",
+        "starts_at": "2025-10-30T10:00:00.000000Z",
+        "ends_at": "2025-11-30T10:00:00.000000Z",
+        "amount_cents": 9900,
+        "paid_cents": 0,
+        "plan": {
+          "id": 1,
+          "name": "Basic Monthly",
+          "interval": "monthly"
+        }
+      }
     },
     "token": "2|xxxxxxxxxxxxxxxxxxxxx",
     "token_type": "Bearer"
@@ -638,8 +655,11 @@ Content-Type: application/json
       "name": "John Doe",
       "email": "john@example.com",
       "role": "user",
-      "email_verified_at": "2024-01-01T10:00:00.000000Z",
-      "created_at": "2024-01-01T10:00:00.000000Z"
+      "current_subscription": {
+        "id": 10,
+        "status": "active",
+        "plan": {"id": 1, "name": "Basic Monthly", "interval": "monthly"}
+      }
     },
     "token": "2|xxxxxxxxxxxxxxxxxxxxx",
     "token_type": "Bearer"
@@ -674,8 +694,12 @@ Authorization: Bearer {token}</pre>
     "name": "John Doe",
     "email": "john@example.com",
     "role": "user",
-    "email_verified_at": "2024-01-01T10:00:00.000000Z",
-    "created_at": "2024-01-01T10:00:00.000000Z"
+    "current_subscription": {
+      "id": 10,
+      "status": "active",
+      "ends_at": "2025-11-30T10:00:00.000000Z",
+      "plan": {"id": 1, "name": "Basic Monthly", "interval": "monthly"}
+    }
   }
 }</pre>
                                 </div>
@@ -702,7 +726,7 @@ Authorization: Bearer {token}</pre>
                                 <div class="code-section-body">
                                     <pre>{
   "success": true,
-  "message": "Logged out successfully"
+  "message": "Logout successful"
 }</pre>
                                 </div>
                             </div>
@@ -733,6 +757,233 @@ Authorization: Bearer {token}</pre>
     "token": "3|xxxxxxxxxxxxxxxxxxxxx",
     "token_type": "Bearer"
   }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Plans Section -->
+                <section id="plans" class="section">
+                    <h2>Plans</h2>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <span class="endpoint-url">/api/plans</span>
+                        </div>
+                        <p><strong>List active plans (public)</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Plans retrieved successfully",
+  "data": [
+    {
+      "id": 1,
+      "name": "Basic Monthly",
+      "price_cents": 9900,
+      "currency": "USD",
+      "interval": "monthly",
+      "trial_days": 7,
+      "features": {"support": "email", "projects": 5},
+      "is_active": true
+    }
+  ]
+}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <span class="endpoint-url">/api/plans/admin</span>
+                        </div>
+                        <p><strong>List all plans (owner only)</strong></p>
+                        <div class="response-example">
+                            <div class="response-label">Authorization:</div>
+                            <div class="code-block">Authorization: Bearer {owner_token}</div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method post">POST</span>
+                            <span class="endpoint-url">/api/plans</span>
+                        </div>
+                        <p><strong>Create a plan (owner only)</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/plans
+Authorization: Bearer {owner_token}
+Content-Type: application/json
+
+{
+  "name": "Basic Monthly",
+  "price_cents": 9900,
+  "currency": "USD",
+  "interval": "monthly",
+  "trial_days": 7,
+  "features": {"support": "email", "projects": 5}
+}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (201 Created)</div>
+                                <div class="code-section-body">
+                                    <pre>{"success": true, "message": "Plan created successfully", "data": {"id": 1, "name": "Basic Monthly", ...}}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method put">PUT</span>
+                            <span class="endpoint-url">/api/plans/{plan}</span>
+                        </div>
+                        <p><strong>Update a plan (owner only)</strong></p>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method delete">DELETE</span>
+                            <span class="endpoint-url">/api/plans/{plan}</span>
+                        </div>
+                        <p><strong>Delete a plan (owner only)</strong></p>
+                    </div>
+                </section>
+
+                <!-- Subscriptions Section -->
+                <section id="subscriptions" class="section">
+                    <h2>Subscriptions</h2>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <span class="endpoint-url">/api/subscriptions/current</span>
+                        </div>
+                        <p><strong>Get current user subscription</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>GET /api/subscriptions/current
+Authorization: Bearer {token}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (200 OK)</div>
+                                <div class="code-section-body">
+                                    <pre>{
+  "success": true,
+  "message": "Current subscription retrieved",
+  "data": {
+    "id": 10,
+    "status": "active",
+    "starts_at": "2025-10-30T10:00:00.000000Z",
+    "ends_at": "2025-11-30T10:00:00.000000Z",
+    "next_due_at": "2025-11-30T10:00:00.000000Z",
+    "amount_cents": 9900,
+    "paid_cents": 0,
+    "plan": {"id": 1, "name": "Basic Monthly", "interval": "monthly"}
+  }
+}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method post">POST</span>
+                            <span class="endpoint-url">/api/subscriptions/subscribe</span>
+                        </div>
+                        <p><strong>Subscribe to a plan</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/subscriptions/subscribe
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "plan_id": 1
+}</pre>
+                                </div>
+                            </div>
+                            <div class="code-section">
+                                <div class="code-section-header">📥 Response (201 Created)</div>
+                                <div class="code-section-body">
+                                    <pre>{"success": true, "message": "Subscribed successfully", "data": {"id": 10, "plan": {"id": 1, "name": "Basic Monthly"}, ...}}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method post">POST</span>
+                            <span class="endpoint-url">/api/subscriptions/cancel</span>
+                        </div>
+                        <p><strong>Cancel current subscription</strong></p>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method post">POST</span>
+                            <span class="endpoint-url">/api/subscriptions/change-plan</span>
+                        </div>
+                        <p><strong>Change to a different plan</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/subscriptions/change-plan
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "plan_id": 2
+}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <span class="endpoint-url">/api/subscriptions/payments</span>
+                        </div>
+                        <p><strong>List subscription payments</strong></p>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method post">POST</span>
+                            <span class="endpoint-url">/api/subscriptions/record-payment</span>
+                        </div>
+                        <p><strong>Record an offline payment</strong></p>
+                        <div class="request-response">
+                            <div class="code-section">
+                                <div class="code-section-header">📤 Request</div>
+                                <div class="code-section-body">
+                                    <pre>POST /api/subscriptions/record-payment
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "amount_cents": 9900,
+  "note": "Cash received"
 }</pre>
                                 </div>
                             </div>
@@ -1668,16 +1919,6 @@ Query Parameters:
                         <p><strong>List all users (Owner only)</strong></p>
                         <div class="request-response">
                             <div class="code-section">
-                                <div class="code-section-header">📤 Request</div>
-                                <div class="code-section-body">
-                                    <pre>GET /api/user-list
-Authorization: Bearer {owner_token}
-Accept: application/json
-
-Note: Requires owner role</pre>
-                                </div>
-                            </div>
-                            <div class="code-section">
                                 <div class="code-section-header">📥 Response (200 OK)</div>
                                 <div class="code-section-body">
                                     <pre>{
@@ -1688,62 +1929,12 @@ Note: Requires owner role</pre>
       "name": "John Doe",
       "email": "john@example.com",
       "role": "user",
-      "email_verified_at": "2024-01-01T10:00:00.000000Z",
-      "created_at": "2024-01-01T10:00:00.000000Z",
-      "updated_at": "2024-01-01T10:00:00.000000Z"
-    },
-    {
-      "id": 2,
-      "name": "Admin User",
-      "email": "admin@example.com",
-      "role": "owner",
-      "email_verified_at": "2024-01-15T10:00:00.000000Z",
-      "created_at": "2024-01-15T10:00:00.000000Z",
-      "updated_at": "2024-01-15T10:00:00.000000Z"
+      "current_subscription": {
+        "status": "active",
+        "plan": {"name": "Basic Monthly"}
+      }
     }
   ]
-}</pre>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="endpoint">
-                        <div class="endpoint-header">
-                            <span class="method post">POST</span>
-                            <span class="endpoint-url">/api/user-create</span>
-                        </div>
-                        <p><strong>Create a new user (Owner only)</strong></p>
-                        <div class="request-response">
-                            <div class="code-section">
-                                <div class="code-section-header">📤 Request</div>
-                                <div class="code-section-body">
-                                    <pre>POST /api/user-create
-Authorization: Bearer {owner_token}
-Content-Type: application/json
-
-{
-  "name": "New User",
-  "email": "newuser@example.com",
-  "password": "password123",
-  "password_confirmation": "password123",
-  "role": "user"
-}</pre>
-                                </div>
-                            </div>
-                            <div class="code-section">
-                                <div class="code-section-header">📥 Response (201 Created)</div>
-                                <div class="code-section-body">
-                                    <pre>{
-  "success": true,
-  "message": "User created successfully",
-  "data": {
-    "id": 2,
-    "name": "New User",
-    "email": "newuser@example.com",
-    "role": "user",
-    "created_at": "2024-01-15T10:00:00.000000Z"
-  }
 }</pre>
                                 </div>
                             </div>
@@ -1757,71 +1948,8 @@ Content-Type: application/json
                         </div>
                         <p><strong>Get user details</strong></p>
                         <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block">{
-  "success": true,
-  "data": {
-    "id": 1,
-    "name": "John Doe",
-    "email": "john@example.com",
-    "role": "user",
-    "created_at": "2024-01-01T10:00:00.000000Z"
-  }
-}</div>
-                        </div>
-                    </div>
-
-                    <div class="endpoint">
-                        <div class="endpoint-header">
-                            <span class="method put">PUT</span>
-                            <span class="endpoint-url">/api/user-update/{id}</span>
-                        </div>
-                        <p><strong>Update user</strong></p>
-                        <div class="request-response">
-                            <div class="code-section">
-                                <div class="code-section-header">📤 Request</div>
-                                <div class="code-section-body">
-                                    <pre>PUT /api/user-update/1
-Authorization: Bearer {owner_token}
-Content-Type: application/json
-
-{
-  "name": "John Doe Updated",
-  "role": "admin"
-}</pre>
-                                </div>
-                            </div>
-                            <div class="code-section">
-                                <div class="code-section-header">📥 Response (200 OK)</div>
-                                <div class="code-section-body">
-                                    <pre>{
-  "success": true,
-  "message": "User updated successfully",
-  "data": {
-    "id": 1,
-    "name": "John Doe Updated",
-    "email": "john@example.com",
-    "role": "admin",
-    "updated_at": "2024-01-15T14:00:00.000000Z"
-  }
-}</pre>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="endpoint">
-                        <div class="endpoint-header">
-                            <span class="method delete">DELETE</span>
-                            <span class="endpoint-url">/api/user-delete/{id}</span>
-                        </div>
-                        <p><strong>Delete user</strong></p>
-                        <div class="response-example">
-                            <div class="response-label">Response:</div>
-                            <div class="code-block">{
-  "success": true,
-  "message": "User deleted successfully"
-}</div>
+                            <div class="response-label">Response includes:</div>
+                            <div class="code-block">{"current_subscription": {"status": "active", "plan": {"name": "Basic Monthly"}}}</div>
                         </div>
                     </div>
                 </section>
