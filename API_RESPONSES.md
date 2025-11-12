@@ -18,9 +18,34 @@
 
 ### `POST /api/auth/login`
 
+#### Request Body
+
+```json
+{
+    "email": "owner@example.com",
+    "password": "secret"
+}
+```
+
 ### `POST /api/auth/register`
 
+#### Request Body
+
+```json
+{
+    "name": "Test User",
+    "email": "user@example.com",
+    "password": "secret",
+    "password_confirmation": "secret",
+    "subscription_id": 1
+}
+```
+
 ### `GET /api/auth/me`
+
+لا يتطلب جسم؛ فقط توكن المصادقة في الهيدر.
+
+#### Response
 
 ```json
 {
@@ -89,56 +114,115 @@
 
 ## 📦 Subscription Plans
 
-### `GET /api/subscriptions` (عام)
+### `GET /api/subscriptions-public` (عام)
+
+#### Request
+
+-   GET بدون جسم.
+
+#### Response
+
+```json
+{
+    "success": true,
+    "message": "تم جلب خطط الاشتراك بنجاح",
+    "data": [
+        {
+            "id": 1,
+            "name": "الخطة المجانية",
+            "slug": "free",
+            "currency": "EGP",
+            "price": 0,
+            "duration": "monthly",
+            "description": "خطة البداية",
+            "is_active": true,
+            "customers": { "from": 0, "to": 10 },
+            "installments": { "from": 0, "to": 20 },
+            "notifications": { "from": 0, "to": 200 },
+            "reports": true,
+            "features": { "basic_reports": true },
+            "created_at": "2025-01-01T10:20:30.000000Z",
+            "updated_at": "2025-01-01T10:20:30.000000Z"
+        }
+    ]
+}
+```
+
+### (مالك) `GET /api/subscriptions-admin`
+
+#### Request Parameters
+
+-   `per_page` اختياري (افتراضي 15)
+
+#### Response
 
 ```json
 {
   "success": true,
   "message": "تم جلب خطط الاشتراك بنجاح",
-  "data": [
-    {
-      "id": 1,
-      "name": "الخطة المجانية",
-      "slug": "free",
-      "currency": "EGP",
-      "price": 0,
-      "duration": "monthly",
-      "description": "خطة البداية",
-      "is_active": true,
-      "customers": { "from": 0, "to": 10 },
-      "installments": { "from": 0, "to": 20 },
-      "notifications": { "from": 0, "to": 200 },
-      "reports": true,
-      "features": { "basic_reports": true },
-      "created_at": "2025-01-01T10:20:30.000000Z",
-      "updated_at": "2025-01-01T10:20:30.000000Z"
-    },
-    ...
-  ]
-}
-```
-
-### (مالك) `GET /api/subscriptions/admin`
-
-نفس البنية لكن داخل `data` كائن Pagination من Laravel مع `data`, `links`, `meta`.
-
-### (مالك) `POST /api/subscriptions`
-
-```json
-{
-  "success": true,
-  "message": "تم إنشاء خطة الاشتراك بنجاح",
   "data": {
-    "id": 5,
-    "name": "...",
-    ...
+    "data": [...],
+    "links": {...},
+    "meta": {...}
   }
 }
 ```
 
-### (مالك) `POST /api/subscriptions/{id}/assign`
+### (مالك) `POST /api/subscriptions-create`
 
-يعيد `UserLimitResource` بالكامل بنفس الشكل الموضح في قسم Auth فوق.
+#### Request Body
+
+```json
+{
+    "name": "الخطة الذهبية",
+    "slug": "gold-plan",
+    "currency": "EGP",
+    "price": 499.99,
+    "duration": "monthly",
+    "description": "وصف الخطة...",
+    "customers": { "from": 0, "to": 200 },
+    "installments": { "from": 0, "to": 500 },
+    "notifications": { "from": 0, "to": 5000 },
+    "reports": true,
+    "features": { "priority_support": true },
+    "is_active": true
+}
+```
+
+### (مالك) `GET /api/subscriptions-show/{subscription}`
+
+يعيد تفاصيل الخطة المحددة.
+
+### (مالك) `PUT /api/subscriptions-update/{subscription}`
+
+#### Request Body
+
+-   نفس حقول الإنشاء لكن كلها اختيارية.
+
+### (مالك) `DELETE /api/subscriptions-delete/{subscription}`
+
+#### Response
+
+```json
+{
+    "success": true,
+    "message": "تم حذف خطة الاشتراك بنجاح"
+}
+```
+
+### (مالك) `POST /api/subscriptions/{subscription}/assign`
+
+#### Request Body
+
+```json
+{
+    "user_id": 12,
+    "start_date": "2025-01-01",
+    "end_date": "2025-02-01",
+    "status": "active",
+    "features": { "custom": true }
+}
+```
 
 ---
 
@@ -146,145 +230,42 @@
 
 ### `GET /api/limits/current`
 
-```json
-{
-    "success": true,
-    "message": "تم جلب الحدود الحالية بنجاح",
-    "data": {
-        "subscription": {
-            "name": "الخطة الأساسية",
-            "slug": "basic-plan",
-            "price": 199.99,
-            "currency": "EGP",
-            "duration": "monthly",
-            "description": "وصف الخطة...",
-            "start_date": "2025-01-01",
-            "end_date": "2025-02-01",
-            "status": "active"
-        },
-        "limits": {
-            "customers": { "from": 0, "to": 100 },
-            "installments": { "from": 0, "to": 200 },
-            "notifications": { "from": 0, "to": 1000 },
-            "features": { "advanced_reports": true },
-            "reports": true
-        },
-        "usage": {
-            "customers_used": 12,
-            "installments_used": 34,
-            "notifications_used": 50
-        },
-        "remaining": {
-            "customers": 88,
-            "installments": 166,
-            "notifications": 950
-        }
-    }
-}
-```
+#### Request
 
-إذا لم توجد حدود لسبب ما:
-
-```json
-{
-    "success": false,
-    "message": "لا توجد حدود مضبوطة لهذا المستخدم"
-}
-```
+-   GET بدون جسم.
+-   يتطلب التوكن.
 
 ### `GET /api/limits/can-create/{resource}`
 
-```json
-{
-    "success": true,
-    "message": "يمكنك إنشاء موارد إضافية.",
-    "data": {
-        "resource_type": "customers",
-        "can_create": true,
-        "remaining": 88,
-        "subscription": {
-            "name": "...",
-            "slug": "...",
-            "status": "active",
-            "start_date": "...",
-            "end_date": "...",
-            "currency": "EGP",
-            "price": 199.99,
-            "duration": "monthly"
-        },
-        "message": "يمكنك إنشاء موارد إضافية."
-    }
-}
-```
+#### Request
 
-لو تجاوز الحد:
-
-```json
-{
-  "success": true,
-  "message": "لقد وصلت إلى الحد الأقصى لعدد العملاء المسموح به في خطتك.",
-  "data": {
-    "resource_type": "customers",
-    "can_create": false,
-    "remaining": 0,
-    "subscription": { ... نفس الحقل ... },
-    "message": "لقد وصلت إلى الحد الأقصى لعدد العملاء المسموح به في خطتك."
-  }
-}
-```
+-   `{resource}` = `customers | installments | notifications`
 
 ### `POST /api/limits/increment/{resource}`
 
-```json
-{
-  "success": true,
-  "message": "تمت زيادة استهلاك المورد بنجاح",
-  "data": {
-    "resource_type": "customers",
-    "incremented_by": 1,
-    "remaining": 87,
-    "subscription": { ... التفاصيل ... }
-  }
-}
-```
-
-عند الفشل (مثلاً تخطي الحد):
+#### Request Body
 
 ```json
 {
-    "success": false,
-    "message": "تعذّر زيادة الاستهلاك للمورد المحدد"
+    "count": 1
 }
 ```
 
 ### `POST /api/limits/decrement/{resource}`
 
+#### Request Body
+
 ```json
 {
-  "success": true,
-  "message": "تم تقليل استهلاك المورد بنجاح",
-  "data": {
-    "resource_type": "customers",
-    "decremented_by": 1,
-    "remaining": 88,
-    "subscription": { ... التفاصيل ... }
-  }
+    "count": 1
 }
 ```
 
 ### `GET /api/limits/feature/{feature}`
 
-```json
-{
-  "success": true,
-  "message": "تم التحقق من إمكانية الوصول إلى الميزة بنجاح",
-  "data": {
-    "feature": "advanced_reports",
-    "can_access": true,
-    "subscription": { ... التفاصيل ... }
-  }
-}
-```
+#### Request
+
+-   `{feature}` مثال: `advanced_reports`
 
 ---
 
@@ -292,55 +273,31 @@
 
 ### `GET /api/notification-list`
 
-```json
-{
-  "success": true,
-  "message": "تم جلب الإشعارات بنجاح",
-  "data": [
-    {
-      "id": 200,
-      "title": "...",
-      "message": "...",
-      "type": "overdue",
-      "read_at": null,
-      "created_at": "2025-01-01T10:20:30.000000Z"
-    },
-    ...
-  ]
-}
-```
+#### Request Parameters
+
+-   `unread_only` اختياري (true/false)
 
 ### `GET /api/notification-count`
 
-```json
-{
-    "success": true,
-    "message": "تم جلب عدد الإشعارات غير المقروءة بنجاح",
-    "data": {
-        "count": 5
-    }
-}
-```
+#### Request
+
+-   GET بدون جسم.
 
 ### `POST /api/notification-mark-read/{id}`
 
-نجاح:
+#### Request
+
+-   POST بدون جسم.
+-   `{id}` هو معرف الإشعار.
+
+### `POST /api/notification-delete/{id}`
+
+#### Response
 
 ```json
 {
     "success": true,
-    "message": "تم وضع علامة مقروء على الإشعار",
-    "data": { "marked": true }
-}
-```
-
-مقروء مسبقًا:
-
-```json
-{
-    "success": true,
-    "message": "الإشعار مقروء مسبقاً",
-    "data": { "marked": false }
+    "message": "تم حذف الإشعار بنجاح"
 }
 ```
 
@@ -372,18 +329,53 @@
     }
     ```
 
--   `POST /api/customer-create` → `message: "تم إنشاء العميل بنجاح"`
+-   `POST /api/customer-create`
+
+    #### Request Body
+
+    ```json
+    {
+        "name": "عميل جديد",
+        "email": "client@example.com",
+        "phone": "+201000000000",
+        "address": "القاهرة",
+        "notes": "ملاحظات"
+    }
+    ```
+
+    يرفض الطلب برسالة: `"لقد وصلت إلى الحد الأقصى لعدد العملاء المسموح به في خطتك."` إذا تجاوز المستخدم الحد.
+
 -   `GET /api/customer-show/{id}` → `message: "تم جلب العميل بنجاح"`
 -   `PUT /api/customer-update/{id}` → `message: "تم تحديث العميل بنجاح"`
 -   `DELETE /api/customer-delete/{id}` → `message: "تم حذف العميل بنجاح"`
+-   `GET /api/customer-stats/{id}`
 
 الشيء نفسه مع الأقساط:
 
 -   `GET /api/installment-list` → `"تم جلب الأقساط بنجاح"`
--   `POST /api/installment-create` → `"تم إنشاء القسط بنجاح"`
+-   `POST /api/installment-create`
+
+    #### Request Body
+
+    ```json
+    {
+        "customer_id": 12,
+        "total_amount": 10000,
+        "products": ["Product A", "Product B"],
+        "start_date": "2025-01-01",
+        "months": 12,
+        "notes": "ملاحظات"
+    }
+    ```
+
+    يرفض الطلب برسالة: `"لقد وصلت إلى الحد الأقصى لعدد الأقساط المسموح بها في خطتك."` إذا تجاوز الحد.
+
 -   `GET /api/installment-show/{id}` → `"تم جلب القسط بنجاح"`
--   `POST /api/installment-item-pay/{item}` → `"تم تسجيل الدفعة بنجاح"`
--   `GET /api/installment-due-soon` → `"تم جلب الأقساط المستحقة قريباً بنجاح"`
+-   `GET /api/installment-overdue`
+-   `GET /api/installment-due-soon`
+-   `GET /api/installment-stats/{id}`
+-   `GET /api/installment-all-stats`
+-   `POST /api/installment-item-pay/{item}`
 -   ... إلخ.
 
 ---

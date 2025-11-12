@@ -27,7 +27,7 @@ Route::prefix('auth')->controller(AuthController::class)->group(function () {
 });
 
 // Public subscription plans
-Route::get('subscriptions', [SubscriptionController::class, 'publicIndex']);
+Route::get('subscriptions-public', [SubscriptionController::class, 'publicIndex']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -89,11 +89,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('owner')->group(function () {
         Route::controller(SubscriptionController::class)->group(function () {
-            Route::get('subscriptions/admin', 'index');
-            Route::post('subscriptions', 'store');
-            Route::get('subscriptions/{subscription}', 'show');
-            Route::put('subscriptions/{subscription}', 'update');
-            Route::delete('subscriptions/{subscription}', 'destroy');
+            Route::get('subscriptions-admin', 'index');
+            Route::post('subscriptions-create', 'store');
+            Route::get('subscriptions-show/{subscription}', 'show');
+            Route::put('subscriptions-update/{subscription}', 'update');
+            Route::delete('subscriptions-delete/{subscription}', 'destroy');
             Route::post('subscriptions/{subscription}/assign', 'assign');
         });
 
@@ -106,11 +106,11 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
         Route::controller(UserController::class)->group(function () {
-        Route::get('user-list', 'index');
-        Route::post('user-create', 'store');
-        Route::get('user-show/{id}', 'show');
-        Route::put('user-update/{id}', 'update');
-        Route::delete('user-delete/{id}', 'destroy');
-    });
+            Route::get('user-list', 'index');
+            Route::post('user-create', 'store');
+            Route::get('user-show/{id}', 'show');
+            Route::put('user-update/{id}', 'update');
+            Route::delete('user-delete/{id}', 'destroy');
+        });
     });
 });
