@@ -33,6 +33,7 @@ class UserLimit extends Model
         'subscription_assignment_id',
         'customers',
         'installments',
+        'notifications',
         'reports',
         'features',
         'customers_used',
