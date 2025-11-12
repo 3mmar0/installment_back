@@ -6,6 +6,7 @@ use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Enums\UserRole;
 use Illuminate\Support\Facades\Hash;
+use App\Models\Subscription;
 
 class DatabaseSeeder extends Seeder
 {
@@ -14,8 +15,10 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        if (!User::where('role', UserRole::Owner)->exists()) {
-            User::create([
+        $owner = User::where('role', UserRole::Owner)->first();
+
+        if (!$owner) {
+            $owner = User::create([
                 'name' => 'Owner',
                 'email' => 'superadmin@admin.com',
                 'password' => Hash::make('password'),
@@ -23,8 +26,22 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
-        $this->call([
-            PlanSeeder::class,
-        ]);
+        if (!Subscription::where('slug', 'free')->exists()) {
+            Subscription::create([
+                'name' => 'Free Plan',
+                'slug' => 'free',
+                'currency' => 'EGP',
+                'price' => 0,
+                'duration' => 'monthly',
+                'description' => 'Default starter plan with limited allowances.',
+                'customers' => ['from' => 0, 'to' => 10],
+                'installments' => ['from' => 0, 'to' => 20],
+                'notifications' => ['from' => 0, 'to' => 200],
+                'reports' => true,
+                'features' => ['basic_reports' => true],
+                'is_active' => true,
+                'created_by' => $owner->id,
+            ]);
+        }
     }
 }

@@ -75,13 +75,18 @@ class User extends Authenticatable
         return $this->notifications()->whereNull('read_at');
     }
 
-    public function subscriptions()
+    public function userLimit()
     {
-        return $this->hasMany(Subscription::class);
+        return $this->hasOne(UserLimit::class);
     }
 
-    public function latestSubscription()
+    public function subscriptionAssignments()
     {
-        return $this->hasOne(Subscription::class)->latestOfMany();
+        return $this->hasMany(SubscriptionAssignment::class);
+    }
+
+    public function currentSubscriptionAssignment()
+    {
+        return $this->hasOne(SubscriptionAssignment::class)->latestOfMany();
     }
 }

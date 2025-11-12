@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\Services\CustomerServiceInterface;
+use App\Helpers\LimitsHelper;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -40,6 +41,10 @@ class CustomerService implements CustomerServiceInterface
     public function createCustomer(array $data, User $user): Customer
     {
         return DB::transaction(function () use ($data, $user) {
+            if (!$user->isOwner() && !LimitsHelper::canCreate($user->id, 'customers')) {
+                abort(403, LimitsHelper::getLimitExceededMessage('customers'));
+            }
+
             $customer = Customer::create([
                 'user_id' => $user->id,
                 'name' => $data['name'],
@@ -48,6 +53,10 @@ class CustomerService implements CustomerServiceInterface
                 'address' => $data['address'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
+
+            if (!$user->isOwner()) {
+                LimitsHelper::incrementUsage($user->id, 'customers');
+            }
 
             return $customer;
         });
@@ -81,7 +90,17 @@ class CustomerService implements CustomerServiceInterface
             abort(403, 'Unauthorized to delete this customer');
         }
 
-        return $customer->delete();
+        $owner = $customer->user;
+
+        $deleted = DB::transaction(function () use ($customer) {
+            return $customer->delete();
+        });
+
+        if ($deleted && $owner && !$owner->isOwner()) {
+            LimitsHelper::decrementUsage($customer->user_id, 'customers');
+        }
+
+        return $deleted;
     }
 
     /**

@@ -2,169 +2,155 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\LimitsHelper;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\ChangePlanRequest;
-use App\Http\Requests\RecordPaymentRequest;
-use App\Http\Requests\SubscribeRequest;
+use App\Http\Requests\StoreSubscriptionRequest;
+use App\Http\Requests\UpdateSubscriptionRequest;
+use App\Http\Resources\SubscriptionResource;
+use App\Http\Resources\UserLimitResource;
 use App\Http\Traits\ApiResponse;
-use App\Models\Plan;
 use App\Models\Subscription;
-use App\Models\SubscriptionTransaction;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 
 class SubscriptionController extends Controller
 {
     use ApiResponse;
 
-    public function current(Request $request): JsonResponse
+    /**
+     * Public listing of active subscription plans.
+     */
+    public function publicIndex(): JsonResponse
     {
-        $user = Auth::user();
-        $subscription = Subscription::query()
-            ->where('user_id', $user->id)
-            ->latest('id')
-            ->with('plan')
-            ->first();
-
-        if ($subscription) {
-            $subscription->refreshComputedStatus();
-        }
-
-        return $this->successResponse($subscription, 'Current subscription retrieved');
-    }
-
-    public function subscribe(SubscribeRequest $request): JsonResponse
-    {
-        $user = Auth::user();
-        $planId = (int) ($request->validated()['plan_id'] ?? 0);
-        $plan = Plan::active()->findOrFail($planId);
-
-        $subscription = $this->createOrReplaceSubscription($user->id, $plan);
-
-        return $this->createdResponse($subscription->load('plan'), 'Subscribed successfully');
-    }
-
-    public function cancel(Request $request): JsonResponse
-    {
-        $user = Auth::user();
-        $subscription = Subscription::query()
-            ->where('user_id', $user->id)
-            ->whereIn('status', ['active', 'past_due'])
-            ->latest('id')
-            ->first();
-
-        if (!$subscription) {
-            return $this->notFoundResponse('No active subscription to cancel');
-        }
-
-        $subscription->update([
-            'status' => 'canceled',
-            'canceled_at' => now(),
-        ]);
-
-        return $this->successResponse($subscription, 'Subscription canceled');
-    }
-
-    public function changePlan(ChangePlanRequest $request): JsonResponse
-    {
-        $user = Auth::user();
-        $planId = (int) ($request->validated()['plan_id'] ?? 0);
-        $plan = Plan::active()->findOrFail($planId);
-
-        $subscription = $this->createOrReplaceSubscription($user->id, $plan);
-
-        return $this->successResponse($subscription->load('plan'), 'Plan changed successfully');
-    }
-
-    public function paymentsIndex(Request $request): JsonResponse
-    {
-        $user = Auth::user();
-        $subscription = Subscription::query()
-            ->where('user_id', $user->id)
-            ->latest('id')
-            ->first();
-
-        if (!$subscription) {
-            return $this->successResponse([], 'No payments');
-        }
-
-        $payments = SubscriptionTransaction::query()
-            ->where('subscription_id', $subscription->id)
-            ->orderByDesc('id')
+        $subscriptions = Subscription::active()
+            ->orderBy('price')
             ->get();
 
-        return $this->successResponse($payments, 'Payments retrieved');
+        return $this->successResponse(
+            SubscriptionResource::collection($subscriptions),
+            'تم جلب خطط الاشتراك بنجاح'
+        );
     }
 
-    public function recordPayment(RecordPaymentRequest $request): JsonResponse
+    /**
+     * Owner listing of all subscription plans.
+     */
+    public function index(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        $subscription = Subscription::query()
-            ->where('user_id', $user->id)
-            ->latest('id')
-            ->first();
+        $perPage = (int) $request->query('per_page', 15);
 
-        if (!$subscription) {
-            return $this->notFoundResponse('No subscription found');
+        $subscriptions = Subscription::query()
+            ->with('creator')
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return $this->successResponse(
+            SubscriptionResource::collection($subscriptions),
+            'تم جلب خطط الاشتراك بنجاح'
+        );
+    }
+
+    /**
+     * Store a new subscription plan.
+     */
+    public function store(StoreSubscriptionRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+        $data['slug'] = $this->generateUniqueSlug($data['slug'] ?? Str::slug($data['name']));
+        $data['created_by'] = $request->user()->id;
+
+        $subscription = Subscription::create($data);
+
+        return $this->createdResponse(
+            new SubscriptionResource($subscription),
+            'تم إنشاء خطة الاشتراك بنجاح'
+        );
+    }
+
+    /**
+     * Display a subscription plan.
+     */
+    public function show(Subscription $subscription): JsonResponse
+    {
+        return $this->successResponse(
+            new SubscriptionResource($subscription),
+            'تم جلب خطة الاشتراك بنجاح'
+        );
+    }
+
+    /**
+     * Update a subscription plan.
+     */
+    public function update(UpdateSubscriptionRequest $request, Subscription $subscription): JsonResponse
+    {
+        $data = $request->validated();
+
+        if (isset($data['slug'])) {
+            $data['slug'] = $this->generateUniqueSlug($data['slug'], $subscription->id);
         }
 
-        $validated = $request->validated();
-        $amount = (int) $validated['amount_cents'];
-        $note = $validated['note'] ?? null;
+        $subscription->update($data);
 
-        return DB::transaction(function () use ($subscription, $user, $amount, $note) {
-            $txn = SubscriptionTransaction::create([
-                'subscription_id' => $subscription->id,
-                'amount_cents' => $amount,
-                'type' => 'payment',
-                'note' => $note,
-                'recorded_by' => $user->id,
-            ]);
-
-            $subscription->paid_cents = (int) $subscription->paid_cents + $amount;
-            $subscription->refreshComputedStatus();
-            $subscription->save();
-
-            return $this->successResponse([
-                'transaction' => $txn,
-                'subscription' => $subscription->fresh(),
-            ], 'Payment recorded');
-        });
+        return $this->successResponse(
+            new SubscriptionResource($subscription->fresh()),
+            'تم تحديث خطة الاشتراك بنجاح'
+        );
     }
 
-    protected function createOrReplaceSubscription(int $userId, Plan $plan): Subscription
+    /**
+     * Delete a subscription plan.
+     */
+    public function destroy(Subscription $subscription): JsonResponse
     {
-        return DB::transaction(function () use ($userId, $plan) {
-            Subscription::query()
-                ->where('user_id', $userId)
-                ->whereIn('status', ['active', 'past_due'])
-                ->update([
-                    'status' => 'canceled',
-                    'canceled_at' => now(),
-                ]);
+        $subscription->delete();
 
-            $startsAt = now();
-            $trialDays = (int) ($plan->trial_days ?? 0);
-            if ($trialDays > 0) {
-                $endsAt = (clone $startsAt)->addDays($trialDays);
-            } else {
-                $endsAt = $plan->interval === 'monthly'
-                    ? (clone $startsAt)->addMonth()
-                    : (clone $startsAt)->addYear();
-            }
+        return $this->deletedResponse('تم حذف خطة الاشتراك بنجاح');
+    }
 
-            return Subscription::create([
-                'user_id' => $userId,
-                'plan_id' => $plan->id,
-                'status' => 'active',
-                'starts_at' => $startsAt,
-                'ends_at' => $endsAt,
-                'next_due_at' => $endsAt,
-                'amount_cents' => (int) $plan->price_cents,
-                'paid_cents' => 0,
-            ]);
-        });
+    /**
+     * Assign a subscription plan to a user.
+     */
+    public function assign(Request $request, Subscription $subscription): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'start_date' => ['sometimes', 'nullable', 'date'],
+            'end_date' => ['sometimes', 'nullable', 'date', 'after_or_equal:start_date'],
+            'status' => ['sometimes', 'nullable', 'string', 'in:active,paused,canceled'],
+            'features' => ['sometimes', 'nullable', 'array'],
+        ]);
+
+        $user = User::findOrFail($data['user_id']);
+        $overrides = Arr::only($data, ['start_date', 'end_date', 'status', 'features']);
+        $userLimit = LimitsHelper::applySubscriptionToUser($user->id, $subscription, $overrides);
+
+        return $this->successResponse(
+            new UserLimitResource($userLimit),
+            'تم تعيين الاشتراك بنجاح'
+        );
+    }
+
+    /**
+     * Ensure slug uniqueness.
+     */
+    protected function generateUniqueSlug(string $slug, ?int $ignoreId = null): string
+    {
+        $baseSlug = Str::slug($slug);
+        $uniqueSlug = $baseSlug;
+        $counter = 1;
+
+        while (
+            Subscription::where('slug', $uniqueSlug)
+            ->when($ignoreId, fn($query) => $query->where('id', '!=', $ignoreId))
+            ->exists()
+        ) {
+            $uniqueSlug = $baseSlug . '-' . $counter;
+            $counter++;
+        }
+
+        return $uniqueSlug;
     }
 }

@@ -3,9 +3,10 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\InstallmentController;
-use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\PlanController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\UserLimitController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,8 +26,8 @@ Route::prefix('auth')->controller(AuthController::class)->group(function () {
     Route::post('register', 'register');
 });
 
-// Public Plans
-Route::get('plans', [PlanController::class, 'index']);
+// Public subscription plans
+Route::get('subscriptions', [SubscriptionController::class, 'publicIndex']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -37,14 +38,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('refresh', 'refresh');
     });
 
-    // Subscriptions (management of subscription itself should not require active subscription)
-    Route::controller(SubscriptionController::class)->group(function () {
-        Route::get('subscriptions/current', 'current');
-        Route::post('subscriptions/subscribe', 'subscribe');
-        Route::post('subscriptions/cancel', 'cancel');
-        Route::post('subscriptions/change-plan', 'changePlan');
-        Route::get('subscriptions/payments', 'paymentsIndex');
-        Route::post('subscriptions/record-payment', 'recordPayment');
+    Route::prefix('limits')->controller(UserLimitController::class)->group(function () {
+        Route::get('current', 'current');
+        Route::get('can-create/{resourceType}', 'canCreate');
+        Route::post('refresh', 'refreshUsage');
+        Route::post('increment/{resourceType}', 'increment');
+        Route::post('decrement/{resourceType}', 'decrement');
+        Route::get('feature/{feature}', 'feature');
     });
 
     // Routes below require an active subscription
@@ -53,7 +53,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('dashboard', [InstallmentController::class, 'dashboard']);
 
         // Notifications & Emails
-        Route::controller(\App\Http\Controllers\Api\NotificationController::class)->group(function () {
+        Route::controller(NotificationController::class)->group(function () {
             Route::get('notification-list', 'index');
             Route::get('notification-count', 'count');
             Route::post('notification-mark-read/{id}', 'markAsRead');
@@ -87,12 +87,30 @@ Route::middleware('auth:sanctum')->group(function () {
         });
     });
 
-    // User routes (Owner only)
-    Route::middleware('owner')->controller(UserController::class)->group(function () {
+    Route::middleware('owner')->group(function () {
+        Route::controller(SubscriptionController::class)->group(function () {
+            Route::get('subscriptions/admin', 'index');
+            Route::post('subscriptions', 'store');
+            Route::get('subscriptions/{subscription}', 'show');
+            Route::put('subscriptions/{subscription}', 'update');
+            Route::delete('subscriptions/{subscription}', 'destroy');
+            Route::post('subscriptions/{subscription}/assign', 'assign');
+        });
+
+        Route::controller(UserLimitController::class)->group(function () {
+            Route::get('limits', 'index');
+            Route::post('limits', 'store');
+            Route::get('limits/{userLimit}', 'show');
+            Route::put('limits/{userLimit}', 'update');
+            Route::delete('limits/{userLimit}', 'destroy');
+        });
+
+        Route::controller(UserController::class)->group(function () {
         Route::get('user-list', 'index');
         Route::post('user-create', 'store');
         Route::get('user-show/{id}', 'show');
         Route::put('user-update/{id}', 'update');
         Route::delete('user-delete/{id}', 'destroy');
+    });
     });
 });

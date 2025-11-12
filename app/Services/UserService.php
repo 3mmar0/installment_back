@@ -16,7 +16,7 @@ class UserService implements UserServiceInterface
      */
     public function getAllUsers(): Collection
     {
-        return User::with(['latestSubscription.plan'])->latest()->get();
+        return User::with('userLimit')->latest()->get();
     }
 
     /**
@@ -25,12 +25,16 @@ class UserService implements UserServiceInterface
     public function createUser(array $data): User
     {
         return DB::transaction(function () use ($data) {
-            return User::create([
+            $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'password' => Hash::make($data['password']),
                 'role' => $data['role'] ?? UserRole::User,
             ]);
+
+            \App\Helpers\LimitsHelper::createOrUpdateUserLimits($user->id);
+
+            return $user->fresh('userLimit');
         });
     }
 
@@ -39,7 +43,7 @@ class UserService implements UserServiceInterface
      */
     public function findUserById(int $id): ?User
     {
-        return User::with(['latestSubscription.plan'])->find($id);
+        return User::with('userLimit')->find($id);
     }
 
     /**
@@ -64,7 +68,7 @@ class UserService implements UserServiceInterface
             }
 
             $user->update($updateData);
-            return $user->fresh(['latestSubscription.plan']);
+            return $user->fresh('userLimit');
         });
     }
 
@@ -91,7 +95,7 @@ class UserService implements UserServiceInterface
     public function getUsersForOwner()
     {
         return User::where('role', UserRole::User)
-            ->with(['latestSubscription.plan'])
+            ->with('userLimit')
             ->latest()
             ->paginate(20);
     }

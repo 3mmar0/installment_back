@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Helpers\LimitsHelper;
 use App\Http\Traits\ApiResponse;
 use Closure;
 use Illuminate\Http\Request;
@@ -23,22 +24,12 @@ class EnsureActiveSubscription
             return $next($request);
         }
 
-        $subscription = $user->latestSubscription;
-        if (!$subscription) {
-            return $this->errorResponse('Subscription required', 402);
-        }
+        if (!LimitsHelper::isSubscriptionActive($user->id)) {
+            $info = LimitsHelper::getSubscriptionInfo($user->id);
 
-        // Update computed status in-memory
-        $subscription->refreshComputedStatus();
-
-        // Validate active window and payment status
-        $isActive = $subscription->status === 'active';
-        $withinDates = !$subscription->ends_at || !$subscription->ends_at->isPast();
-
-        if (!($isActive && $withinDates)) {
             return $this->errorResponse('Subscription inactive or expired', 402, [
-                'subscription_status' => $subscription->status,
-                'ends_at' => optional($subscription->ends_at)?->toISOString(),
+                'subscription_status' => $info['subscription']['status'] ?? 'inactive',
+                'ends_at' => $info['subscription']['end_date'] ?? null,
             ]);
         }
 

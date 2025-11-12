@@ -29,7 +29,7 @@ class InstallmentController extends Controller
 
         return $this->successResponse(
             InstallmentResource::collection($installments)->response()->getData(true),
-            'Installments retrieved successfully'
+            'تم جلب الأقساط بنجاح'
         );
     }
 
@@ -49,7 +49,7 @@ class InstallmentController extends Controller
 
         return $this->createdResponse(
             new InstallmentResource($installment),
-            'Installment created successfully'
+            'تم إنشاء القسط بنجاح'
         );
     }
 
@@ -61,17 +61,17 @@ class InstallmentController extends Controller
         $installment = $this->installmentService->findInstallmentById($id);
 
         if (!$installment) {
-            return $this->notFoundResponse('Installment not found');
+            return $this->notFoundResponse('القسط غير موجود');
         }
 
         // Check authorization
         if (!$request->user()->isOwner() && $installment->user_id !== $request->user()->id) {
-            return $this->forbiddenResponse('You are not authorized to view this installment');
+            return $this->forbiddenResponse('غير مصرح لك بعرض هذا القسط');
         }
 
         return $this->successResponse(
             new InstallmentResource($installment),
-            'Installment retrieved successfully'
+            'تم جلب القسط بنجاح'
         );
     }
 
@@ -90,7 +90,7 @@ class InstallmentController extends Controller
 
             return $this->successResponse(
                 new InstallmentItemResource($updatedItem),
-                'Payment recorded successfully'
+                'تم تسجيل الدفعة بنجاح'
             );
         } catch (\Exception $e) {
             if ($e->getCode() === 403) {
@@ -107,7 +107,7 @@ class InstallmentController extends Controller
     {
         $analytics = $this->installmentService->getDashboardAnalytics($request->user());
 
-        return $this->successResponse($analytics, 'Dashboard analytics retrieved successfully');
+        return $this->successResponse($analytics, 'تم جلب تحليلات لوحة التحكم بنجاح');
     }
 
     /**
@@ -118,10 +118,10 @@ class InstallmentController extends Controller
         $stats = $this->installmentService->getInstallmentStats($id, $request->user());
 
         if (empty($stats)) {
-            return $this->notFoundResponse('Installment not found or unauthorized');
+            return $this->notFoundResponse('القسط غير موجود أو غير مصرح به');
         }
 
-        return $this->successResponse($stats, 'Installment statistics retrieved successfully');
+        return $this->successResponse($stats, 'تم جلب إحصائيات القسط بنجاح');
     }
 
     /**
@@ -131,7 +131,7 @@ class InstallmentController extends Controller
     {
         $stats = $this->installmentService->getAllInstallmentsStats($request->user());
 
-        return $this->successResponse($stats, 'All installments statistics retrieved successfully');
+        return $this->successResponse($stats, 'تم جلب إحصائيات جميع الأقساط بنجاح');
     }
 
     /**
@@ -143,7 +143,7 @@ class InstallmentController extends Controller
 
         return $this->successResponse(
             InstallmentItemResource::collection($items),
-            'Overdue items retrieved successfully'
+            'تم جلب الأقساط المتأخرة بنجاح'
         );
     }
 
@@ -156,7 +156,7 @@ class InstallmentController extends Controller
 
         return $this->successResponse(
             InstallmentItemResource::collection($items),
-            'Due soon items retrieved successfully'
+            'تم جلب الأقساط المستحقة قريباً بنجاح'
         );
     }
 }

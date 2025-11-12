@@ -83,6 +83,39 @@ The **Installment Manager API** is a comprehensive solution for businesses that 
 -   View user activity
 -   Secure user operations
 
+### 📦 Subscription Plans & Usage Limits (محدّث)
+
+-   بنية جديدة للاشتراكات تعتمد على الجداول:
+    -   `subscriptions`: تعريف الخطط (السعر، المدة، الحدود، الميزات).
+    -   `subscription_assignments`: تعيين الخطة للمستخدم مع الحالة والتواريخ.
+    -   `user_limits`: المصدر الرئيس للحدود الحالية والاستخدام لكل مستخدم.
+-   `LimitsHelper` يتولى إنشاء/تحديث حدود المستخدم، احتساب الاستهلاك، وفحص الصلاحيات.
+-   جميع رسائل الـ API أصبحت بالعربية (نجاح/أخطاء/تنبيهات تجاوز الحدود).
+-   كل رد للواجهات الأمامية يعود بالصورة الموحدة:
+
+    ```json
+    {
+      "success": true,
+      "message": "تمت العملية بنجاح",
+      "data": { ... }
+    }
+    ```
+
+-   أهم النقاط التي يجب أن تستهلكها الواجهة الأمامية:
+    -   `POST /api/auth/login`, `POST /api/auth/register`, `GET /api/auth/me`\
+        تعيد بيانات المستخدم متضمنة `current_subscription` و`user_limit`.
+    -   `GET /api/subscriptions`\
+        قائمة الخطط الفعّالة (مفتوحة للجميع).
+    -   (للمالك) `GET /api/subscriptions/admin`, `POST /api/subscriptions`, `PUT /api/subscriptions/{id}`, `DELETE /api/subscriptions/{id}`, `POST /api/subscriptions/{id}/assign`\
+        إدارة الخطط وتعيينها للمستخدمين، ويتم إرجاع `UserLimitResource`.
+    -   مسارات حدود المستخدم:
+        -   `GET /api/limits/current`
+        -   `GET /api/limits/can-create/{resource}`
+        -   `POST /api/limits/increment/{resource}`, `POST /api/limits/decrement/{resource}`
+        -   `GET /api/limits/feature/{feature}`
+        -   (للمالك) `GET/POST/PUT/DELETE /api/limits`
+-   الاستجابات الآن تتضمن تفاصيل الاشتراك الحالي (الاسم، الحالة، السعر، المدة، التواريخ، الحدود المتبقية) لتسهيل عرض المعلومات في الواجهة الأمامية.
+
 ---
 
 ## 🏗️ Architecture

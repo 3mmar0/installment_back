@@ -11,263 +11,167 @@ class DocsController extends Controller
     {
         $docs = [
             'title' => 'Installment Program API',
-            'version' => '1.0.0',
+            'version' => '2.0.0',
             'authentication' => 'Bearer token via Sanctum. Use Authorization: Bearer {token}',
-            'endpoints' => [
+            'sections' => [
                 [
-                    'name' => 'Auth - Register',
+                    'name' => 'Authentication',
+                    'endpoints' => [
+                        [
                     'method' => 'POST',
                     'path' => '/api/auth/register',
                     'auth' => false,
+                            'description' => 'Create a new account. Optionally provide a subscription_id to immediately assign a plan.',
                     'request' => [
-                        'name' => 'string (required)',
-                        'email' => 'string email (required)',
-                        'password' => 'string (required, confirmed)',
-                        'password_confirmation' => 'string (required)',
-                        'plan_id' => 'integer (optional, existing plans.id)',
-                        'free_trial' => 'boolean (optional)'
-                    ],
-                    'response_201' => [
-                        'success' => true,
-                        'message' => 'Registration successful',
-                        'data' => [
-                            'user' => [
-                                'id' => 'int',
-                                'name' => 'string',
-                                'email' => 'string',
-                                'role' => 'owner|user',
-                                'current_subscription' => [
-                                    'id' => 'int|null',
-                                    'status' => 'active|canceled|expired|past_due|null',
-                                    'plan' => [
-                                        'id' => 'int',
-                                        'name' => 'string',
-                                        'interval' => 'monthly|yearly'
-                                    ]
-                                ]
+                                'name' => 'string required',
+                                'email' => 'string email required',
+                                'password' => 'string required (confirmed)',
+                                'password_confirmation' => 'string required',
+                                'subscription_id' => 'integer optional (existing subscriptions.id)',
                             ],
-                            'token' => 'string',
-                            'token_type' => 'Bearer'
-                        ]
-                    ]
                 ],
                 [
-                    'name' => 'Auth - Login',
                     'method' => 'POST',
                     'path' => '/api/auth/login',
                     'auth' => false,
+                            'description' => 'Authenticate user and issue Sanctum token.',
                     'request' => [
-                        'email' => 'string email (required)',
-                        'password' => 'string (required)'
+                                'email' => 'string email required',
+                                'password' => 'string required',
                     ],
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'Login successful',
-                        'data' => [
-                            'user' => 'User object including current_subscription',
-                            'token' => 'string',
-                            'token_type' => 'Bearer'
-                        ]
-                    ]
+                        ],
+                        [
+                            'method' => 'GET',
+                            'path' => '/api/auth/me',
+                            'auth' => true,
+                            'description' => 'Retrieve the authenticated profile including current user limit snapshot.',
+                        ],
+                    ],
                 ],
                 [
-                    'name' => 'Plans - Public list',
+                    'name' => 'Subscription Plans',
+                    'endpoints' => [
+                        [
                     'method' => 'GET',
-                    'path' => '/api/plans',
+                            'path' => '/api/subscriptions',
                     'auth' => false,
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'Plans retrieved successfully',
-                        'data' => [
-                            [
-                                'id' => 'int',
-                                'name' => 'string',
-                                'price_cents' => 'int',
-                                'currency' => 'USD',
-                                'interval' => 'monthly|yearly',
-                                'trial_days' => 'int|null',
-                                'features' => 'object',
-                                'is_active' => 'bool'
-                            ]
-                        ]
-                    ]
+                            'description' => 'Public list of active subscription plans.',
                 ],
                 [
-                    'name' => 'Plans - Admin list',
                     'method' => 'GET',
-                    'path' => '/api/plans/admin',
+                            'path' => '/api/subscriptions/admin',
                     'auth' => true,
                     'roles' => ['owner'],
-                    'response_200' => 'Same as public list, includes inactive'
+                            'description' => 'Owner view of all plans (active and inactive) with pagination.',
                 ],
                 [
-                    'name' => 'Plans - Create',
                     'method' => 'POST',
-                    'path' => '/api/plans',
+                            'path' => '/api/subscriptions',
                     'auth' => true,
                     'roles' => ['owner'],
+                            'description' => 'Create a new subscription plan.',
                     'request' => [
                         'name' => 'string required',
-                        'price_cents' => 'int required >=0',
-                        'currency' => 'string 3-char required',
-                        'interval' => 'in:monthly,yearly required',
-                        'trial_days' => 'int nullable',
-                        'features' => 'object nullable',
-                        'is_active' => 'bool optional'
-                    ],
-                    'response_201' => [
-                        'success' => true,
-                        'message' => 'Plan created successfully',
-                        'data' => 'Plan object'
-                    ]
-                ],
-                [
-                    'name' => 'Plans - Update',
+                                'slug' => 'string optional unique',
+                                'price' => 'numeric required >= 0',
+                                'currency' => 'string optional default EGP',
+                                'duration' => 'in:monthly,yearly required',
+                                'customers' => 'object optional {from,to}',
+                                'installments' => 'object optional {from,to}',
+                                'notifications' => 'object optional {from,to}',
+                                'reports' => 'boolean optional',
+                                'features' => 'object optional',
+                                'is_active' => 'boolean optional',
+                            ],
+                        ],
+                        [
                     'method' => 'PUT',
-                    'path' => '/api/plans/{plan}',
+                            'path' => '/api/subscriptions/{subscription}',
                     'auth' => true,
                     'roles' => ['owner'],
-                    'request' => 'Any Plan fields (partial)',
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'Plan updated successfully',
-                        'data' => 'Plan object'
-                    ]
+                            'description' => 'Update plan details.',
                 ],
                 [
-                    'name' => 'Plans - Delete',
                     'method' => 'DELETE',
-                    'path' => '/api/plans/{plan}',
+                            'path' => '/api/subscriptions/{subscription}',
                     'auth' => true,
                     'roles' => ['owner'],
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'Plan deleted successfully'
-                    ]
+                            'description' => 'Soft-remove a subscription plan.',
                 ],
                 [
-                    'name' => 'Subscriptions - Current',
-                    'method' => 'GET',
-                    'path' => '/api/subscriptions/current',
-                    'auth' => true,
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'Current subscription retrieved',
-                        'data' => [
-                            'id' => 'int',
-                            'status' => 'string',
-                            'starts_at' => 'iso',
-                            'ends_at' => 'iso',
-                            'next_due_at' => 'iso',
-                            'amount_cents' => 'int',
-                            'paid_cents' => 'int',
-                            'plan' => ['id' => 'int', 'name' => 'string', 'interval' => 'string']
-                        ]
-                    ]
-                ],
-                [
-                    'name' => 'Subscriptions - Subscribe',
                     'method' => 'POST',
-                    'path' => '/api/subscriptions/subscribe',
+                            'path' => '/api/subscriptions/{subscription}/assign',
                     'auth' => true,
+                            'roles' => ['owner'],
+                            'description' => 'Assign a plan to a specific user and sync their usage limits.',
                     'request' => [
-                        'plan_id' => 'int required exists:plans,id'
+                                'user_id' => 'integer required',
+                                'start_date' => 'date optional',
+                                'end_date' => 'date optional >= start_date',
+                                'status' => 'in:active,paused,canceled optional',
+                                'features' => 'object optional overrides',
+                            ],
+                        ],
                     ],
-                    'response_201' => [
-                        'success' => true,
-                        'message' => 'Subscribed successfully',
-                        'data' => 'Subscription object with plan'
-                    ]
                 ],
                 [
-                    'name' => 'Subscriptions - Cancel',
-                    'method' => 'POST',
-                    'path' => '/api/subscriptions/cancel',
+                    'name' => 'User Limits',
+                    'endpoints' => [
+                        [
+                            'method' => 'GET',
+                            'path' => '/api/limits/current',
                     'auth' => true,
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'Subscription canceled',
-                        'data' => 'Subscription object'
-                    ]
+                            'description' => 'Current user subscription snapshot (limits, usage, remaining).',
                 ],
                 [
-                    'name' => 'Subscriptions - Change Plan',
                     'method' => 'POST',
-                    'path' => '/api/subscriptions/change-plan',
+                            'path' => '/api/limits/refresh',
                     'auth' => true,
-                    'request' => [
-                        'plan_id' => 'int required exists:plans,id'
-                    ],
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'Plan changed successfully',
-                        'data' => 'Subscription object with plan'
-                    ]
-                ],
-                [
-                    'name' => 'Subscriptions - Payments List',
+                            'description' => 'Recalculate usage counters for the authenticated user.',
+                        ],
+                        [
                     'method' => 'GET',
-                    'path' => '/api/subscriptions/payments',
+                            'path' => '/api/limits/can-create/{resource}',
                     'auth' => true,
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'Payments retrieved',
-                        'data' => [
-                            [
-                                'id' => 'int',
-                                'amount_cents' => 'int',
-                                'type' => 'payment|refund|adjustment',
-                                'note' => 'string|null',
-                                'created_at' => 'iso'
-                            ]
-                        ]
-                    ]
-                ],
-                [
-                    'name' => 'Subscriptions - Record Payment',
+                            'description' => 'Check whether the authenticated user can create another resource (customers|installments|notifications).',
+                        ],
+                        [
+                            'method' => 'POST',
+                            'path' => '/api/limits/increment/{resource}',
+                            'auth' => true,
+                            'description' => 'Increment usage counter for the specified resource.',
+                        ],
+                        [
                     'method' => 'POST',
-                    'path' => '/api/subscriptions/record-payment',
+                            'path' => '/api/limits/decrement/{resource}',
                     'auth' => true,
-                    'request' => [
-                        'amount_cents' => 'int required >=1',
-                        'note' => 'string optional'
-                    ],
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'Payment recorded',
-                        'data' => [
-                            'transaction' => 'Transaction object',
-                            'subscription' => 'Updated subscription object'
-                        ]
-                    ]
-                ],
-                [
-                    'name' => 'Users - Owner List',
+                            'description' => 'Decrement usage counter for the specified resource.',
+                        ],
+                        [
+                            'method' => 'GET',
+                            'path' => '/api/limits/feature/{feature}',
+                            'auth' => true,
+                            'description' => 'Check whether a feature flag is enabled for the authenticated user plan.',
+                        ],
+                        [
                     'method' => 'GET',
-                    'path' => '/api/user-list',
+                            'path' => '/api/limits',
+                            'auth' => true,
+                            'roles' => ['owner'],
+                            'description' => 'Owner view of all user limit profiles (paginated).',
+                        ],
+                        [
+                            'method' => 'POST',
+                            'path' => '/api/limits',
                     'auth' => true,
                     'roles' => ['owner'],
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'Users retrieved successfully',
-                        'data' => [
-                            'data' => [
-                                '... users with current_subscription.plan.name etc ...'
-                            ]
-                        ]
-                    ]
+                            'description' => 'Owner ability to create or override user limit profile manually.',
+                        ],
+                    ],
                 ],
                 [
-                    'name' => 'Users - Owner Show',
-                    'method' => 'GET',
-                    'path' => '/api/user-show/{id}',
-                    'auth' => true,
-                    'roles' => ['owner'],
-                    'response_200' => [
-                        'success' => true,
-                        'message' => 'User retrieved successfully',
-                        'data' => 'User object including current_subscription and plan'
-                    ]
+                    'name' => 'Core Resources (require active subscription)',
+                    'description' => 'Customers, installments, and notifications endpoints remain unchanged but are now guarded by the updated EnsureActiveSubscription middleware that reads user limits.',
                 ],
             ],
         ];

@@ -27,7 +27,7 @@ class UserController extends Controller
 
         return $this->successResponse(
             UserResource::collection($users)->response()->getData(true),
-            'Users retrieved successfully'
+            'تم جلب المستخدمين بنجاح'
         );
     }
 
@@ -47,7 +47,7 @@ class UserController extends Controller
 
         return $this->createdResponse(
             new UserResource($user),
-            'User created successfully'
+            'تم إنشاء المستخدم بنجاح'
         );
     }
 
@@ -59,12 +59,12 @@ class UserController extends Controller
         $user = $this->userService->findUserById($id);
 
         if (!$user) {
-            return $this->notFoundResponse('User not found');
+            return $this->notFoundResponse('المستخدم غير موجود');
         }
 
         return $this->successResponse(
             new UserResource($user),
-            'User retrieved successfully'
+            'تم جلب المستخدم بنجاح'
         );
     }
 
@@ -85,10 +85,10 @@ class UserController extends Controller
 
             return $this->successResponse(
                 new UserResource($user),
-                'User updated successfully'
+                'تم تحديث المستخدم بنجاح'
             );
         } catch (\Exception $e) {
-            return $this->notFoundResponse('User not found');
+            return $this->notFoundResponse('المستخدم غير موجود');
         }
     }
 
@@ -100,7 +100,7 @@ class UserController extends Controller
         try {
             $this->userService->deleteUser($id);
 
-            return $this->deletedResponse('User deleted successfully');
+            return $this->deletedResponse('تم حذف المستخدم بنجاح');
         } catch (\Exception $e) {
             return $this->errorResponse($e->getMessage(), 400);
         }

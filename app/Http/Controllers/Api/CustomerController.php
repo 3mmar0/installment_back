@@ -27,7 +27,7 @@ class CustomerController extends Controller
 
         return $this->successResponse(
             CustomerResource::collection($customers)->response()->getData(true),
-            'Customers retrieved successfully'
+            'تم جلب العملاء بنجاح'
         );
     }
 
@@ -47,7 +47,7 @@ class CustomerController extends Controller
 
         return $this->createdResponse(
             new CustomerResource($customer),
-            'Customer created successfully'
+            'تم إنشاء العميل بنجاح'
         );
     }
 
@@ -59,12 +59,12 @@ class CustomerController extends Controller
         $customer = $this->customerService->findCustomerById($id);
 
         if (!$customer) {
-            return $this->notFoundResponse('Customer not found');
+            return $this->notFoundResponse('العميل غير موجود');
         }
 
         // Check authorization
         if (!$request->user()->isOwner() && $customer->user_id !== $request->user()->id) {
-            return $this->forbiddenResponse('You are not authorized to view this customer');
+            return $this->forbiddenResponse('غير مصرح لك بعرض هذا العميل');
         }
 
         // Load installments with their items
@@ -72,7 +72,7 @@ class CustomerController extends Controller
 
         return $this->successResponse(
             new CustomerResource($customer),
-            'Customer retrieved successfully'
+            'تم جلب العميل بنجاح'
         );
     }
 
@@ -94,13 +94,13 @@ class CustomerController extends Controller
 
             return $this->successResponse(
                 new CustomerResource($customer),
-                'Customer updated successfully'
+                'تم تحديث العميل بنجاح'
             );
         } catch (\Exception $e) {
             if ($e->getCode() === 403) {
                 return $this->forbiddenResponse($e->getMessage());
             }
-            return $this->notFoundResponse('Customer not found');
+            return $this->notFoundResponse('العميل غير موجود');
         }
     }
 
@@ -112,12 +112,12 @@ class CustomerController extends Controller
         try {
             $this->customerService->deleteCustomer($id, $request->user());
 
-            return $this->deletedResponse('Customer deleted successfully');
+            return $this->deletedResponse('تم حذف العميل بنجاح');
         } catch (\Exception $e) {
             if ($e->getCode() === 403) {
                 return $this->forbiddenResponse($e->getMessage());
             }
-            return $this->notFoundResponse('Customer not found');
+            return $this->notFoundResponse('العميل غير موجود');
         }
     }
 
@@ -129,17 +129,17 @@ class CustomerController extends Controller
         $customer = $this->customerService->findCustomerById($id);
 
         if (!$customer) {
-            return $this->notFoundResponse('Customer not found');
+            return $this->notFoundResponse('العميل غير موجود');
         }
 
         // Check authorization
         if (!$request->user()->isOwner() && $customer->user_id !== $request->user()->id) {
-            return $this->forbiddenResponse('You are not authorized to view this customer');
+            return $this->forbiddenResponse('غير مصرح لك بعرض هذا العميل');
         }
 
         $stats = $this->customerService->getCustomerStats($customer);
 
-        return $this->successResponse($stats, 'Customer statistics retrieved successfully');
+        return $this->successResponse($stats, 'تم جلب إحصائيات العميل بنجاح');
     }
 
     /**
@@ -162,6 +162,6 @@ class CustomerController extends Controller
 
         return $this->successResponse([
             'data' => $selectData->values(),
-        ], 'Customers retrieved successfully');
+        ], 'تم جلب العملاء بنجاح');
     }
 }

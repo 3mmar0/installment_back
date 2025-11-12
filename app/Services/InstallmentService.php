@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\Services\InstallmentServiceInterface;
+use App\Helpers\LimitsHelper;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
 use App\Models\User;
@@ -39,6 +40,10 @@ class InstallmentService implements InstallmentServiceInterface
      */
     public function createInstallment(array $data, User $user): Installment
     {
+        if (!$user->isOwner() && !LimitsHelper::canCreate($user->id, 'installments')) {
+            abort(403, LimitsHelper::getLimitExceededMessage('installments'));
+        }
+
         return DB::transaction(function () use ($data, $user) {
             $start = Carbon::parse($data['start_date'])->startOfDay();
             $months = (int) $data['months'];
@@ -72,6 +77,10 @@ class InstallmentService implements InstallmentServiceInterface
             }
 
             $installment->refresh()->load(['customer', 'items']);
+
+            if (!$user->isOwner()) {
+                LimitsHelper::incrementUsage($user->id, 'installments');
+            }
 
             // Send notification
             app(NotificationService::class)->notifyInstallmentCreated($user, $installment);

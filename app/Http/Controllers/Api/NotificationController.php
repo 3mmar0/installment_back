@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\LimitsHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\NotificationResource;
 use App\Http\Traits\ApiResponse;
@@ -9,6 +10,7 @@ use App\Services\EmailNotificationService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class NotificationController extends Controller
 {
@@ -29,7 +31,7 @@ class NotificationController extends Controller
 
         return $this->successResponse(
             NotificationResource::collection($notifications),
-            'Notifications retrieved successfully'
+            'تم جلب الإشعارات بنجاح'
         );
     }
 
@@ -40,7 +42,7 @@ class NotificationController extends Controller
     {
         $count = $this->notificationService->getUnreadCount($request->user());
 
-        return $this->successResponse(['count' => $count], 'Unread notifications count retrieved');
+        return $this->successResponse(['count' => $count], 'تم جلب عدد الإشعارات غير المقروءة بنجاح');
     }
 
     /**
@@ -52,7 +54,7 @@ class NotificationController extends Controller
 
         return $this->successResponse(
             ['marked' => $marked],
-            $marked ? 'Notification marked as read' : 'Notification already read'
+            $marked ? 'تم وضع علامة مقروء على الإشعار' : 'الإشعار مقروء مسبقاً'
         );
     }
 
@@ -63,7 +65,7 @@ class NotificationController extends Controller
     {
         $count = $this->notificationService->markAllAsRead($request->user());
 
-        return $this->successResponse(['count' => $count], "$count notifications marked as read");
+        return $this->successResponse(['count' => $count], "تم وضع علامة مقروء على {$count} إشعار");
     }
 
     /**
@@ -80,7 +82,7 @@ class NotificationController extends Controller
                 'overdue_notifications' => $overdueCount,
                 'total' => $upcomingCount + $overdueCount,
             ],
-            'Notifications generated successfully'
+            'تم إنشاء الإشعارات بنجاح'
         );
     }
 
@@ -89,9 +91,17 @@ class NotificationController extends Controller
      */
     public function destroy(Request $request, int $id): JsonResponse
     {
-        $request->user()->notifications()->findOrFail($id)->delete();
+        $notification = $request->user()->notifications()->findOrFail($id);
 
-        return $this->deletedResponse('Notification deleted successfully');
+        $deleted = DB::transaction(function () use ($notification) {
+            return $notification->delete();
+        });
+
+        if ($deleted && !$request->user()->isOwner()) {
+            LimitsHelper::decrementUsage($request->user()->id, 'notifications');
+        }
+
+        return $this->deletedResponse('تم حذف الإشعار بنجاح');
     }
 
     /**
@@ -103,7 +113,7 @@ class NotificationController extends Controller
 
         return $this->successResponse(
             $result,
-            "Sent {$result['total_emails']} reminder emails successfully"
+            "تم إرسال {$result['total_emails']} رسالة تذكير بنجاح"
         );
     }
 }

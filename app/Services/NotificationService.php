@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\LimitsHelper;
 use App\Models\InstallmentItem;
 use App\Models\Notification;
 use App\Models\User;
@@ -14,13 +15,23 @@ class NotificationService
      */
     public function create(User $user, string $type, string $title, string $message, array $data = []): Notification
     {
-        return Notification::create([
+        if (!$user->isOwner() && !LimitsHelper::canCreate($user->id, 'notifications')) {
+            abort(403, LimitsHelper::getLimitExceededMessage('notifications'));
+        }
+
+        $notification = Notification::create([
             'user_id' => $user->id,
             'type' => $type,
             'title' => $title,
             'message' => $message,
             'data' => $data,
         ]);
+
+        if (!$user->isOwner()) {
+            LimitsHelper::incrementUsage($user->id, 'notifications');
+        }
+
+        return $notification;
     }
 
     /**

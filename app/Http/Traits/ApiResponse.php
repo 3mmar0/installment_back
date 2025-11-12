@@ -13,7 +13,7 @@ trait ApiResponse
      */
     protected function successResponse(
         mixed $data = null,
-        string $message = 'Success',
+        string $message = 'تمت العملية بنجاح',
         int $statusCode = 200
     ): JsonResponse {
         $response = [
@@ -35,7 +35,7 @@ trait ApiResponse
      * Return an error JSON response.
      */
     protected function errorResponse(
-        string $message = 'Error occurred',
+        string $message = 'حدث خطأ',
         int $statusCode = 400,
         ?array $errors = null
     ): JsonResponse {
@@ -56,7 +56,7 @@ trait ApiResponse
      */
     protected function createdResponse(
         mixed $data = null,
-        string $message = 'Resource created successfully'
+        string $message = 'تم إنشاء المورد بنجاح'
     ): JsonResponse {
         return $this->successResponse($data, $message, 201);
     }
@@ -64,7 +64,7 @@ trait ApiResponse
     /**
      * Return a deleted response.
      */
-    protected function deletedResponse(string $message = 'Resource deleted successfully'): JsonResponse
+    protected function deletedResponse(string $message = 'تم حذف المورد بنجاح'): JsonResponse
     {
         return $this->successResponse(null, $message, 200);
     }
@@ -72,7 +72,7 @@ trait ApiResponse
     /**
      * Return a not found response.
      */
-    protected function notFoundResponse(string $message = 'Resource not found'): JsonResponse
+    protected function notFoundResponse(string $message = 'المورد غير موجود'): JsonResponse
     {
         return $this->errorResponse($message, 404);
     }
@@ -80,7 +80,7 @@ trait ApiResponse
     /**
      * Return an unauthorized response.
      */
-    protected function unauthorizedResponse(string $message = 'Unauthorized'): JsonResponse
+    protected function unauthorizedResponse(string $message = 'غير مصرح'): JsonResponse
     {
         return $this->errorResponse($message, 401);
     }
@@ -88,7 +88,7 @@ trait ApiResponse
     /**
      * Return a forbidden response.
      */
-    protected function forbiddenResponse(string $message = 'Forbidden'): JsonResponse
+    protected function forbiddenResponse(string $message = 'ممنوع الوصول'): JsonResponse
     {
         return $this->errorResponse($message, 403);
     }
@@ -98,7 +98,7 @@ trait ApiResponse
      */
     protected function validationErrorResponse(
         array $errors,
-        string $message = 'Validation failed'
+        string $message = 'فشلت عملية التحقق'
     ): JsonResponse {
         return $this->errorResponse($message, 422, $errors);
     }
