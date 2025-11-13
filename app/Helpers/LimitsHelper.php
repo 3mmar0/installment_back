@@ -34,6 +34,9 @@ class LimitsHelper
      */
     public static function createOrUpdateUserLimits(int $userId, array $attributes = []): UserLimit
     {
+        // Get existing user limit to preserve current usage
+        $existingLimit = UserLimit::where('user_id', $userId)->first();
+        
         $payload = self::buildPayloadFromAttributes($attributes);
         $payload['subscription_name'] ??= 'Custom Plan';
         $payload['subscription_slug'] ??= Str::slug($payload['subscription_name']);
@@ -50,14 +53,22 @@ class LimitsHelper
         $payload['reports'] = $payload['reports'] ?? self::DEFAULT_LIMITS['reports'];
         $payload['features'] = $payload['features'] ?? self::DEFAULT_LIMITS['features'];
 
-            $userLimit = UserLimit::updateOrCreate(
-                ['user_id' => $userId],
-                $payload
-            );
+        // Preserve current usage counts if they exist
+        if ($existingLimit) {
+            $payload['customers_used'] = $existingLimit->customers_used ?? 0;
+            $payload['installments_used'] = $existingLimit->installments_used ?? 0;
+            $payload['notifications_used'] = $existingLimit->notifications_used ?? 0;
+        }
 
-            self::updateUsageCounts($userId);
+        $userLimit = UserLimit::updateOrCreate(
+            ['user_id' => $userId],
+            $payload
+        );
 
-            return $userLimit->fresh();
+        // Update usage counts from actual database records to ensure accuracy
+        self::updateUsageCounts($userId);
+
+        return $userLimit->fresh();
     }
 
     /**

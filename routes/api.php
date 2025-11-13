@@ -47,6 +47,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('feature/{feature}', 'feature');
     });
 
+    // User subscription change (upgrade/downgrade)
+    Route::post('subscriptions/{subscription}/change', [SubscriptionController::class, 'changeSubscription']);
+
     // Routes below require an active subscription
     Route::middleware(\App\Http\Middleware\EnsureActiveSubscription::class)->group(function () {
         // Dashboard

@@ -224,6 +224,97 @@
 }
 ```
 
+#### Response
+
+```json
+{
+    "success": true,
+    "message": "تم تعيين الاشتراك بنجاح",
+    "data": {
+        "id": 10,
+        "user_id": 12,
+        "subscription_name": "الخطة الذهبية",
+        "subscription_slug": "gold-plan",
+        "currency": "EGP",
+        "price": 499.99,
+        "duration": "monthly",
+        "status": "active",
+        "limits": { ... },
+        "usage": { ... },
+        "remaining": { ... }
+    }
+}
+```
+
+### `POST /api/subscriptions/{subscription}/change` (للمستخدمين العاديين)
+
+يسمح للمستخدمين العاديين بتغيير اشتراكهم (ترقية أو تخفيض) إلى خطة أخرى.
+
+#### Request Body
+
+```json
+{
+    "start_date": "2025-01-01",
+    "end_date": "2025-02-01",
+    "status": "active",
+    "features": { "custom": true }
+}
+```
+
+> **ملاحظة**: جميع الحقول اختيارية. إذا لم يتم تحديد `start_date` و `end_date`، سيتم حسابها تلقائياً بناءً على مدة الخطة.
+
+#### Response
+
+```json
+{
+    "success": true,
+    "message": "تم تغيير الاشتراك بنجاح",
+    "data": {
+        "id": 10,
+        "user_id": 1,
+        "subscription_name": "الخطة الذهبية",
+        "subscription_slug": "gold-plan",
+        "currency": "EGP",
+        "price": 499.99,
+        "duration": "monthly",
+        "description": "وصف الخطة...",
+        "start_date": "2025-01-01",
+        "end_date": "2025-02-01",
+        "status": "active",
+        "limits": {
+            "customers": { "from": 0, "to": 200 },
+            "installments": { "from": 0, "to": 500 },
+            "notifications": { "from": 0, "to": 5000 },
+            "features": { "priority_support": true },
+            "reports": true
+        },
+        "usage": {
+            "customers_used": 12,
+            "installments_used": 34,
+            "notifications_used": 50
+        },
+        "remaining": {
+            "customers": 188,
+            "installments": 466,
+            "notifications": 4950
+        },
+        "created_at": "2025-01-01T10:20:30.000000Z",
+        "updated_at": "2025-01-01T10:20:30.000000Z"
+    }
+}
+```
+
+#### Error Responses
+
+إذا كانت الخطة غير متاحة:
+
+```json
+{
+    "success": false,
+    "message": "الخطة المحددة غير متاحة حالياً"
+}
+```
+
 ---
 
 ## 📊 User Limits

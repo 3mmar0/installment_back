@@ -134,6 +134,34 @@ class SubscriptionController extends Controller
     }
 
     /**
+     * Change user's own subscription (upgrade/downgrade).
+     */
+    public function changeSubscription(Request $request, Subscription $subscription): JsonResponse
+    {
+        $user = $request->user();
+
+        // Ensure the subscription is active
+        if (!$subscription->is_active) {
+            return $this->errorResponse('الخطة المحددة غير متاحة حالياً', 400);
+        }
+
+        // Apply subscription to the authenticated user
+        $overrides = $request->validate([
+            'start_date' => ['sometimes', 'nullable', 'date'],
+            'end_date' => ['sometimes', 'nullable', 'date', 'after_or_equal:start_date'],
+            'status' => ['sometimes', 'nullable', 'string', 'in:active,paused,canceled'],
+            'features' => ['sometimes', 'nullable', 'array'],
+        ]);
+
+        $userLimit = LimitsHelper::applySubscriptionToUser($user->id, $subscription, $overrides);
+
+        return $this->successResponse(
+            new UserLimitResource($userLimit),
+            'تم تغيير الاشتراك بنجاح'
+        );
+    }
+
+    /**
      * Ensure slug uniqueness.
      */
     protected function generateUniqueSlug(string $slug, ?int $ignoreId = null): string
