@@ -209,7 +209,8 @@ This project is built following **SOLID principles** for maximum maintainability
     Open your browser and navigate to:
 
     ```
-    http://localhost:8000/documentation
+    http://localhost:8000/documentation        # Overview
+    http://localhost:8000/documentation/api   # Full API Documentation
     ```
 
 ### Test the API
@@ -256,28 +257,639 @@ All protected endpoints require the `Authorization` header:
 Authorization: Bearer {your-token}
 ```
 
-### Main Endpoints
+### Response Format
 
-| Method | Endpoint                            | Description             |
-| ------ | ----------------------------------- | ----------------------- |
-| POST   | `/api/auth/register`                | Register new user       |
-| POST   | `/api/auth/login`                   | Login and get token     |
-| GET    | `/api/auth/me`                      | Get current user        |
-| POST   | `/api/auth/logout`                  | Logout                  |
-| GET    | `/api/dashboard`                    | Get dashboard analytics |
-| GET    | `/api/customers`                    | List customers          |
-| POST   | `/api/customers`                    | Create customer         |
-| GET    | `/api/customers/{id}`               | Get customer            |
-| PUT    | `/api/customers/{id}`               | Update customer         |
-| DELETE | `/api/customers/{id}`               | Delete customer         |
-| GET    | `/api/installments`                 | List installments       |
-| POST   | `/api/installments`                 | Create installment      |
-| GET    | `/api/installments/{id}`            | Get installment         |
-| POST   | `/api/installment-items/{item}/pay` | Mark as paid            |
-| GET    | `/api/installments/overdue`         | Get overdue items       |
-| GET    | `/api/installments/due-soon`        | Get due soon items      |
+All API responses follow this structure:
 
-**Full API documentation available at:** `http://localhost:8000/documentation`
+```json
+{
+  "success": true,
+  "message": "تمت العملية بنجاح",
+  "data": { ... }
+}
+```
+
+All messages are in Arabic (العربية).
+
+---
+
+## 🔐 Authentication Endpoints
+
+### `POST /api/auth/register` (Public)
+
+Register a new user.
+
+**Request Body:**
+
+```json
+{
+    "name": "أحمد محمد",
+    "email": "ahmed@example.com",
+    "password": "password123",
+    "password_confirmation": "password123",
+    "subscription_id": 1 // Optional
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "success": true,
+    "message": "تم التسجيل بنجاح",
+    "data": {
+        "user": {
+            "id": 1,
+            "name": "أحمد محمد",
+            "email": "ahmed@example.com",
+            "role": "user",
+            "user_limit": {
+                "subscription_name": "الخطة الأساسية",
+                "limits": {
+                    "customers": { "from": 0, "to": 100 },
+                    "installments": { "from": 0, "to": 200 },
+                    "notifications": { "from": 0, "to": 1000 }
+                },
+                "usage": {
+                    "customers_used": 0,
+                    "installments_used": 0,
+                    "notifications_used": 0
+                },
+                "remaining": {
+                    "customers": 100,
+                    "installments": 200,
+                    "notifications": 1000
+                }
+            }
+        },
+        "token": "1|xxxxxxxxxxxx",
+        "token_type": "Bearer"
+    }
+}
+```
+
+### `POST /api/auth/login` (Public)
+
+Login and get authentication token.
+
+**Request Body:**
+
+```json
+{
+    "email": "ahmed@example.com",
+    "password": "password123"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "message": "تم تسجيل الدخول بنجاح",
+  "data": {
+    "user": { ... },
+    "token": "1|xxxxxxxxxxxx",
+    "token_type": "Bearer"
+  }
+}
+```
+
+### `GET /api/auth/me` (Protected)
+
+Get current authenticated user data.
+
+**Headers:**
+
+```
+Authorization: Bearer {token}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "message": "تم جلب البيانات بنجاح",
+  "data": {
+    "user": { ... }
+  }
+}
+```
+
+### `POST /api/auth/logout` (Protected)
+
+Logout and revoke token.
+
+**Response (200 OK):**
+
+```json
+{
+    "success": true,
+    "message": "تم تسجيل الخروج بنجاح"
+}
+```
+
+---
+
+## 📦 Subscription Plans Endpoints
+
+### `GET /api/subscriptions-public` (Public)
+
+Get list of all active subscription plans.
+
+**Response (200 OK):**
+
+```json
+{
+    "success": true,
+    "message": "تم جلب خطط الاشتراك بنجاح",
+    "data": [
+        {
+            "id": 1,
+            "name": "الخطة المجانية",
+            "slug": "free",
+            "currency": "EGP",
+            "price": 0,
+            "duration": "monthly",
+            "description": "خطة البداية",
+            "is_active": true,
+            "customers": { "from": 0, "to": 10 },
+            "installments": { "from": 0, "to": 20 },
+            "notifications": { "from": 0, "to": 200 },
+            "reports": true,
+            "features": { "basic_reports": true }
+        }
+    ]
+}
+```
+
+### `POST /api/subscriptions/{subscription}/change` (Protected)
+
+Change user's subscription (upgrade/downgrade). Preserves current usage.
+
+**Request Body (All fields optional):**
+
+```json
+{
+    "start_date": "2025-01-01",
+    "end_date": "2025-02-01",
+    "status": "active",
+    "features": { "custom": true }
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "message": "تم تغيير الاشتراك بنجاح",
+  "data": {
+    "id": 10,
+    "user_id": 1,
+    "subscription_name": "الخطة الذهبية",
+    "limits": { ... },
+    "usage": { "customers_used": 12, ... },
+    "remaining": { ... }
+  }
+}
+```
+
+### `GET /api/subscriptions-admin` (Owner Only)
+
+Get all subscription plans (active and inactive) with pagination.
+
+**Query Parameters:**
+
+-   `per_page` (optional, default: 15)
+
+### `POST /api/subscriptions-create` (Owner Only)
+
+Create a new subscription plan.
+
+**Request Body:**
+
+```json
+{
+    "name": "الخطة الذهبية",
+    "slug": "gold-plan",
+    "currency": "EGP",
+    "price": 499.99,
+    "duration": "monthly",
+    "description": "وصف الخطة",
+    "customers": { "from": 0, "to": 200 },
+    "installments": { "from": 0, "to": 500 },
+    "notifications": { "from": 0, "to": 5000 },
+    "reports": true,
+    "features": { "priority_support": true },
+    "is_active": true
+}
+```
+
+### `POST /api/subscriptions/{subscription}/assign` (Owner Only)
+
+Assign a subscription plan to a user.
+
+**Request Body:**
+
+```json
+{
+    "user_id": 12,
+    "start_date": "2025-01-01",
+    "end_date": "2025-02-01",
+    "status": "active",
+    "features": { "custom": true }
+}
+```
+
+---
+
+## 📊 User Limits Endpoints
+
+### `GET /api/limits/current` (Protected)
+
+Get current user limits and usage.
+
+**Response (200 OK):**
+
+```json
+{
+    "success": true,
+    "message": "تم جلب الحدود بنجاح",
+    "data": {
+        "limits": {
+            "customers": { "from": 0, "to": 100 },
+            "installments": { "from": 0, "to": 200 },
+            "notifications": { "from": 0, "to": 1000 }
+        },
+        "usage": {
+            "customers_used": 12,
+            "installments_used": 34,
+            "notifications_used": 50
+        },
+        "remaining": {
+            "customers": 88,
+            "installments": 166,
+            "notifications": 950
+        }
+    }
+}
+```
+
+### `GET /api/limits/can-create/{resourceType}` (Protected)
+
+Check if user can create a resource. Values: `customers`, `installments`, `notifications`
+
+**Response (200 OK):**
+
+```json
+{
+    "success": true,
+    "message": "يمكن إنشاء المورد",
+    "data": {
+        "can_create": true,
+        "remaining": 88
+    }
+}
+```
+
+### `POST /api/limits/refresh` (Protected)
+
+Recalculate usage counts from database.
+
+---
+
+## 👥 Customer Endpoints (Protected + Active Subscription Required)
+
+### `GET /api/customer-list` (Protected + Subscription)
+
+Get list of all customers with pagination.
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "message": "تم جلب العملاء بنجاح",
+  "data": {
+    "data": [
+      {
+        "id": 1,
+        "name": "محمد أحمد",
+        "email": "mohamed@example.com",
+        "phone": "+201000000000",
+        "address": "القاهرة",
+        "notes": "ملاحظات",
+        "created_at": "2025-01-01T10:20:30.000000Z"
+      }
+    ],
+    "links": { ... },
+    "meta": { ... }
+  }
+}
+```
+
+### `POST /api/customer-create` (Protected + Subscription)
+
+Create a new customer. Checks customer limit.
+
+**Request Body:**
+
+```json
+{
+    "name": "محمد أحمد",
+    "email": "mohamed@example.com",
+    "phone": "+201000000000",
+    "address": "القاهرة",
+    "notes": "ملاحظات"
+}
+```
+
+**Fields:**
+
+-   `name` (required, string)
+-   `email` (optional, email)
+-   `phone` (optional, string)
+-   `address` (optional, string)
+-   `notes` (optional, string)
+
+**Error Response (403):**
+
+```json
+{
+    "success": false,
+    "message": "لقد وصلت إلى الحد الأقصى لعدد العملاء المسموح به في خطتك."
+}
+```
+
+### `GET /api/customer-show/{id}` (Protected + Subscription)
+
+Get customer details with installments.
+
+### `PUT /api/customer-update/{id}` (Protected + Subscription)
+
+Update customer information.
+
+### `DELETE /api/customer-delete/{id}` (Protected + Subscription)
+
+Delete a customer. Usage count is automatically decremented.
+
+### `GET /api/customer-stats/{id}` (Protected + Subscription)
+
+Get customer statistics (total installments, paid, remaining).
+
+---
+
+## 💰 Installment Endpoints (Protected + Active Subscription Required)
+
+### `GET /api/installment-list` (Protected + Subscription)
+
+Get list of all installments with pagination.
+
+### `POST /api/installment-create` (Protected + Subscription)
+
+Create a new installment plan. Checks installment limit.
+
+**Request Body:**
+
+```json
+{
+    "customer_id": 12,
+    "total_amount": 10000,
+    "months": 12,
+    "start_date": "2025-01-01",
+    "products": [
+        {
+            "name": "منتج أ",
+            "qty": 2,
+            "price": 5000
+        }
+    ],
+    "notes": "ملاحظات"
+}
+```
+
+**Fields:**
+
+-   `customer_id` (required, integer, exists in customers)
+-   `total_amount` (required, numeric, min: 0.01)
+-   `months` (required, integer, 1-120)
+-   `start_date` (required, date)
+-   `products` (required, array, min: 1 item)
+    -   `products[].name` (required, string)
+    -   `products[].qty` (required, integer, min: 1)
+    -   `products[].price` (required, numeric, min: 0)
+-   `notes` (optional, string)
+
+**Error Response (403):**
+
+```json
+{
+    "success": false,
+    "message": "لقد وصلت إلى الحد الأقصى لعدد الأقساط المسموح بها في خطتك."
+}
+```
+
+### `GET /api/installment-show/{id}` (Protected + Subscription)
+
+Get installment details.
+
+### `GET /api/installment-overdue` (Protected + Subscription)
+
+Get list of overdue installments.
+
+### `GET /api/installment-due-soon` (Protected + Subscription)
+
+Get list of installments due within 7 days.
+
+### `POST /api/installment-item-pay/{item}` (Protected + Subscription)
+
+Mark an installment item as paid.
+
+**Request Body:**
+
+```json
+{
+    "paid_amount": 500,
+    "reference": "رقم المرجع"
+}
+```
+
+### `GET /api/installment-stats/{id}` (Protected + Subscription)
+
+Get installment statistics.
+
+### `GET /api/installment-all-stats` (Protected + Subscription)
+
+Get comprehensive statistics for all installments.
+
+---
+
+## 🔔 Notification Endpoints (Protected + Active Subscription Required)
+
+### `GET /api/notification-list` (Protected + Subscription)
+
+Get list of all notifications.
+
+**Query Parameters:**
+
+-   `unread_only` (optional, boolean)
+
+### `GET /api/notification-count` (Protected + Subscription)
+
+Get count of unread notifications.
+
+### `POST /api/notification-mark-read/{id}` (Protected + Subscription)
+
+Mark a notification as read.
+
+### `POST /api/notification-mark-all-read` (Protected + Subscription)
+
+Mark all notifications as read.
+
+### `POST /api/notification-generate` (Protected + Subscription)
+
+Generate reminder notifications for due installments. Checks notification limit.
+
+### `POST /api/notification-send-emails` (Protected + Subscription)
+
+Send reminder emails for due installments.
+
+### `DELETE /api/notification-delete/{id}` (Protected + Subscription)
+
+Delete a notification.
+
+---
+
+## 📊 Dashboard Endpoints
+
+### `GET /api/dashboard` (Protected + Active Subscription Required)
+
+Get dashboard statistics.
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "message": "تم جلب البيانات بنجاح",
+  "data": {
+    "overdue_count": 5,
+    "due_soon_count": 10,
+    "total_outstanding": 50000,
+    "upcoming_payments": [ ... ]
+  }
+}
+```
+
+---
+
+## 👤 User Management Endpoints (Owner Only)
+
+### `GET /api/user-list` (Owner Only)
+
+Get list of all users with pagination.
+
+### `POST /api/user-create` (Owner Only)
+
+Create a new user.
+
+**Request Body:**
+
+```json
+{
+    "name": "مستخدم جديد",
+    "email": "user@example.com",
+    "password": "password123",
+    "password_confirmation": "password123",
+    "role": "user"
+}
+```
+
+### `GET /api/user-show/{id}` (Owner Only)
+
+Get user details.
+
+### `PUT /api/user-update/{id}` (Owner Only)
+
+Update user information.
+
+### `DELETE /api/user-delete/{id}` (Owner Only)
+
+Delete a user.
+
+---
+
+## 📖 Full Documentation
+
+**Interactive API documentation available at:**
+
+-   Web UI: `http://localhost:8000/documentation/api`
+-   Markdown: See `API_RESPONSES.md` for detailed request/response examples
+
+---
+
+## 🔑 Authentication Requirements
+
+| Badge               | Description                                     |
+| ------------------- | ----------------------------------------------- |
+| 🌐 **Public**       | No authentication required                      |
+| 🔒 **Protected**    | Requires `Authorization: Bearer {token}` header |
+| 👑 **Owner**        | Requires authentication + Owner role            |
+| ⚠️ **Subscription** | Requires authentication + Active subscription   |
+
+---
+
+## ⚠️ Error Responses
+
+### Limit Exceeded (403)
+
+```json
+{
+    "success": false,
+    "message": "لقد وصلت إلى الحد الأقصى لعدد العملاء المسموح به في خطتك."
+}
+```
+
+### Unauthorized (401)
+
+```json
+{
+    "success": false,
+    "message": "غير مصرح"
+}
+```
+
+### Forbidden (403)
+
+```json
+{
+    "success": false,
+    "message": "ممنوع الوصول"
+}
+```
+
+### Not Found (404)
+
+```json
+{
+    "success": false,
+    "message": "المورد غير موجود"
+}
+```
+
+### Validation Error (422)
+
+```json
+{
+    "success": false,
+    "message": "بيانات غير صحيحة",
+    "errors": {
+        "email": ["البريد الإلكتروني مطلوب"]
+    }
+}
+```
 
 ---
 
@@ -423,10 +1035,12 @@ This project includes comprehensive documentation:
 
 1. **[QUICK_START.md](QUICK_START.md)** - Get running in 5 minutes
 2. **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)** - Complete API reference with examples
-3. **[SOLID_PRINCIPLES.md](SOLID_PRINCIPLES.md)** - Architecture and design patterns explained
-4. **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Detailed setup and configuration
-5. **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - Project overview and transformation details
-6. **[Web Documentation](http://localhost:8000/documentation)** - Beautiful interactive documentation (run `php artisan serve` first)
+3. **[API_RESPONSES.md](API_RESPONSES.md)** - Detailed API request/response examples
+4. **[SOLID_PRINCIPLES.md](SOLID_PRINCIPLES.md)** - Architecture and design patterns explained
+5. **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Detailed setup and configuration
+6. **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - Project overview and transformation details
+7. **[Web Documentation](http://localhost:8000/documentation)** - Overview page
+8. **[Full API Documentation](http://localhost:8000/documentation/api)** - Complete interactive API documentation with all routes, requests, and responses (run `php artisan serve` first)
 
 ---
 

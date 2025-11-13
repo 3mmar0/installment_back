@@ -21,3 +21,4 @@ Route::get('/', function () {
 });
 
 Route::get('/documentation', [DocumentationController::class, 'index'])->name('documentation');
+Route::get('/documentation/api', [DocumentationController::class, 'api'])->name('documentation.api');

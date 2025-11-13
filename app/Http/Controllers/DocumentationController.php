@@ -13,4 +13,12 @@ class DocumentationController extends Controller
     {
         return view('documentation.index');
     }
+
+    /**
+     * Display the comprehensive API documentation page.
+     */
+    public function api(): View
+    {
+        return view('documentation.api');
+    }
 }
