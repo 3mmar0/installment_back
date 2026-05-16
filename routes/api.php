@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\ExportReportController;
 use App\Http\Controllers\Api\InstallmentController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SubscriptionController;
@@ -54,6 +55,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(\App\Http\Middleware\EnsureActiveSubscription::class)->group(function () {
         // Dashboard
         Route::get('dashboard', [InstallmentController::class, 'dashboard']);
+
+        // Exports (binary download — POST JSON body e.g. { "scope": "dashboard" })
+        Route::post('export/pdf', [ExportReportController::class, 'pdf']);
+        Route::post('export/excel', [ExportReportController::class, 'excel']);
+        Route::post('export/csv', [ExportReportController::class, 'csv']);
 
         // Notifications & Emails
         Route::controller(NotificationController::class)->group(function () {
