@@ -235,11 +235,13 @@ class InstallmentService implements InstallmentServiceInterface
             ->where('installments.status', 'active')
             ->sum('installment_items.amount');
 
+        $thisMonthStart = $thisMonth->copy()->startOfDay();
+        $thisMonthEnd = $thisMonth->copy()->endOfMonth()->endOfDay();
+
         $collectedThisMonth = (float) InstallmentItem::query()
             ->whereIn('installment_id', $userInstallmentIds)
-            ->where('status', 'paid')
-            ->whereMonth('paid_at', $now->month)
-            ->whereYear('paid_at', $now->year)
+            ->whereNotNull('paid_at')
+            ->whereBetween('paid_at', [$thisMonthStart, $thisMonthEnd])
             ->sum(DB::raw($paidAmountSql));
 
         $totalCollected = (float) InstallmentItem::query()
@@ -260,11 +262,13 @@ class InstallmentService implements InstallmentServiceInterface
             })->count();
 
         // Monthly collection comparison
+        $lastMonthStart = $lastMonth->copy()->startOfDay();
+        $lastMonthEnd = $lastMonth->copy()->endOfMonth()->endOfDay();
+
         $collectedLastMonth = (float) InstallmentItem::query()
             ->whereIn('installment_id', $userInstallmentIds)
-            ->where('status', 'paid')
-            ->whereMonth('paid_at', $lastMonth->month)
-            ->whereYear('paid_at', $lastMonth->year)
+            ->whereNotNull('paid_at')
+            ->whereBetween('paid_at', [$lastMonthStart, $lastMonthEnd])
             ->sum(DB::raw($paidAmountSql));
 
         $collectionGrowth = $lastMonth->isSameMonth($now) ? 0 : ($collectedLastMonth > 0 ? (($collectedThisMonth - $collectedLastMonth) / $collectedLastMonth) * 100 : 0);
@@ -416,22 +420,38 @@ class InstallmentService implements InstallmentServiceInterface
                 ];
             });
 
-        // Monthly collection trend (last 6 months)
+        // Monthly collection trend (last 6 months, oldest → newest; last entry = current month)
         $monthlyTrend = [];
         for ($i = 5; $i >= 0; $i--) {
-            $month = $now->copy()->subMonths($i);
+            $month = $now->copy()->startOfMonth()->subMonths($i);
+            $monthStart = $month->copy()->startOfDay();
+            $monthEnd = $month->copy()->endOfMonth()->endOfDay();
+
             $monthlyCollection = (float) InstallmentItem::query()
                 ->whereIn('installment_id', $userInstallmentIds)
-                ->where('status', 'paid')
-                ->whereMonth('paid_at', $month->month)
-                ->whereYear('paid_at', $month->year)
+                ->whereNotNull('paid_at')
+                ->whereBetween('paid_at', [$monthStart, $monthEnd])
                 ->sum(DB::raw($paidAmountSql));
+
+            $monthlyDue = (float) InstallmentItem::query()
+                ->whereIn('installment_id', $userInstallmentIds)
+                ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+                ->sum('amount');
+
+            $isCurrentMonth = $month->isSameMonth($now);
+
+            if ($isCurrentMonth) {
+                $monthlyCollection = $collectedThisMonth;
+            }
 
             $monthlyTrend[] = [
                 'month' => $month->format('M Y'),
                 'amount' => $monthlyCollection,
+                'collected' => $monthlyCollection,
+                'due' => $monthlyDue,
                 'year' => $month->year,
                 'month_number' => $month->month,
+                'is_current' => $isCurrentMonth,
             ];
         }
 
