@@ -120,4 +120,43 @@ class AuthController extends Controller
             'token_type' => 'Bearer',
         ], 'تم تحديث الرمز بنجاح');
     }
+
+    /**
+     * Send password reset link to email.
+     */
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        $this->authService->sendPasswordResetLink($request->input('email'));
+
+        return $this->successResponse(
+            null,
+            'إذا كان البريد الإلكتروني مسجلاً، سيتم إرسال رابط إعادة تعيين كلمة المرور'
+        );
+    }
+
+    /**
+     * Reset password using token from email.
+     */
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email'],
+            'token' => ['required', 'string'],
+            'password' => ['required', 'confirmed', Password::defaults()],
+        ]);
+
+        try {
+            $this->authService->resetPassword($data);
+        } catch (ValidationException $e) {
+            $message = collect($e->errors())->flatten()->first() ?? 'تعذر إعادة تعيين كلمة المرور';
+
+            return $this->errorResponse($message, 422, $e->errors());
+        }
+
+        return $this->successResponse(null, 'تم إعادة تعيين كلمة المرور بنجاح');
+    }
 }

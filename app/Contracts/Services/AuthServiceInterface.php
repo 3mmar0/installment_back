@@ -25,4 +25,16 @@ interface AuthServiceInterface
      * Refresh user token.
      */
     public function refreshToken(User $user): string;
+
+    /**
+     * Send password reset link to the user's email.
+     */
+    public function sendPasswordResetLink(string $email): void;
+
+    /**
+     * Reset user password using token from email.
+     *
+     * @throws \Illuminate\Validation\ValidationException
+     */
+    public function resetPassword(array $credentials): void;
 }
