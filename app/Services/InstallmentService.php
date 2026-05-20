@@ -678,12 +678,15 @@ class InstallmentService implements InstallmentServiceInterface
      */
     public function getOverdueItems(User $user): Collection
     {
+        $now = now()->startOfDay();
+
         return InstallmentItem::query()
             ->whereHas('installment', function ($query) use ($user) {
-                $query->forUser($user);
+                $query->forUser($user)->where('installments.status', 'active');
             })
-            ->where('status', 'pending')
-            ->where('due_date', '<', now())
+            ->whereNull('paid_at')
+            ->where('status', '!=', 'paid')
+            ->where('due_date', '<', $now)
             ->with(['installment.customer'])
             ->orderBy('due_date')
             ->get();
@@ -694,12 +697,16 @@ class InstallmentService implements InstallmentServiceInterface
      */
     public function getDueSoonItems(User $user): Collection
     {
+        $now = now()->startOfDay();
+        $soon = now()->addDays(7)->endOfDay();
+
         return InstallmentItem::query()
             ->whereHas('installment', function ($query) use ($user) {
-                $query->forUser($user);
+                $query->forUser($user)->where('installments.status', 'active');
             })
-            ->where('status', 'pending')
-            ->whereBetween('due_date', [now(), now()->addDays(7)])
+            ->whereNull('paid_at')
+            ->where('status', '!=', 'paid')
+            ->whereBetween('due_date', [$now, $soon])
             ->with(['installment.customer'])
             ->orderBy('due_date')
             ->get();
