@@ -205,6 +205,8 @@ class InstallmentService implements InstallmentServiceInterface
     public function getDashboardAnalytics(User $user): array
     {
         $baseQuery = Installment::query()->forUser($user);
+        $userInstallmentIds = Installment::query()->forUser($user)->select('installments.id');
+        $paidAmountSql = 'COALESCE(installment_items.paid_amount, installment_items.amount, 0)';
         $now = now()->startOfDay();
         $soon = now()->addDays(7)->endOfDay();
         $thisMonth = $now->copy()->startOfMonth();
@@ -233,23 +235,23 @@ class InstallmentService implements InstallmentServiceInterface
             ->where('installments.status', 'active')
             ->sum('installment_items.amount');
 
-        $collectedThisMonth = $baseQuery->clone()
-            ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
-            ->whereNotNull('installment_items.paid_at')
-            ->where('installments.status', 'active')
-            ->whereMonth('installment_items.paid_at', $now->month)
-            ->whereYear('installment_items.paid_at', $now->year)
-            ->sum('installment_items.paid_amount');
+        $collectedThisMonth = (float) InstallmentItem::query()
+            ->whereIn('installment_id', $userInstallmentIds)
+            ->where('status', 'paid')
+            ->whereMonth('paid_at', $now->month)
+            ->whereYear('paid_at', $now->year)
+            ->sum(DB::raw($paidAmountSql));
 
-        $totalCollected = $baseQuery->clone()
-            ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
-            ->whereNotNull('installment_items.paid_at')
-            ->sum('installment_items.paid_amount');
+        $totalCollected = (float) InstallmentItem::query()
+            ->whereIn('installment_id', $userInstallmentIds)
+            ->where('status', 'paid')
+            ->sum(DB::raw($paidAmountSql));
 
         // Additional analytics
         $totalInstallments = $baseQuery->clone()->count();
         $activeInstallments = $baseQuery->clone()->where('installments.status', 'active')->count();
         $completedInstallments = $baseQuery->clone()->where('installments.status', 'completed')->count();
+        $uncompletedInstallments = $activeInstallments;
 
         $totalCustomers = $user->customers()->count();
         $activeCustomers = $user->customers()
@@ -258,13 +260,12 @@ class InstallmentService implements InstallmentServiceInterface
             })->count();
 
         // Monthly collection comparison
-        $collectedLastMonth = $baseQuery->clone()
-            ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
-            ->whereNotNull('installment_items.paid_at')
-            ->where('installments.status', 'active')
-            ->whereMonth('installment_items.paid_at', $lastMonth->month)
-            ->whereYear('installment_items.paid_at', $lastMonth->year)
-            ->sum('installment_items.paid_amount');
+        $collectedLastMonth = (float) InstallmentItem::query()
+            ->whereIn('installment_id', $userInstallmentIds)
+            ->where('status', 'paid')
+            ->whereMonth('paid_at', $lastMonth->month)
+            ->whereYear('paid_at', $lastMonth->year)
+            ->sum(DB::raw($paidAmountSql));
 
         $collectionGrowth = $lastMonth->isSameMonth($now) ? 0 : ($collectedLastMonth > 0 ? (($collectedThisMonth - $collectedLastMonth) / $collectedLastMonth) * 100 : 0);
 
@@ -358,8 +359,7 @@ class InstallmentService implements InstallmentServiceInterface
         $recentPayments = $baseQuery->clone()
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
             ->join('customers', 'customers.id', '=', 'installments.customer_id')
-            ->whereNotNull('installment_items.paid_at')
-            ->where('installments.status', 'active')
+            ->where('installment_items.status', 'paid')
             ->orderBy('installment_items.paid_at', 'desc')
             ->select(
                 'installments.id as installment_id',
@@ -420,13 +420,12 @@ class InstallmentService implements InstallmentServiceInterface
         $monthlyTrend = [];
         for ($i = 5; $i >= 0; $i--) {
             $month = $now->copy()->subMonths($i);
-            $monthlyCollection = $baseQuery->clone()
-                ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
-                ->whereNotNull('installment_items.paid_at')
-                ->where('installments.status', 'active')
-                ->whereMonth('installment_items.paid_at', $month->month)
-                ->whereYear('installment_items.paid_at', $month->year)
-                ->sum('installment_items.paid_amount');
+            $monthlyCollection = (float) InstallmentItem::query()
+                ->whereIn('installment_id', $userInstallmentIds)
+                ->where('status', 'paid')
+                ->whereMonth('paid_at', $month->month)
+                ->whereYear('paid_at', $month->year)
+                ->sum(DB::raw($paidAmountSql));
 
             $monthlyTrend[] = [
                 'month' => $month->format('M Y'),
@@ -446,6 +445,7 @@ class InstallmentService implements InstallmentServiceInterface
             'totalInstallments' => $totalInstallments,
             'activeInstallments' => $activeInstallments,
             'completedInstallments' => $completedInstallments,
+            'uncompletedInstallments' => $uncompletedInstallments,
             'totalCustomers' => $totalCustomers,
             'activeCustomers' => $activeCustomers,
             'collectedLastMonth' => $collectedLastMonth,

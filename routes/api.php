@@ -39,6 +39,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('logout', 'logout');
         Route::get('me', 'me');
         Route::post('refresh', 'refresh');
+        Route::delete('account', 'deleteAccount');
     });
 
     Route::prefix('limits')->controller(UserLimitController::class)->group(function () {
@@ -50,7 +51,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('feature/{feature}', 'feature');
     });
 
-    // User subscription change (upgrade/downgrade)
+    // User subscription change (upgrade/downgrade) and cancel current plan
+    Route::post('subscriptions/cancel', [SubscriptionController::class, 'cancelCurrent']);
     Route::post('subscriptions/{subscription}/change', [SubscriptionController::class, 'changeSubscription']);
 
     // Routes below require an active subscription

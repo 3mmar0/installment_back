@@ -159,4 +159,30 @@ class AuthController extends Controller
 
         return $this->successResponse(null, 'تم إعادة تعيين كلمة المرور بنجاح');
     }
+
+    /**
+     * Delete the authenticated user's account (not available for owners).
+     */
+    public function deleteAccount(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'password' => ['required', 'string'],
+        ]);
+
+        $user = $request->user();
+
+        if ($user->role === UserRole::Owner) {
+            return $this->errorResponse('لا يمكن حذف حساب المدير العام', 403);
+        }
+
+        try {
+            $this->authService->deleteAccount($user, $data['password']);
+        } catch (ValidationException $e) {
+            $message = collect($e->errors())->flatten()->first() ?? 'تعذر حذف الحساب';
+
+            return $this->errorResponse($message, 422, $e->errors());
+        }
+
+        return $this->deletedResponse('تم حذف الحساب بنجاح');
+    }
 }

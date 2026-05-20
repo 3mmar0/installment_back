@@ -37,4 +37,11 @@ interface AuthServiceInterface
      * @throws \Illuminate\Validation\ValidationException
      */
     public function resetPassword(array $credentials): void;
+
+    /**
+     * Permanently delete the authenticated user's account.
+     *
+     * @throws \Illuminate\Validation\ValidationException
+     */
+    public function deleteAccount(User $user, string $password): void;
 }

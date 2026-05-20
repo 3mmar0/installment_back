@@ -72,6 +72,51 @@ class LimitsHelper
     }
 
     /**
+     * Cancel the authenticated user's current subscription plan.
+     */
+    public static function cancelUserSubscription(int $userId): UserLimit
+    {
+        $user = User::findOrFail($userId);
+
+        if ($user->role === UserRole::Owner) {
+            throw new \InvalidArgumentException('لا يمكن إنهاء خطة المدير العام');
+        }
+
+        $userLimit = UserLimit::where('user_id', $userId)->first();
+
+        if (!$userLimit) {
+            throw new \RuntimeException('لا يوجد اشتراك نشط لإنهائه');
+        }
+
+        if ($userLimit->status === 'canceled') {
+            return $userLimit;
+        }
+
+        $today = Carbon::today();
+
+        $userLimit->update([
+            'status' => 'canceled',
+            'end_date' => $today,
+        ]);
+
+        if ($userLimit->subscription_assignment_id) {
+            SubscriptionAssignment::where('id', $userLimit->subscription_assignment_id)->update([
+                'status' => 'canceled',
+                'end_date' => $today,
+            ]);
+        }
+
+        SubscriptionAssignment::where('user_id', $userId)
+            ->where('status', 'active')
+            ->update([
+                'status' => 'canceled',
+                'end_date' => $today,
+            ]);
+
+        return $userLimit->fresh();
+    }
+
+    /**
      * Apply a subscription plan to a user and sync user limits accordingly.
      */
     public static function applySubscriptionToUser(int $userId, Subscription $subscription, array $overrides = []): UserLimit

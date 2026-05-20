@@ -134,6 +134,31 @@ class SubscriptionController extends Controller
     }
 
     /**
+     * End/cancel the authenticated user's current subscription plan.
+     */
+    public function cancelCurrent(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($user->role === \App\Enums\UserRole::Owner) {
+            return $this->errorResponse('لا يمكن إنهاء خطة المدير العام', 403);
+        }
+
+        try {
+            $userLimit = LimitsHelper::cancelUserSubscription($user->id);
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse($e->getMessage(), 403);
+        } catch (\RuntimeException $e) {
+            return $this->errorResponse($e->getMessage(), 400);
+        }
+
+        return $this->successResponse(
+            new UserLimitResource($userLimit),
+            'تم إنهاء الاشتراك بنجاح'
+        );
+    }
+
+    /**
      * Change user's own subscription (upgrade/downgrade).
      */
     public function changeSubscription(Request $request, Subscription $subscription): JsonResponse

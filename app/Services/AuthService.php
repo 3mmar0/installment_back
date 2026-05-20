@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Contracts\Services\AuthServiceInterface;
+use App\Enums\UserRole;
 use App\Mail\PasswordResetMail;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
@@ -131,5 +133,28 @@ class AuthService implements AuthServiceInterface
         throw ValidationException::withMessages([
             'token' => [$message],
         ]);
+    }
+
+    /**
+     * Permanently delete the authenticated user's account.
+     */
+    public function deleteAccount(User $user, string $password): void
+    {
+        if ($user->role === UserRole::Owner) {
+            throw ValidationException::withMessages([
+                'account' => ['لا يمكن حذف حساب المدير العام'],
+            ]);
+        }
+
+        if (!Hash::check($password, $user->password)) {
+            throw ValidationException::withMessages([
+                'password' => ['كلمة المرور غير صحيحة'],
+            ]);
+        }
+
+        DB::transaction(function () use ($user): void {
+            $user->tokens()->delete();
+            $user->delete();
+        });
     }
 }
