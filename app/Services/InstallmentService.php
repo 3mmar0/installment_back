@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\Services\InstallmentServiceInterface;
+use App\Helpers\InstallmentDateHelper;
 use App\Helpers\LimitsHelper;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
@@ -223,6 +224,7 @@ class InstallmentService implements InstallmentServiceInterface
             ->get()
             ->map(function ($item) {
                 return [
+                    'item_id' => $item->item_id,
                     'installment_id' => $item->installment_id,
                     'customer_name' => $item->customer_name,
                     'customer_email' => $item->customer_email,
@@ -234,7 +236,7 @@ class InstallmentService implements InstallmentServiceInterface
                     'status' => $item->status,
                     'item_status' => $item->item_status,
                     'created_at' => $item->created_at,
-                    'days_until_due' => now()->diffInDays($item->due_date, false),
+                    'days_until_due' => InstallmentDateHelper::daysUntilDue($item->due_date),
                 ];
             });
 
@@ -265,6 +267,7 @@ class InstallmentService implements InstallmentServiceInterface
             ->get()
             ->map(function ($item) {
                 return [
+                    'item_id' => $item->item_id,
                     'installment_id' => $item->installment_id,
                     'customer_name' => $item->customer_name,
                     'customer_email' => $item->customer_email,
@@ -276,7 +279,7 @@ class InstallmentService implements InstallmentServiceInterface
                     'status' => $item->status,
                     'item_status' => $item->item_status,
                     'created_at' => $item->created_at,
-                    'days_overdue' => now()->diffInDays($item->due_date),
+                    'days_overdue' => InstallmentDateHelper::daysOverdue($item->due_date),
                 ];
             });
 
@@ -303,6 +306,7 @@ class InstallmentService implements InstallmentServiceInterface
             ->get()
             ->map(function ($item) {
                 return [
+                    'item_id' => $item->item_id,
                     'installment_id' => $item->installment_id,
                     'customer_name' => $item->customer_name,
                     'customer_email' => $item->customer_email,
@@ -311,7 +315,7 @@ class InstallmentService implements InstallmentServiceInterface
                     'paid_amount' => $item->paid_amount,
                     'paid_at' => $item->paid_at,
                     'reference' => $item->reference,
-                    'days_since_paid' => now()->diffInDays($item->paid_at),
+                    'days_since_paid' => InstallmentDateHelper::daysSince($item->paid_at),
                 ];
             });
 

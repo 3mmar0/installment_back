@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Helpers\InstallmentDateHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -23,6 +24,8 @@ class InstallmentItemResource extends JsonResource
             'status' => $this->status,
             'paid_at' => $this->paid_at?->toISOString(),
             'payment_reference' => $this->payment_reference,
+            'days_until_due' => InstallmentDateHelper::daysUntilDue($this->due_date),
+            'days_overdue' => InstallmentDateHelper::daysOverdue($this->due_date),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];
