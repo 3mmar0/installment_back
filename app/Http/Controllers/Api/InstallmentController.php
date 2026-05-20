@@ -110,6 +110,7 @@ class InstallmentController extends Controller
     {
         $data = $request->validate([
             'paid_amount' => ['required', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:2000'],
             'reference' => ['nullable', 'string', 'max:255'],
         ]);
 

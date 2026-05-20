@@ -30,13 +30,14 @@ class InstallmentItem extends Model
         return $this->belongsTo(Installment::class);
     }
 
-    public function markPaid(float $amount, ?string $reference = null): void
+    public function markPaid(float $amount, ?string $reference = null, ?string $note = null): void
     {
         $this->update([
             'paid_at' => now(),
             'paid_amount' => $amount,
             'status' => 'paid',
             'reference' => $reference,
+            'note' => $note,
         ]);
     }
 }

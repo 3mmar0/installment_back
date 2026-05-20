@@ -175,7 +175,8 @@ class InstallmentService implements InstallmentServiceInterface
 
             $item->markPaid(
                 $paidAmount,
-                $data['reference'] ?? null
+                $data['reference'] ?? null,
+                isset($data['note']) ? trim((string) $data['note']) : null
             );
 
             // Send payment received notification

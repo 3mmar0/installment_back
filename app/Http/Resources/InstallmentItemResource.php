@@ -25,6 +25,7 @@ class InstallmentItemResource extends JsonResource
             'paid_at' => $this->paid_at?->toISOString(),
             'reference' => $this->reference,
             'payment_reference' => $this->reference,
+            'note' => $this->note,
             'customer_id' => $this->installment?->customer_id,
             'customer_name' => $this->installment?->customer?->name,
             'customer_phone' => $this->installment?->customer?->phone,
