@@ -142,6 +142,47 @@ class NotificationService
     }
 
     /**
+     * In-app reminder for a single unpaid installment item.
+     */
+    public function notifyItemDueReminder(User $user, InstallmentItem $item): Notification
+    {
+        $item->loadMissing(['installment.customer']);
+        $customerName = $item->installment->customer->name ?? 'العميل';
+        $amountFormatted = $this->formatMoney((float) $item->amount);
+        $dueFormatted = $item->due_date instanceof \Carbon\Carbon
+            ? $item->due_date->format('Y-m-d')
+            : (string) $item->due_date;
+
+        $isOverdue = $item->due_date < now()->startOfDay();
+        $type = $isOverdue ? 'payment_overdue' : 'payment_due';
+        $title = $isOverdue ? 'تذكير بدفعة متأخرة' : 'تذكير بدفعة مستحقة';
+
+        if ($isOverdue) {
+            $daysOverdue = max(0, (int) now()->diffInDays($item->due_date));
+            $message = "تذكير: دفعة بقيمة {$amountFormatted} للعميل {$customerName} متأخرة {$daysOverdue} يوم (استحقاق {$dueFormatted})";
+            $extra = ['days_overdue' => $daysOverdue];
+        } else {
+            $daysUntilDue = max(0, (int) now()->diffInDays($item->due_date, false));
+            $message = "تذكير: دفعة بقيمة {$amountFormatted} للعميل {$customerName} مستحقة خلال {$daysUntilDue} يوم ({$dueFormatted})";
+            $extra = ['days_until_due' => $daysUntilDue];
+        }
+
+        return $this->create(
+            $user,
+            $type,
+            $title,
+            $message,
+            array_merge([
+                'installment_id' => $item->installment_id,
+                'item_id' => $item->id,
+                'amount' => $item->amount,
+                'due_date' => $dueFormatted,
+                'customer_name' => $customerName,
+            ], $extra)
+        );
+    }
+
+    /**
      * Notify about received payments.
      */
     public function notifyPaymentReceived(User $user, InstallmentItem $item, float $paidAmount): Notification

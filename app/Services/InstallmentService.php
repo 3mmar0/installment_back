@@ -499,6 +499,65 @@ class InstallmentService implements InstallmentServiceInterface
     }
 
     /**
+     * Send due-date reminders for unpaid installment items (next due by default, or one item).
+     */
+    public function sendInstallmentDueReminders(int $installmentId, User $user, ?int $itemId = null): array
+    {
+        $installment = $this->findInstallmentById($installmentId);
+
+        if (!$installment) {
+            abort(404, 'القسط غير موجود');
+        }
+
+        if (!$user->isOwner() && $installment->user_id !== $user->id) {
+            abort(403, 'غير مصرح لك بإرسال تذكير لهذا القسط');
+        }
+
+        $query = $installment->items()
+            ->where('status', '!=', 'paid')
+            ->whereNull('paid_at')
+            ->orderBy('due_date');
+
+        if ($itemId !== null) {
+            $query->where('id', $itemId);
+        }
+
+        $items = $query->get();
+
+        if ($itemId === null) {
+            $items = $items->take(1);
+        }
+
+        if ($items->isEmpty()) {
+            return [
+                'notifications_sent' => 0,
+                'emails_sent' => 0,
+                'items_reminded' => 0,
+            ];
+        }
+
+        $notificationService = app(NotificationService::class);
+        $emailService = app(EmailNotificationService::class);
+        $notificationsSent = 0;
+        $emailsSent = 0;
+
+        foreach ($items as $item) {
+            $notificationService->notifyItemDueReminder($user, $item);
+            $notificationsSent++;
+
+            if ($emailService->sendItemReminderEmail($item, $user)) {
+                $emailsSent++;
+            }
+        }
+
+        return [
+            'notifications_sent' => $notificationsSent,
+            'emails_sent' => $emailsSent,
+            'items_reminded' => $items->count(),
+        ];
+    }
+
+    /**
      * Get all installments statistics summary.
      */
     public function getAllInstallmentsStats(User $user): array

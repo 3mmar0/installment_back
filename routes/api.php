@@ -93,6 +93,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('installment-stats/{id}', 'stats');
             Route::get('installment-all-stats', 'allStats');
             Route::post('installment-item-pay/{item}', 'markItemPaid');
+            Route::post('installment-remind/{id}', 'sendReminders');
         });
     });
 

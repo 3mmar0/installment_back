@@ -164,6 +164,44 @@ class EmailNotificationService
     }
 
     /**
+     * Send due/overdue reminder email for one installment item.
+     */
+    public function sendItemReminderEmail(InstallmentItem $item, User $user): bool
+    {
+        $item->loadMissing(['installment.customer']);
+        $customer = $item->installment->customer;
+
+        if (!$customer?->email) {
+            return false;
+        }
+
+        try {
+            if ($item->due_date < now()->startOfDay()) {
+                $daysOverdue = now()->diffInDays($item->due_date);
+                Mail::to($customer->email)->send(new PaymentOverdueNotice($item, $daysOverdue));
+                if ($user->email) {
+                    Mail::to($user->email)->send(new PaymentOverdueNotice($item, $daysOverdue));
+                }
+            } else {
+                $daysRemaining = max(0, (int) now()->diffInDays($item->due_date, false));
+                Mail::to($customer->email)->send(new PaymentDueReminder($item, $daysRemaining));
+                if ($user->email) {
+                    Mail::to($user->email)->send(new PaymentDueReminder($item, $daysRemaining));
+                }
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Failed to send installment item reminder email', [
+                'item_id' => $item->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
      * Send all payment reminders for a user.
      */
     public function sendAllPaymentReminders(User $user): array

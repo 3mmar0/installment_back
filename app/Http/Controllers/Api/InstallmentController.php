@@ -170,4 +170,32 @@ class InstallmentController extends Controller
             'تم جلب الأقساط المستحقة قريباً بنجاح'
         );
     }
+
+    /**
+     * Send due-date reminder notifications (and customer email when available).
+     */
+    public function sendReminders(int $id, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'item_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+        ]);
+
+        $result = $this->installmentService->sendInstallmentDueReminders(
+            $id,
+            $request->user(),
+            isset($validated['item_id']) ? (int) $validated['item_id'] : null
+        );
+
+        if ($result['items_reminded'] === 0) {
+            return $this->successResponse(
+                $result,
+                'لا توجد دفعات غير مدفوعة لإرسال تذكير لها'
+            );
+        }
+
+        return $this->successResponse(
+            $result,
+            'تم إرسال التذكير بنجاح'
+        );
+    }
 }

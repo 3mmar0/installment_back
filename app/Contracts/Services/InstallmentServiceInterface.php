@@ -56,4 +56,11 @@ interface InstallmentServiceInterface
      * Get all installments statistics summary.
      */
     public function getAllInstallmentsStats(User $user): array;
+
+    /**
+     * Send due-date reminders (in-app + email) for unpaid items on an installment.
+     *
+     * @return array{notifications_sent: int, emails_sent: int, items_reminded: int}
+     */
+    public function sendInstallmentDueReminders(int $installmentId, User $user, ?int $itemId = null): array;
 }
