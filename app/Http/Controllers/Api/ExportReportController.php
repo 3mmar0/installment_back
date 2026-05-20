@@ -302,7 +302,7 @@ class ExportReportController extends Controller
     {
         $scalar = $this->scalarValue($value);
         if ($asMoney && is_numeric($scalar)) {
-            return number_format((float) $scalar, 2, '.', ',').' ر.س';
+            return number_format((float) $scalar, 2, '.', ',').' ج.م';
         }
 
         return $scalar;
@@ -409,7 +409,7 @@ HTML;
     private function formatCellValue(string $column, mixed $value): string
     {
         if (in_array($column, ['amount', 'paid_amount'], true) && is_numeric($value)) {
-            return number_format((float) $value, 2, '.', ',').' ر.س';
+            return number_format((float) $value, 2, '.', ',').' ج.م';
         }
 
         return (string) $this->scalarValue($value);
