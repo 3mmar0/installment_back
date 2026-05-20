@@ -6,16 +6,28 @@ use App\Contracts\Services\InstallmentServiceInterface;
 use App\Helpers\LimitsHelper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use Dompdf\Dompdf;
-use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Mpdf\Mpdf;
+use Mpdf\Output\Destination;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ExportReportController extends Controller
 {
+    /** @var array<string, string> */
+    private const COLUMN_LABELS = [
+        'customer_name' => 'العميل',
+        'due_date' => 'تاريخ الاستحقاق',
+        'amount' => 'المبلغ',
+        'days_until_due' => 'أيام متبقية',
+        'days_overdue' => 'أيام التأخير',
+        'paid_at' => 'تاريخ الدفع',
+        'paid_amount' => 'المبلغ المدفوع',
+        'reference' => 'المرجع',
+    ];
+
     public function __construct(
         private readonly InstallmentServiceInterface $installmentService
     ) {}
@@ -37,18 +49,22 @@ class ExportReportController extends Controller
 
         $html = $this->buildDashboardHtml($analytics);
 
-        $options = new Options;
-        $options->set('defaultFont', 'DejaVu Sans');
-        $options->set('isRemoteEnabled', false);
+        try {
+            $mpdf = $this->createMpdf();
+            $mpdf->WriteHTML($html);
+            $binary = $mpdf->Output('', Destination::STRING_RETURN);
+        } catch (\Throwable $e) {
+            report($e);
 
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html, 'UTF-8');
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
+            return response()->json([
+                'success' => false,
+                'message' => 'تعذر إنشاء ملف PDF',
+            ], 500);
+        }
 
         $filename = 'dashboard-report-'.date('Y-m-d-His').'.pdf';
 
-        return response($dompdf->output(), 200, [
+        return response($binary, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
             'Cache-Control' => 'no-store, no-cache',
@@ -172,6 +188,10 @@ class ExportReportController extends Controller
         fputcsv($handle, ['الدفعات المتأخرة'], ',', '"', '\\');
         $this->fputcsvRows($handle, $analytics['overduePayments'] ?? [], ['customer_name', 'due_date', 'amount', 'days_overdue']);
 
+        fputcsv($handle, [], ',', '"', '\\');
+        fputcsv($handle, ['الدفعات الحديثة'], ',', '"', '\\');
+        $this->fputcsvRows($handle, $analytics['recentPayments'] ?? [], ['customer_name', 'paid_at', 'paid_amount', 'reference']);
+
         rewind($handle);
         $csv = stream_get_contents($handle);
         fclose($handle);
@@ -189,6 +209,28 @@ class ExportReportController extends Controller
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
             'Cache-Control' => 'no-store, no-cache',
+        ]);
+    }
+
+    private function createMpdf(): Mpdf
+    {
+        $tmpDir = storage_path('app/mpdf');
+        if (! is_dir($tmpDir)) {
+            mkdir($tmpDir, 0755, true);
+        }
+
+        return new Mpdf([
+            'mode' => 'utf-8',
+            'format' => 'A4',
+            'margin_left' => 14,
+            'margin_right' => 14,
+            'margin_top' => 16,
+            'margin_bottom' => 16,
+            'tempDir' => $tmpDir,
+            'directionality' => 'rtl',
+            'autoArabic' => true,
+            'autoLangToFont' => true,
+            'autoScriptToLang' => true,
         ]);
     }
 
@@ -242,18 +284,28 @@ class ExportReportController extends Controller
     private function summaryPairs(array $analytics): array
     {
         return [
-            ['مستحق قريباً (7 أيام)', $this->scalarValue($analytics['dueSoon'] ?? '')],
-            ['متأخر', $this->scalarValue($analytics['overdue'] ?? '')],
-            ['إجمالي المبالغ المستحقة', $this->scalarValue($analytics['outstanding'] ?? '')],
-            ['المتحصل هذا الشهر', $this->scalarValue($analytics['collectedThisMonth'] ?? '')],
-            ['إجمالي الأقساط', $this->scalarValue($analytics['totalInstallments'] ?? '')],
-            ['أقساط نشطة', $this->scalarValue($analytics['activeInstallments'] ?? '')],
-            ['أقساط مكتملة', $this->scalarValue($analytics['completedInstallments'] ?? '')],
-            ['إجمالي العملاء', $this->scalarValue($analytics['totalCustomers'] ?? '')],
-            ['عملاء نشطون', $this->scalarValue($analytics['activeCustomers'] ?? '')],
-            ['متحصل الشهر الماضي', $this->scalarValue($analytics['collectedLastMonth'] ?? '')],
-            ['نمو التحصيل %', $this->scalarValue($analytics['collectionGrowth'] ?? '')],
+            ['مستحق قريباً (7 أيام)', $this->formatExportValue($analytics['dueSoon'] ?? '')],
+            ['متأخر', $this->formatExportValue($analytics['overdue'] ?? '')],
+            ['إجمالي المبالغ المستحقة', $this->formatExportValue($analytics['outstanding'] ?? '', true)],
+            ['المتحصل هذا الشهر', $this->formatExportValue($analytics['collectedThisMonth'] ?? '', true)],
+            ['إجمالي الأقساط', $this->formatExportValue($analytics['totalInstallments'] ?? '')],
+            ['أقساط نشطة', $this->formatExportValue($analytics['activeInstallments'] ?? '')],
+            ['أقساط مكتملة', $this->formatExportValue($analytics['completedInstallments'] ?? '')],
+            ['إجمالي العملاء', $this->formatExportValue($analytics['totalCustomers'] ?? '')],
+            ['عملاء نشطون', $this->formatExportValue($analytics['activeCustomers'] ?? '')],
+            ['متحصل الشهر الماضي', $this->formatExportValue($analytics['collectedLastMonth'] ?? '', true)],
+            ['نمو التحصيل %', $this->formatExportValue($analytics['collectionGrowth'] ?? '')],
         ];
+    }
+
+    private function formatExportValue(mixed $value, bool $asMoney = false): float|int|string
+    {
+        $scalar = $this->scalarValue($value);
+        if ($asMoney && is_numeric($scalar)) {
+            return number_format((float) $scalar, 2, '.', ',').' ر.س';
+        }
+
+        return $scalar;
     }
 
     private function scalarValue(mixed $value): float|int|string
@@ -268,26 +320,60 @@ class ExportReportController extends Controller
         return is_scalar($value) ? $value : '';
     }
 
+    private function columnLabel(string $key): string
+    {
+        return self::COLUMN_LABELS[$key] ?? $key;
+    }
+
     /**
      * @param  array<string, mixed>  $analytics
      */
     private function buildDashboardHtml(array $analytics): string
     {
         $e = fn (mixed $v): string => htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $generatedAt = $e(now()->format('Y-m-d H:i'));
 
-        $table = '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:11px"><tbody>';
+        $summaryRows = '';
         foreach ($this->summaryPairs($analytics) as [$label, $value]) {
-            $table .= '<tr><td>'.$e($label).'</td><td>'.$e($value).'</td></tr>';
+            $summaryRows .= '<tr><td class="label">'.$e($label).'</td><td class="value">'.$e($value).'</td></tr>';
         }
-        $table .= '</tbody></table>';
 
-        return '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير لوحة التحكم</title></head><body style="font-family:DejaVu Sans,sans-serif">'
-            .'<h2 style="text-align:center">تقرير لوحة التحكم</h2>'
-            .'<p style="text-align:center;color:#444">'.$e(now()->toDateTimeString()).'</p>'
-            .$table
-            .$this->buildPaymentsTableHtml('الدفعات القادمة', $analytics['upcoming'] ?? [], ['customer_name', 'due_date', 'amount', 'days_until_due'], $e)
+        $sections = $this->buildPaymentsTableHtml('الدفعات القادمة', $analytics['upcoming'] ?? [], ['customer_name', 'due_date', 'amount', 'days_until_due'], $e)
             .$this->buildPaymentsTableHtml('الدفعات المتأخرة', $analytics['overduePayments'] ?? [], ['customer_name', 'due_date', 'amount', 'days_overdue'], $e)
-            .'</body></html>';
+            .$this->buildPaymentsTableHtml('الدفعات الحديثة', $analytics['recentPayments'] ?? [], ['customer_name', 'paid_at', 'paid_amount', 'reference'], $e);
+
+        return <<<HTML
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>تقرير لوحة التحكم</title>
+<style>
+  body { font-family: xbriyaz, dejavusans, sans-serif; direction: rtl; text-align: right; color: #1a1a2e; font-size: 11pt; }
+  h1 { font-size: 18pt; margin: 0 0 4px; color: #1565c0; text-align: center; }
+  .meta { text-align: center; color: #5c6b7a; font-size: 10pt; margin-bottom: 18px; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+  th, td { border: 1px solid #cfd8dc; padding: 7px 10px; }
+  th { background: #e3f2fd; color: #0d47a1; font-weight: bold; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .summary td.label { background: #f5f5f5; width: 42%; font-weight: bold; }
+  .summary td.value { text-align: left; direction: ltr; unicode-bidi: embed; }
+  h2.section { font-size: 13pt; color: #37474f; margin: 18px 0 8px; border-bottom: 2px solid #90caf9; padding-bottom: 4px; }
+  .payments td.amount { direction: ltr; text-align: left; unicode-bidi: embed; }
+</style>
+</head>
+<body>
+  <h1>تقرير لوحة التحكم</h1>
+  <p class="meta">تاريخ التصدير: {$generatedAt}</p>
+  <h2 class="section">ملخص المؤشرات</h2>
+  <table class="summary">
+    <thead><tr><th>المؤشر</th><th>القيمة</th></tr></thead>
+    <tbody>{$summaryRows}</tbody>
+  </table>
+  {$sections}
+</body>
+</html>
+HTML;
     }
 
     /**
@@ -300,20 +386,33 @@ class ExportReportController extends Controller
             return '';
         }
 
-        $h = '<h3 style="margin-top:16px">'.$e($title).'</h3><table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:10px"><thead><tr>';
+        $headers = '';
         foreach ($columns as $c) {
-            $h .= '<th>'.$e($c).'</th>';
-        }
-        $h .= '</tr></thead><tbody>';
-        foreach ($rows as $row) {
-            $h .= '<tr>';
-            foreach ($columns as $c) {
-                $h .= '<td>'.$e($this->scalarValue($row[$c] ?? '')).'</td>';
-            }
-            $h .= '</tr>';
+            $headers .= '<th>'.$e($this->columnLabel($c)).'</th>';
         }
 
-        return $h.'</tbody></table>';
+        $body = '';
+        foreach ($rows as $row) {
+            $body .= '<tr>';
+            foreach ($columns as $c) {
+                $cell = $this->formatCellValue($c, $row[$c] ?? '');
+                $class = in_array($c, ['amount', 'paid_amount'], true) ? ' class="amount"' : '';
+                $body .= '<td'.$class.'>'.$e($cell).'</td>';
+            }
+            $body .= '</tr>';
+        }
+
+        return '<h2 class="section">'.$e($title).'</h2>'
+            .'<table class="payments"><thead><tr>'.$headers.'</tr></thead><tbody>'.$body.'</tbody></table>';
+    }
+
+    private function formatCellValue(string $column, mixed $value): string
+    {
+        if (in_array($column, ['amount', 'paid_amount'], true) && is_numeric($value)) {
+            return number_format((float) $value, 2, '.', ',').' ر.س';
+        }
+
+        return (string) $this->scalarValue($value);
     }
 
     /**
@@ -332,7 +431,7 @@ class ExportReportController extends Controller
 
         $col = 1;
         foreach ($columns as $header) {
-            $sheet->setCellValue(Coordinate::stringFromColumnIndex($col).'1', $header);
+            $sheet->setCellValue(Coordinate::stringFromColumnIndex($col).'1', $this->columnLabel($header));
             $col++;
         }
 
@@ -340,7 +439,7 @@ class ExportReportController extends Controller
         foreach ($rows as $row) {
             $col = 1;
             foreach ($columns as $key) {
-                $val = $this->scalarValue($row[$key] ?? '');
+                $val = $this->formatCellValue($key, $row[$key] ?? '');
                 $sheet->setCellValue(Coordinate::stringFromColumnIndex($col).$rowNum, $val);
                 $col++;
             }
@@ -355,11 +454,11 @@ class ExportReportController extends Controller
      */
     private function fputcsvRows(mixed $handle, array $rows, array $columns): void
     {
-        fputcsv($handle, $columns, ',', '"', '\\');
+        fputcsv($handle, array_map(fn (string $c) => $this->columnLabel($c), $columns), ',', '"', '\\');
         foreach ($rows as $row) {
             $line = [];
             foreach ($columns as $c) {
-                $line[] = $this->scalarValue($row[$c] ?? '');
+                $line[] = $this->formatCellValue($c, $row[$c] ?? '');
             }
             fputcsv($handle, $line, ',', '"', '\\');
         }
