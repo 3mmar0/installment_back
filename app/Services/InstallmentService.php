@@ -241,6 +241,11 @@ class InstallmentService implements InstallmentServiceInterface
             ->whereYear('installment_items.paid_at', $now->year)
             ->sum('installment_items.paid_amount');
 
+        $totalCollected = $baseQuery->clone()
+            ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
+            ->whereNotNull('installment_items.paid_at')
+            ->sum('installment_items.paid_amount');
+
         // Additional analytics
         $totalInstallments = $baseQuery->clone()->count();
         $activeInstallments = $baseQuery->clone()->where('installments.status', 'active')->count();
@@ -437,6 +442,7 @@ class InstallmentService implements InstallmentServiceInterface
             'overdue' => $overdue,
             'outstanding' => $outstanding,
             'collectedThisMonth' => $collectedThisMonth,
+            'totalCollected' => $totalCollected,
             'totalInstallments' => $totalInstallments,
             'activeInstallments' => $activeInstallments,
             'completedInstallments' => $completedInstallments,
