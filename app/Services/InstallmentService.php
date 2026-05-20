@@ -98,7 +98,7 @@ class InstallmentService implements InstallmentServiceInterface
                 'user_id' => $user->id,
                 'customer_id' => $data['customer_id'],
                 'total_amount' => $total,
-                'products' => $data['products'],
+                'products' => $data['products'] ?? [],
                 'start_date' => $start->toDateString(),
                 'months' => $months,
                 'end_date' => $start->copy()->addMonths($months - 1)->toDateString(),

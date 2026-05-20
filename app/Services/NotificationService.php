@@ -34,6 +34,11 @@ class NotificationService
         return $notification;
     }
 
+    private function formatMoney(float $amount): string
+    {
+        return number_format($amount, 2) . ' ج.م';
+    }
+
     /**
      * Notify owners about a new user registration.
      */
@@ -42,8 +47,8 @@ class NotificationService
         return $this->create(
             $owner,
             'new_user',
-            'New User Registered',
-            "A new user has registered: {$newUser->name} ({$newUser->email})",
+            'مستخدم جديد',
+            "تم تسجيل مستخدم جديد: {$newUser->name} ({$newUser->email})",
             [
                 'new_user_id' => $newUser->id,
                 'new_user_email' => $newUser->email,
@@ -70,18 +75,22 @@ class NotificationService
 
         $count = 0;
         foreach ($dueSoon as $item) {
-            $daysUntilDue = now()->diffInDays($item->due_date, false);
+            $daysUntilDue = max(0, (int) now()->diffInDays($item->due_date, false));
+            $customerName = $item->installment->customer->name;
+            $amountFormatted = $this->formatMoney((float) $item->amount);
+
             $this->create(
                 $user,
                 'payment_due',
-                "Payment Due Soon",
-                "Payment of $" . number_format($item->amount, 2) . " is due in {$daysUntilDue} day(s) for {$item->installment->customer->name}",
+                'دفعة مستحقة قريباً',
+                "دفعة بقيمة {$amountFormatted} مستحقة خلال {$daysUntilDue} يوم للعميل {$customerName}",
                 [
                     'installment_id' => $item->installment_id,
                     'item_id' => $item->id,
                     'amount' => $item->amount,
                     'due_date' => $item->due_date,
-                    'customer_name' => $item->installment->customer->name,
+                    'days_until_due' => $daysUntilDue,
+                    'customer_name' => $customerName,
                 ]
             );
             $count++;
@@ -108,19 +117,22 @@ class NotificationService
 
         $count = 0;
         foreach ($overdue as $item) {
-            $daysOverdue = now()->diffInDays($item->due_date);
+            $daysOverdue = max(0, (int) now()->diffInDays($item->due_date));
+            $customerName = $item->installment->customer->name;
+            $amountFormatted = $this->formatMoney((float) $item->amount);
+
             $this->create(
                 $user,
                 'payment_overdue',
-                "Payment Overdue",
-                "Payment of $" . number_format($item->amount, 2) . " from {$item->installment->customer->name} is {$daysOverdue} day(s) overdue",
+                'دفعة متأخرة',
+                "دفعة بقيمة {$amountFormatted} من العميل {$customerName} متأخرة {$daysOverdue} يوم",
                 [
                     'installment_id' => $item->installment_id,
                     'item_id' => $item->id,
                     'amount' => $item->amount,
                     'due_date' => $item->due_date,
                     'days_overdue' => $daysOverdue,
-                    'customer_name' => $item->installment->customer->name,
+                    'customer_name' => $customerName,
                 ]
             );
             $count++;
@@ -135,12 +147,13 @@ class NotificationService
     public function notifyPaymentReceived(User $user, InstallmentItem $item, float $paidAmount): Notification
     {
         $customerName = $item->installment->customer->name;
+        $amountFormatted = $this->formatMoney($paidAmount);
 
         return $this->create(
             $user,
             'payment_received',
-            "Payment Received",
-            "Received $" . number_format($paidAmount, 2) . " from {$customerName}",
+            'تم استلام دفعة',
+            "تم استلام {$amountFormatted} من العميل {$customerName}",
             [
                 'installment_id' => $item->installment_id,
                 'item_id' => $item->id,
@@ -156,18 +169,21 @@ class NotificationService
     public function notifyInstallmentCreated(User $user, \App\Models\Installment $installment): Notification
     {
         $customerName = $installment->customer->name;
+        $totalFormatted = $this->formatMoney((float) $installment->total_amount);
+        $months = (int) $installment->months;
+        $monthsLabel = $months === 1 ? 'شهر' : 'شهراً';
 
         return $this->create(
             $user,
             'installment_created',
-            "New Installment Created",
-            "New installment plan created for {$customerName} - Total: $" . number_format($installment->total_amount, 2) . " over {$installment->months} " . ($installment->months == 1 ? 'month' : 'months'),
+            'قسط جديد',
+            "تم إنشاء خطة أقساط للعميل {$customerName} — الإجمالي {$totalFormatted} على {$months} {$monthsLabel}",
             [
                 'installment_id' => $installment->id,
                 'customer_id' => $installment->customer_id,
                 'customer_name' => $customerName,
                 'total_amount' => $installment->total_amount,
-                'months' => $installment->months,
+                'months' => $months,
             ]
         );
     }
