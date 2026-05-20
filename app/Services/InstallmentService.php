@@ -79,6 +79,30 @@ class InstallmentService implements InstallmentServiceInterface
     }
 
     /**
+     * Delete an installment.
+     */
+    public function deleteInstallment(int $id, User $user): bool
+    {
+        $installment = Installment::findOrFail($id);
+
+        if (!$user->isOwner() && $installment->user_id !== $user->id) {
+            abort(403, 'غير مصرح لك بحذف هذا القسط');
+        }
+
+        $owner = $installment->user;
+
+        $deleted = DB::transaction(function () use ($installment) {
+            return $installment->delete();
+        });
+
+        if ($deleted && $owner && !$owner->isOwner()) {
+            LimitsHelper::decrementUsage($installment->user_id, 'installments');
+        }
+
+        return $deleted;
+    }
+
+    /**
      * Create a new installment.
      */
     public function createInstallment(array $data, User $user): Installment

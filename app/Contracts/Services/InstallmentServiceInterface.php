@@ -28,6 +28,11 @@ interface InstallmentServiceInterface
     public function findInstallmentById(int $id): ?Installment;
 
     /**
+     * Delete an installment.
+     */
+    public function deleteInstallment(int $id, User $user): bool;
+
+    /**
      * Mark an installment item as paid.
      */
     public function markItemPaid(InstallmentItem $item, array $data, User $user): InstallmentItem;

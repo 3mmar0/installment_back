@@ -87,6 +87,23 @@ class InstallmentController extends Controller
     }
 
     /**
+     * Delete an installment.
+     */
+    public function destroy(int $id, Request $request): JsonResponse
+    {
+        try {
+            $this->installmentService->deleteInstallment($id, $request->user());
+
+            return $this->deletedResponse('تم حذف القسط بنجاح');
+        } catch (\Exception $e) {
+            if ($e->getCode() === 403) {
+                return $this->forbiddenResponse($e->getMessage());
+            }
+            return $this->notFoundResponse('القسط غير موجود');
+        }
+    }
+
+    /**
      * Mark an installment item as paid.
      */
     public function markItemPaid(InstallmentItem $item, Request $request): JsonResponse
