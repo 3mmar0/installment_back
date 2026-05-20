@@ -17,15 +17,57 @@ use App\Services\NotificationService;
 class InstallmentService implements InstallmentServiceInterface
 {
     /**
-     * Get installments for a specific user with pagination.
+     * Get installments for a specific user with pagination and optional filters.
      */
-    public function getInstallmentsForUser(User $user): LengthAwarePaginator
+    public function getInstallmentsForUser(User $user, array $filters = []): LengthAwarePaginator
     {
-        return Installment::query()
+        $perPage = min(max((int) ($filters['per_page'] ?? 20), 1), 100);
+        $page = max((int) ($filters['page'] ?? 1), 1);
+        $search = trim((string) ($filters['search'] ?? ''));
+        $status = isset($filters['status']) ? (string) $filters['status'] : null;
+        $customerId = isset($filters['customer_id']) ? (int) $filters['customer_id'] : null;
+
+        $query = Installment::query()
             ->with(['customer', 'items'])
-            ->forUser($user)
-            ->latest()
-            ->paginate(20);
+            ->forUser($user);
+
+        if ($customerId > 0) {
+            $query->where('installments.customer_id', $customerId);
+        }
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                if (ctype_digit($search)) {
+                    $builder->where('installments.id', (int) $search);
+                }
+
+                $builder->orWhereHas('customer', function ($customerQuery) use ($search) {
+                    $customerQuery
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                });
+
+                $builder->orWhere('notes', 'like', "%{$search}%");
+            });
+        }
+
+        if ($status && $status !== 'all') {
+            if (in_array($status, ['active', 'completed', 'cancelled'], true)) {
+                $query->where('installments.status', $status);
+            } elseif ($status === 'overdue') {
+                $today = now()->startOfDay()->toDateString();
+                $query
+                    ->where('installments.status', 'active')
+                    ->whereHas('items', function ($itemQuery) use ($today) {
+                        $itemQuery
+                            ->where('status', 'pending')
+                            ->where('due_date', '<', $today);
+                    });
+            }
+        }
+
+        return $query->latest('installments.id')->paginate($perPage, ['*'], 'page', $page);
     }
 
     /**

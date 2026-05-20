@@ -25,7 +25,18 @@ class InstallmentController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $installments = $this->installmentService->getInstallmentsForUser($request->user());
+        $validated = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'status' => ['sometimes', 'nullable', 'string', 'in:all,active,completed,cancelled,overdue'],
+            'customer_id' => ['sometimes', 'integer', 'min:1'],
+        ]);
+
+        $installments = $this->installmentService->getInstallmentsForUser(
+            $request->user(),
+            $validated
+        );
 
         return $this->successResponse(
             InstallmentResource::collection($installments)->response()->getData(true),

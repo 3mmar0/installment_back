@@ -11,9 +11,11 @@ use Illuminate\Database\Eloquent\Collection;
 interface InstallmentServiceInterface
 {
     /**
-     * Get installments for a specific user with pagination.
+     * Get installments for a specific user with pagination and optional filters.
+     *
+     * @param  array{page?: int, per_page?: int, search?: string, status?: string, customer_id?: int}  $filters
      */
-    public function getInstallmentsForUser(User $user): LengthAwarePaginator;
+    public function getInstallmentsForUser(User $user, array $filters = []): LengthAwarePaginator;
 
     /**
      * Create a new installment.
