@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Helpers\TrialHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -26,6 +27,7 @@ class UserLimitResource extends JsonResource
             'start_date' => $this->start_date?->toDateString(),
             'end_date' => $this->end_date?->toDateString(),
             'status' => $this->status,
+            'is_trial' => TrialHelper::isTrialFeatures($this->features),
             'limits' => [
                 'customers' => $this->customers,
                 'installments' => $this->installments,

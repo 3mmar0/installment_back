@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Helpers\TrialHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -34,6 +35,7 @@ class UserResource extends JsonResource
                     'currency' => $this->userLimit->currency,
                     'price' => $this->userLimit->price,
                     'duration' => $this->userLimit->duration,
+                    'is_trial' => TrialHelper::isTrialFeatures($this->userLimit->features),
                 ];
             }),
         ];

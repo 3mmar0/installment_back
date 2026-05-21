@@ -122,7 +122,12 @@ class LimitsHelper
     public static function applySubscriptionToUser(int $userId, Subscription $subscription, array $overrides = []): UserLimit
     {
         $startDate = self::resolveDate($overrides['start_date'] ?? now());
-        $endDate = self::calculateEndDate($subscription->duration, $startDate, $overrides['end_date'] ?? null);
+        $endDate = self::calculateEndDate(
+            $subscription->duration,
+            $startDate,
+            $overrides['end_date'] ?? null,
+            (float) $subscription->price
+        );
 
         $assignment = SubscriptionAssignment::create([
             'user_id' => $userId,
@@ -310,6 +315,7 @@ class LimitsHelper
                 'start_date' => optional($userLimit->start_date)->toDateString(),
                 'end_date' => optional($userLimit->end_date)->toDateString(),
                 'status' => $userLimit->status,
+                'is_trial' => TrialHelper::isTrialFeatures($userLimit->features),
             ],
             'limits' => [
                 'customers' => $userLimit->customers,
@@ -448,10 +454,18 @@ class LimitsHelper
     /**
      * Calculate subscription end date based on duration.
      */
-    protected static function calculateEndDate(string $duration, Carbon $startDate, mixed $override = null): ?Carbon
-    {
+    protected static function calculateEndDate(
+        string $duration,
+        Carbon $startDate,
+        mixed $override = null,
+        ?float $price = null
+    ): ?Carbon {
         if ($override !== null) {
             return self::resolveDate($override);
+        }
+
+        if ($price !== null && $price <= 0) {
+            return null;
         }
 
         return match ($duration) {

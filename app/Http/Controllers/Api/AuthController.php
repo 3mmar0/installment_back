@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Contracts\Services\AuthServiceInterface;
 use App\Helpers\LimitsHelper;
+use App\Helpers\TrialHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Http\Traits\ApiResponse;
@@ -72,13 +73,9 @@ class AuthController extends Controller
         $subscriptionId = $data['subscription_id'] ?? null;
         $subscription = $subscriptionId
             ? Subscription::active()->find($subscriptionId)
-            : Subscription::active()->where('slug', 'free')->first();
+            : null;
 
-        if ($subscription) {
-            LimitsHelper::applySubscriptionToUser($result['user']->id, $subscription);
-                    } else {
-            LimitsHelper::createOrUpdateUserLimits($result['user']->id);
-        }
+        TrialHelper::applyRegistrationPlan($result['user'], $subscription);
 
         return $this->createdResponse([
             'user' => new UserResource($result['user']->load(['userLimit'])),

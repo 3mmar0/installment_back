@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\ExportReportController;
 use App\Http\Controllers\Api\InstallmentController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\LegalController;
+use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserLimitController;
@@ -31,6 +33,11 @@ Route::prefix('auth')->controller(AuthController::class)->group(function () {
 
 // Public subscription plans
 Route::get('subscriptions-public', [SubscriptionController::class, 'publicIndex']);
+
+// Public trial settings & legal pages
+Route::get('settings/trial', [SettingsController::class, 'trialPublic']);
+Route::get('legal/privacy', [LegalController::class, 'privacy']);
+Route::get('legal/terms', [LegalController::class, 'terms']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -103,6 +110,8 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::middleware('owner')->group(function () {
+        Route::put('settings/trial', [SettingsController::class, 'updateTrial']);
+
         Route::controller(SubscriptionController::class)->group(function () {
             Route::get('subscriptions-admin', 'index');
             Route::post('subscriptions-create', 'store');

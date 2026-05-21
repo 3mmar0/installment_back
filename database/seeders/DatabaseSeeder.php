@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Enums\UserRole;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Subscription;
+use App\Helpers\TrialHelper;
 
 class DatabaseSeeder extends Seeder
 {
@@ -25,6 +26,8 @@ class DatabaseSeeder extends Seeder
                 'role' => UserRole::Owner,
             ]);
         }
+
+        TrialHelper::updateSettings(true, 7);
 
         if (!Subscription::where('slug', 'free')->exists()) {
             Subscription::create([
