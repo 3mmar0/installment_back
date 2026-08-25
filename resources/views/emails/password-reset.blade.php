@@ -96,6 +96,7 @@
 <body>
     <div class="email-container">
         <div class="header">
+            <img src="{{ config('app.url') }}/aqsat-logo.png" alt="اقساطي" style="max-height:72px;width:auto;margin-bottom:12px;" />
             <div class="header-title">إعادة تعيين كلمة المرور</div>
         </div>
         <div class="content">

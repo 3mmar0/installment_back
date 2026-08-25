@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Installment Manager API - Documentation</title>
+    <title>اقساطي API - Documentation</title>
+    <link rel="icon" type="image/png" href="/aqsat-logo.png" />
     <style>
         * {
             margin: 0;
@@ -453,8 +454,9 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 Installment Manager API</h1>
-            <p>RESTful API for managing installment plans and customer payments</p>
+            <img src="/aqsat-logo.png" alt="اقساطي" />
+            <h1>اقساطي API</h1>
+            <p>RESTful API لإدارة الأقساط والمدفوعات</p>
             <p style="margin-top: 10px; font-size: 0.95rem; opacity: 0.9;">All messages in Arabic | جميع الرسائل بالعربية</p>
             <div>
                 <span class="badge">Laravel 12</span>
@@ -2558,7 +2560,7 @@ const DashboardStats = ({ data }) => {
 
         <footer class="footer">
             <p>Built with Laravel 12 following SOLID principles</p>
-            <p>© {{ date('Y') }} Installment Manager API</p>
+            <p>© {{ date('Y') }} اقساطي — Aqsaty API</p>
         </footer>
     </div>
 </body>
