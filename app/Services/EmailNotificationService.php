@@ -140,22 +140,27 @@ class EmailNotificationService
     public function sendInstallmentCreatedNotification(Installment $installment, User $user): void
     {
         try {
-            // Send to customer
-            Mail::to($installment->customer->email)
-                ->send(new InstallmentCreated(
-                    $installment,
-                    $installment->customer->email
-                ));
+            $installment->loadMissing('customer');
+            $customerEmail = $installment->customer?->email;
+
+            // Send to customer only when a valid email exists
+            if (is_string($customerEmail) && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                Mail::to($customerEmail)
+                    ->send(new InstallmentCreated(
+                        $installment,
+                        $customerEmail
+                    ));
+            }
 
             // Send to owner
-            if ($user->email) {
+            if ($user->email && filter_var($user->email, FILTER_VALIDATE_EMAIL)) {
                 Mail::to($user->email)
                     ->send(new InstallmentCreated(
                         $installment,
                         $user->email
                     ));
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Failed to send installment created email', [
                 'installment_id' => $installment->id,
                 'error' => $e->getMessage()

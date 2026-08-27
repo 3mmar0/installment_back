@@ -111,7 +111,7 @@ class InstallmentService implements InstallmentServiceInterface
             abort(403, LimitsHelper::getLimitExceededMessage('installments'));
         }
 
-        return DB::transaction(function () use ($data, $user) {
+        $installment = DB::transaction(function () use ($data, $user) {
             $start = Carbon::parse($data['start_date'])->startOfDay();
             $months = (int) $data['months'];
             $total = round((float) $data['total_amount'], 2);
@@ -130,7 +130,6 @@ class InstallmentService implements InstallmentServiceInterface
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            // Create installment items
             for ($i = 0; $i < $months; $i++) {
                 $due = $start->copy()->addMonths($i);
                 $amount = $base + ($i === ($months - 1) ? $remainder : 0.0);
@@ -143,34 +142,34 @@ class InstallmentService implements InstallmentServiceInterface
                 ]);
             }
 
-            $installment->refresh()->load(['customer', 'items']);
-
             if (!$user->isOwner()) {
                 LimitsHelper::incrementUsage($user->id, 'installments');
             }
 
-            // Side effects must never roll back the installment (e.g. notification limit 403)
-            try {
-                app(NotificationService::class)->notifyInstallmentCreated($user, $installment);
-            } catch (\Throwable $e) {
-                \Log::warning('Installment created but notification failed', [
-                    'installment_id' => $installment->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            try {
-                app(\App\Services\EmailNotificationService::class)
-                    ->sendInstallmentCreatedNotification($installment, $user);
-            } catch (\Throwable $e) {
-                \Log::warning('Installment created but email failed', [
-                    'installment_id' => $installment->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            return $installment;
+            return $installment->refresh()->load(['customer', 'items']);
         });
+
+        // Side effects AFTER commit — must never fail the create API response
+        try {
+            app(NotificationService::class)->notifyInstallmentCreated($user, $installment);
+        } catch (\Throwable $e) {
+            \Log::warning('Installment created but notification failed', [
+                'installment_id' => $installment->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        try {
+            app(\App\Services\EmailNotificationService::class)
+                ->sendInstallmentCreatedNotification($installment, $user);
+        } catch (\Throwable $e) {
+            \Log::warning('Installment created but email failed', [
+                'installment_id' => $installment->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $installment;
     }
 
     /**

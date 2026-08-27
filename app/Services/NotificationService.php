@@ -12,11 +12,27 @@ class NotificationService
 {
     /**
      * Create a new notification.
+     * Set $enforceLimits to false for side-effect notifications (e.g. after installment create)
+     * so a notification quota never fails the parent operation.
      */
-    public function create(User $user, string $type, string $title, string $message, array $data = []): Notification
-    {
-        if (!$user->isOwner() && !LimitsHelper::canCreate($user->id, 'notifications')) {
+    public function create(
+        User $user,
+        string $type,
+        string $title,
+        string $message,
+        array $data = [],
+        bool $enforceLimits = true
+    ): ?Notification {
+        if ($enforceLimits && !$user->isOwner() && !LimitsHelper::canCreate($user->id, 'notifications')) {
             abort(403, LimitsHelper::getLimitExceededMessage('notifications'));
+        }
+
+        if (!$enforceLimits && !$user->isOwner() && !LimitsHelper::canCreate($user->id, 'notifications')) {
+            \Log::info('Skipping notification due to plan limit', [
+                'user_id' => $user->id,
+                'type' => $type,
+            ]);
+            return null;
         }
 
         $notification = Notification::create([
@@ -207,26 +223,36 @@ class NotificationService
     /**
      * Notify about installment creation.
      */
-    public function notifyInstallmentCreated(User $user, \App\Models\Installment $installment): Notification
+    public function notifyInstallmentCreated(User $user, \App\Models\Installment $installment): ?Notification
     {
-        $customerName = $installment->customer->name;
-        $totalFormatted = $this->formatMoney((float) $installment->total_amount);
-        $months = (int) $installment->months;
-        $monthsLabel = $months === 1 ? 'شهر' : 'شهراً';
+        try {
+            $installment->loadMissing('customer');
+            $customerName = $installment->customer?->name ?? 'عميل';
+            $totalFormatted = $this->formatMoney((float) $installment->total_amount);
+            $months = (int) $installment->months;
+            $monthsLabel = $months === 1 ? 'شهر' : 'شهراً';
 
-        return $this->create(
-            $user,
-            'installment_created',
-            'قسط جديد',
-            "تم إنشاء خطة أقساط للعميل {$customerName} — الإجمالي {$totalFormatted} على {$months} {$monthsLabel}",
-            [
-                'installment_id' => $installment->id,
-                'customer_id' => $installment->customer_id,
-                'customer_name' => $customerName,
-                'total_amount' => $installment->total_amount,
-                'months' => $months,
-            ]
-        );
+            return $this->create(
+                $user,
+                'installment_created',
+                'قسط جديد',
+                "تم إنشاء خطة أقساط للعميل {$customerName} — الإجمالي {$totalFormatted} على {$months} {$monthsLabel}",
+                [
+                    'installment_id' => $installment->id,
+                    'customer_id' => $installment->customer_id,
+                    'customer_name' => $customerName,
+                    'total_amount' => $installment->total_amount,
+                    'months' => $months,
+                ],
+                false // never block installment creation on notification limits
+            );
+        } catch (\Throwable $e) {
+            \Log::warning('notifyInstallmentCreated failed', [
+                'installment_id' => $installment->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 
     /**
