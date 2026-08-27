@@ -20,9 +20,13 @@ class InstallmentResource extends JsonResource
             'customer' => new CustomerResource($this->whenLoaded('customer')),
             'user' => new UserResource($this->whenLoaded('user')),
             'total_amount' => (float) $this->total_amount,
-            'products' => $this->products,
-            'start_date' => $this->start_date,
-            'end_date' => $this->end_date,
+            'products' => $this->products ?? [],
+            'start_date' => $this->start_date instanceof \DateTimeInterface
+                ? $this->start_date->format('Y-m-d')
+                : $this->start_date,
+            'end_date' => $this->end_date instanceof \DateTimeInterface
+                ? $this->end_date->format('Y-m-d')
+                : $this->end_date,
             'months' => $this->months,
             'status' => $this->status,
             'notes' => $this->notes,

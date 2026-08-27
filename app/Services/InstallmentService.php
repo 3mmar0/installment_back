@@ -149,12 +149,25 @@ class InstallmentService implements InstallmentServiceInterface
                 LimitsHelper::incrementUsage($user->id, 'installments');
             }
 
-            // Send notification
-            app(NotificationService::class)->notifyInstallmentCreated($user, $installment);
+            // Side effects must never roll back the installment (e.g. notification limit 403)
+            try {
+                app(NotificationService::class)->notifyInstallmentCreated($user, $installment);
+            } catch (\Throwable $e) {
+                \Log::warning('Installment created but notification failed', [
+                    'installment_id' => $installment->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
-            // Send email notification
-            app(\App\Services\EmailNotificationService::class)
-                ->sendInstallmentCreatedNotification($installment, $user);
+            try {
+                app(\App\Services\EmailNotificationService::class)
+                    ->sendInstallmentCreatedNotification($installment, $user);
+            } catch (\Throwable $e) {
+                \Log::warning('Installment created but email failed', [
+                    'installment_id' => $installment->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return $installment;
         });
