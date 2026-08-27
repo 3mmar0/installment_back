@@ -115,4 +115,16 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | App notification emails
+    |--------------------------------------------------------------------------
+    |
+    | When false, business emails (installment created, payment reminders, etc.)
+    | are skipped so mail failures never break core API logic.
+    | Password-reset mail still uses the mailer directly when needed.
+    |
+    */
+    'notifications_enabled' => (bool) env('MAIL_NOTIFICATIONS_ENABLED', false),
+
 ];

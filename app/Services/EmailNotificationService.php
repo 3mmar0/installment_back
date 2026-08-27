@@ -15,10 +15,28 @@ use Illuminate\Support\Facades\Mail;
 class EmailNotificationService
 {
     /**
+     * Business emails are off by default so mail misconfig never breaks API logic.
+     * Enable with MAIL_NOTIFICATIONS_ENABLED=true when mail is ready.
+     */
+    protected function isEnabled(): bool
+    {
+        return (bool) config('mail.notifications_enabled', false);
+    }
+
+    protected function isValidEmail(?string $email): bool
+    {
+        return is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL);
+    }
+
+    /**
      * Send payment due reminders (exactly 2 days remaining).
      */
     public function sendPaymentDueReminders(User $user): int
     {
+        if (!$this->isEnabled()) {
+            return 0;
+        }
+
         $twoDaysLater = now()->addDays(2)->endOfDay();
         $oneDayLater = now()->addDays(1)->startOfDay();
 
@@ -36,23 +54,26 @@ class EmailNotificationService
         $count = 0;
         foreach ($dueSoon as $item) {
             try {
+                $customerEmail = $item->installment?->customer?->email;
+                if (!$this->isValidEmail($customerEmail)) {
+                    continue;
+                }
+
                 $daysRemaining = now()->diffInDays($item->due_date, false);
 
-                // Send to customer
-                Mail::to($item->installment->customer->email)
+                Mail::to($customerEmail)
                     ->send(new PaymentDueReminder($item, $daysRemaining));
 
-                // Send to owner
-                if ($user->email) {
+                if ($this->isValidEmail($user->email)) {
                     Mail::to($user->email)
                         ->send(new PaymentDueReminder($item, $daysRemaining));
                 }
 
                 $count++;
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 Log::error('Failed to send payment due reminder email', [
                     'item_id' => $item->id,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
             }
         }
@@ -65,6 +86,10 @@ class EmailNotificationService
      */
     public function sendOverduePaymentNotices(User $user): int
     {
+        if (!$this->isEnabled()) {
+            return 0;
+        }
+
         $overdue = InstallmentItem::query()
             ->whereHas('installment', function ($query) use ($user) {
                 $query->where('user_id', $user->id)
@@ -79,23 +104,26 @@ class EmailNotificationService
         $count = 0;
         foreach ($overdue as $item) {
             try {
+                $customerEmail = $item->installment?->customer?->email;
+                if (!$this->isValidEmail($customerEmail)) {
+                    continue;
+                }
+
                 $daysOverdue = now()->diffInDays($item->due_date);
 
-                // Send to customer
-                Mail::to($item->installment->customer->email)
+                Mail::to($customerEmail)
                     ->send(new PaymentOverdueNotice($item, $daysOverdue));
 
-                // Send to owner
-                if ($user->email) {
+                if ($this->isValidEmail($user->email)) {
                     Mail::to($user->email)
                         ->send(new PaymentOverdueNotice($item, $daysOverdue));
                 }
 
                 $count++;
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 Log::error('Failed to send overdue payment notice email', [
                     'item_id' => $item->id,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
             }
         }
@@ -108,17 +136,24 @@ class EmailNotificationService
      */
     public function sendPaymentReceivedConfirmation(InstallmentItem $item, float $paidAmount, User $user): void
     {
-        try {
-            // Send to customer
-            Mail::to($item->installment->customer->email)
-                ->send(new PaymentReceivedConfirmation(
-                    $item,
-                    $paidAmount,
-                    $item->installment->customer->email
-                ));
+        if (!$this->isEnabled()) {
+            return;
+        }
 
-            // Send to owner
-            if ($user->email) {
+        try {
+            $item->loadMissing('installment.customer');
+            $customerEmail = $item->installment?->customer?->email;
+
+            if ($this->isValidEmail($customerEmail)) {
+                Mail::to($customerEmail)
+                    ->send(new PaymentReceivedConfirmation(
+                        $item,
+                        $paidAmount,
+                        $customerEmail
+                    ));
+            }
+
+            if ($this->isValidEmail($user->email)) {
                 Mail::to($user->email)
                     ->send(new PaymentReceivedConfirmation(
                         $item,
@@ -126,10 +161,10 @@ class EmailNotificationService
                         $user->email
                     ));
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Failed to send payment received confirmation email', [
                 'item_id' => $item->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -139,12 +174,15 @@ class EmailNotificationService
      */
     public function sendInstallmentCreatedNotification(Installment $installment, User $user): void
     {
+        if (!$this->isEnabled()) {
+            return;
+        }
+
         try {
             $installment->loadMissing('customer');
             $customerEmail = $installment->customer?->email;
 
-            // Send to customer only when a valid email exists
-            if (is_string($customerEmail) && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+            if ($this->isValidEmail($customerEmail)) {
                 Mail::to($customerEmail)
                     ->send(new InstallmentCreated(
                         $installment,
@@ -152,8 +190,7 @@ class EmailNotificationService
                     ));
             }
 
-            // Send to owner
-            if ($user->email && filter_var($user->email, FILTER_VALIDATE_EMAIL)) {
+            if ($this->isValidEmail($user->email)) {
                 Mail::to($user->email)
                     ->send(new InstallmentCreated(
                         $installment,
@@ -163,7 +200,7 @@ class EmailNotificationService
         } catch (\Throwable $e) {
             Log::error('Failed to send installment created email', [
                 'installment_id' => $installment->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -173,10 +210,14 @@ class EmailNotificationService
      */
     public function sendItemReminderEmail(InstallmentItem $item, User $user): bool
     {
-        $item->loadMissing(['installment.customer']);
-        $customer = $item->installment->customer;
+        if (!$this->isEnabled()) {
+            return false;
+        }
 
-        if (!$customer?->email) {
+        $item->loadMissing(['installment.customer']);
+        $customer = $item->installment?->customer;
+
+        if (!$this->isValidEmail($customer?->email)) {
             return false;
         }
 
@@ -184,19 +225,19 @@ class EmailNotificationService
             if ($item->due_date < now()->startOfDay()) {
                 $daysOverdue = now()->diffInDays($item->due_date);
                 Mail::to($customer->email)->send(new PaymentOverdueNotice($item, $daysOverdue));
-                if ($user->email) {
+                if ($this->isValidEmail($user->email)) {
                     Mail::to($user->email)->send(new PaymentOverdueNotice($item, $daysOverdue));
                 }
             } else {
                 $daysRemaining = max(0, (int) now()->diffInDays($item->due_date, false));
                 Mail::to($customer->email)->send(new PaymentDueReminder($item, $daysRemaining));
-                if ($user->email) {
+                if ($this->isValidEmail($user->email)) {
                     Mail::to($user->email)->send(new PaymentDueReminder($item, $daysRemaining));
                 }
             }
 
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Failed to send installment item reminder email', [
                 'item_id' => $item->id,
                 'error' => $e->getMessage(),
@@ -211,6 +252,15 @@ class EmailNotificationService
      */
     public function sendAllPaymentReminders(User $user): array
     {
+        if (!$this->isEnabled()) {
+            return [
+                'due_reminders_sent' => 0,
+                'overdue_notices_sent' => 0,
+                'total_emails' => 0,
+                'disabled' => true,
+            ];
+        }
+
         $dueReminders = $this->sendPaymentDueReminders($user);
         $overdueNotices = $this->sendOverduePaymentNotices($user);
 

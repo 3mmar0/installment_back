@@ -153,12 +153,13 @@ class InstallmentService implements InstallmentServiceInterface
         try {
             app(NotificationService::class)->notifyInstallmentCreated($user, $installment);
         } catch (\Throwable $e) {
-            \Log::warning('Installment created but notification failed', [
+            \Log::warning('Installment created but in-app notification failed', [
                 'installment_id' => $installment->id,
                 'error' => $e->getMessage(),
             ]);
         }
 
+        // Email is optional (MAIL_NOTIFICATIONS_ENABLED); skipped when disabled
         try {
             app(\App\Services\EmailNotificationService::class)
                 ->sendInstallmentCreatedNotification($installment, $user);
@@ -182,7 +183,7 @@ class InstallmentService implements InstallmentServiceInterface
             abort(403, 'Unauthorized to update this installment item');
         }
 
-        return DB::transaction(function () use ($item, $data, $user) {
+        $item = DB::transaction(function () use ($item, $data, $user) {
             $paidAmount = (float) $data['paid_amount'];
 
             $item->markPaid(
@@ -191,14 +192,17 @@ class InstallmentService implements InstallmentServiceInterface
                 isset($data['note']) ? trim((string) $data['note']) : null
             );
 
-            // Send payment received notification
             $refreshedItem = $item->refresh();
-            app(\App\Services\NotificationService::class)
-                ->notifyPaymentReceived($user, $refreshedItem, $paidAmount);
 
-            // Send payment received email to customer and owner
-            app(\App\Services\EmailNotificationService::class)
-                ->sendPaymentReceivedConfirmation($refreshedItem, $paidAmount, $user);
+            try {
+                app(\App\Services\NotificationService::class)
+                    ->notifyPaymentReceived($user, $refreshedItem, $paidAmount);
+            } catch (\Throwable $e) {
+                \Log::warning('Payment saved but in-app notification failed', [
+                    'item_id' => $refreshedItem->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             // Check if all items are paid
             $installment = $item->installment;
@@ -210,6 +214,22 @@ class InstallmentService implements InstallmentServiceInterface
 
             return $item->refresh();
         });
+
+        try {
+            app(\App\Services\EmailNotificationService::class)
+                ->sendPaymentReceivedConfirmation(
+                    $item,
+                    (float) ($data['paid_amount'] ?? $item->paid_amount ?? 0),
+                    $user
+                );
+        } catch (\Throwable $e) {
+            \Log::warning('Payment saved but email failed', [
+                'item_id' => $item->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $item;
     }
 
     /**
