@@ -7,9 +7,17 @@ ENV_BACKUP="${ENV_BACKUP_DIR}/installment-back.env.bak"
 
 mkdir -p "$ENV_BACKUP_DIR"
 
+# Ensure deploy user can write app files (.env, git, composer)
+sudo chown -R deploy:www-data "$APP"
+
 cd "$APP"
+
 if [ -f .env ]; then
   cp .env "$ENV_BACKUP"
+elif [ -f "$ENV_BACKUP" ]; then
+  : # keep existing backup if .env missing this run
+else
+  echo "WARNING: no .env found and no backup at $ENV_BACKUP" >&2
 fi
 
 git fetch origin
@@ -17,6 +25,7 @@ git reset --hard origin/main
 
 if [ -f "$ENV_BACKUP" ]; then
   cp "$ENV_BACKUP" .env
+  chmod 640 .env
 fi
 
 composer install --no-dev --optimize-autoloader --no-interaction
