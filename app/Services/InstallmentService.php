@@ -49,6 +49,7 @@ class InstallmentService implements InstallmentServiceInterface
                 });
 
                 $builder->orWhere('notes', 'like', "%{$search}%");
+                $builder->orWhere('name', 'like', "%{$search}%");
             });
         }
 
@@ -121,6 +122,9 @@ class InstallmentService implements InstallmentServiceInterface
             $installment = Installment::create([
                 'user_id' => $user->id,
                 'customer_id' => $data['customer_id'],
+                'name' => !empty(trim((string) ($data['name'] ?? '')))
+                    ? trim((string) $data['name'])
+                    : null,
                 'total_amount' => $total,
                 'products' => $data['products'] ?? [],
                 'start_date' => $start->toDateString(),

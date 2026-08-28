@@ -17,6 +17,7 @@ class InstallmentResource extends JsonResource
         return [
             'id' => $this->id,
             'customer_id' => $this->customer_id,
+            'name' => $this->name,
             'customer' => new CustomerResource($this->whenLoaded('customer')),
             'user' => new UserResource($this->whenLoaded('user')),
             'total_amount' => (float) $this->total_amount,

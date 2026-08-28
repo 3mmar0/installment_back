@@ -22,6 +22,7 @@ class StoreInstallmentRequest extends FormRequest
     {
         return [
             'customer_id' => ['required', 'exists:customers,id'],
+            'name' => ['nullable', 'string', 'max:255'],
             'total_amount' => ['required', 'numeric', 'min:0.01'],
             'months' => ['required', 'integer', 'min:1', 'max:120'],
             'start_date' => ['required', 'date'],
