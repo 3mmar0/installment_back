@@ -9,6 +9,18 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload deploy script
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.INSTALLMENT_SSH_HOST }}
+          username: ${{ secrets.INSTALLMENT_SSH_USER }}
+          key: ${{ secrets.INSTALLMENT_SSH_KEY }}
+          source: "scripts/deploy-installment-back.sh"
+          target: "/home/deploy/bin/"
+          strip_components: 1
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.2
         with:
@@ -17,4 +29,5 @@ jobs:
           key: ${{ secrets.INSTALLMENT_SSH_KEY }}
           script_stop: true
           script: |
+            chmod +x /home/deploy/bin/deploy-installment-back.sh
             bash /home/deploy/bin/deploy-installment-back.sh
