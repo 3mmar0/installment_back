@@ -134,4 +134,9 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'platform_admin_emails' => array_filter(array_map(
+        'trim',
+        explode(',', env('PLATFORM_ADMIN_EMAILS', 'superadmin@admin.com'))
+    )),
+
 ];

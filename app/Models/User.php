@@ -24,6 +24,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'is_platform_admin',
         'trial_used_at',
     ];
 
@@ -49,12 +50,29 @@ class User extends Authenticatable
             'trial_used_at' => 'datetime',
             'password' => 'hashed',
             'role' => UserRole::class,
+            'is_platform_admin' => 'boolean',
         ];
     }
 
     public function isOwner(): bool
     {
         return $this->role === UserRole::Owner;
+    }
+
+    public function isPlatformAdmin(): bool
+    {
+        if ($this->is_platform_admin) {
+            return true;
+        }
+
+        $emails = config('app.platform_admin_emails', []);
+
+        return in_array($this->email, $emails, true);
+    }
+
+    public function complaints()
+    {
+        return $this->hasMany(Complaint::class);
     }
 
     public function customers()

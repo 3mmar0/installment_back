@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ComplaintController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\ExportReportController;
 use App\Http\Controllers\Api\InstallmentController;
@@ -61,6 +62,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // User subscription change (upgrade/downgrade) and cancel current plan
     Route::post('subscriptions/cancel', [SubscriptionController::class, 'cancelCurrent']);
     Route::post('subscriptions/{subscription}/change', [SubscriptionController::class, 'changeSubscription']);
+
+    // Support / complaints (no active subscription required)
+    Route::controller(ComplaintController::class)->group(function () {
+        Route::get('complaint-list', 'index');
+        Route::post('complaint-create', 'store');
+        Route::get('complaint-show/{id}', 'show');
+        Route::post('complaint-reply/{id}', 'reply')->middleware('platform_admin');
+    });
 
     // Routes below require an active subscription
     Route::middleware(\App\Http\Middleware\EnsureActiveSubscription::class)->group(function () {

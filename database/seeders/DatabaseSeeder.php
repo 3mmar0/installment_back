@@ -24,7 +24,10 @@ class DatabaseSeeder extends Seeder
                 'email' => 'superadmin@admin.com',
                 'password' => Hash::make('password'),
                 'role' => UserRole::Owner,
+                'is_platform_admin' => true,
             ]);
+        } else {
+            $owner->update(['is_platform_admin' => true]);
         }
 
         TrialHelper::updateSettings(true, 7);

@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'owner' => \App\Http\Middleware\EnsureOwner::class,
+            'platform_admin' => \App\Http\Middleware\EnsurePlatformAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
