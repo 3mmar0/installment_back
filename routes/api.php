@@ -110,6 +110,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('installment-overdue', 'overdue');
             Route::get('installment-due-soon', 'dueSoon');
             Route::get('installment-show/{id}', 'show');
+            Route::put('installment-update/{id}', 'update');
             Route::delete('installment-delete/{id}', 'destroy');
             Route::get('installment-stats/{id}', 'stats');
             Route::get('installment-all-stats', 'allStats');

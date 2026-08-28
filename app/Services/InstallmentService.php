@@ -104,6 +104,28 @@ class InstallmentService implements InstallmentServiceInterface
     }
 
     /**
+     * Update an installment.
+     */
+    public function updateInstallment(int $id, array $data, User $user): Installment
+    {
+        $installment = Installment::findOrFail($id);
+
+        if (!$user->isOwner() && $installment->user_id !== $user->id) {
+            abort(403, 'غير مصرح لك بتحديث هذا القسط');
+        }
+
+        if (array_key_exists('name', $data)) {
+            $installment->name = !empty(trim((string) $data['name']))
+                ? trim((string) $data['name'])
+                : null;
+        }
+
+        $installment->save();
+
+        return $installment->refresh()->load(['customer', 'items']);
+    }
+
+    /**
      * Create a new installment.
      */
     public function createInstallment(array $data, User $user): Installment

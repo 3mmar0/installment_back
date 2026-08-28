@@ -33,6 +33,11 @@ interface InstallmentServiceInterface
     public function deleteInstallment(int $id, User $user): bool;
 
     /**
+     * Update installment fields (e.g. name).
+     */
+    public function updateInstallment(int $id, array $data, User $user): Installment;
+
+    /**
      * Mark an installment item as paid.
      */
     public function markItemPaid(InstallmentItem $item, array $data, User $user): InstallmentItem;

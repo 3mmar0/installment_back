@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Contracts\Services\InstallmentServiceInterface;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreInstallmentRequest;
+use App\Http\Requests\UpdateInstallmentRequest;
 use App\Http\Resources\InstallmentItemResource;
 use App\Http\Resources\InstallmentResource;
 use App\Http\Traits\ApiResponse;
@@ -84,6 +85,31 @@ class InstallmentController extends Controller
             new InstallmentResource($installment),
             'تم جلب القسط بنجاح'
         );
+    }
+
+    /**
+     * Update an installment.
+     */
+    public function update(int $id, UpdateInstallmentRequest $request): JsonResponse
+    {
+        try {
+            $installment = $this->installmentService->updateInstallment(
+                $id,
+                $request->validated(),
+                $request->user()
+            );
+
+            return $this->successResponse(
+                new InstallmentResource($installment),
+                'تم تحديث القسط بنجاح'
+            );
+        } catch (\Exception $e) {
+            if ($e->getCode() === 403) {
+                return $this->forbiddenResponse($e->getMessage());
+            }
+
+            return $this->notFoundResponse('القسط غير موجود');
+        }
     }
 
     /**
