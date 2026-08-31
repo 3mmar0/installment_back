@@ -22,12 +22,85 @@ class LimitsHelper
      * @var array<string, mixed>
      */
     protected const DEFAULT_LIMITS = [
-        'customers' => ['from' => 0, 'to' => 50],
-        'installments' => ['from' => 0, 'to' => 50],
+        'customers' => ['from' => 0, 'to' => 10],
+        'installments' => ['from' => 0, 'to' => 20],
         'notifications' => ['from' => 0, 'to' => 200],
         'reports' => true,
-        'features' => [],
+        'features' => ['basic_reports' => true],
     ];
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function freePlanAttributes(): array
+    {
+        return [
+            'name' => 'الخطه المجانية',
+            'currency' => 'EGP',
+            'price' => 0,
+            'duration' => 'monthly',
+            'description' => 'الخطة المجانية الحالية لجميع المستخدمين.',
+            'customers' => self::DEFAULT_LIMITS['customers'],
+            'installments' => self::DEFAULT_LIMITS['installments'],
+            'notifications' => self::DEFAULT_LIMITS['notifications'],
+            'reports' => self::DEFAULT_LIMITS['reports'],
+            'features' => self::DEFAULT_LIMITS['features'],
+            'is_active' => true,
+        ];
+    }
+
+    public static function ensureFreePlan(): Subscription
+    {
+        $attributes = self::freePlanAttributes();
+        $attributes['created_by'] = $attributes['created_by']
+            ?? User::query()->where('role', UserRole::Owner)->value('id')
+            ?? User::query()->value('id');
+
+        return Subscription::query()->updateOrCreate(
+            ['slug' => 'free'],
+            $attributes
+        );
+    }
+
+    /**
+     * Move all regular users to the free plan and refresh their limits.
+     *
+     * @return array{synced: int, plan: string}
+     */
+    public static function syncAllUsersToFreePlan(): array
+    {
+        $freePlan = self::ensureFreePlan();
+
+        Subscription::query()
+            ->where('slug', '!=', 'free')
+            ->update(['is_active' => false]);
+
+        $synced = 0;
+
+        User::query()
+            ->where('role', UserRole::User)
+            ->orderBy('id')
+            ->chunkById(100, function ($users) use ($freePlan, &$synced) {
+                foreach ($users as $user) {
+                    SubscriptionAssignment::query()
+                        ->where('user_id', $user->id)
+                        ->where('status', 'active')
+                        ->update([
+                            'status' => 'canceled',
+                            'end_date' => now()->toDateString(),
+                        ]);
+
+                    self::applySubscriptionToUser($user->id, $freePlan);
+                    self::updateUsageCounts($user->id);
+                    $synced++;
+                }
+            });
+
+        return [
+            'synced' => $synced,
+            'plan' => $freePlan->name,
+        ];
+    }
 
     /**
      * Create or update user limits using provided attributes.

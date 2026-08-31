@@ -33,21 +33,15 @@ class DatabaseSeeder extends Seeder
         TrialHelper::updateSettings(true, 7);
 
         if (!Subscription::where('slug', 'free')->exists()) {
-            Subscription::create([
-                'name' => 'الخطه المجانية',
-                'slug' => 'free',
-                'currency' => 'EGP',
-                'price' => 0,
-                'duration' => 'monthly',
-                'description' => 'Default starter plan with limited allowances.',
-                'customers' => ['from' => 0, 'to' => 10],
-                'installments' => ['from' => 0, 'to' => 20],
-                'notifications' => ['from' => 0, 'to' => 200],
-                'reports' => true,
-                'features' => ['basic_reports' => true],
-                'is_active' => true,
-                'created_by' => $owner->id,
-            ]);
+            Subscription::create(array_merge(
+                \App\Helpers\LimitsHelper::freePlanAttributes(),
+                [
+                    'slug' => 'free',
+                    'created_by' => $owner->id,
+                ]
+            ));
         }
+
+        \App\Helpers\LimitsHelper::syncAllUsersToFreePlan();
     }
 }

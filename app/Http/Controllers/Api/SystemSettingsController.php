@@ -98,4 +98,14 @@ class SystemSettingsController extends Controller
             'تمت جدولة إرسال الإشعار لجميع المستخدمين'
         );
     }
+
+    public function syncFreePlan(): JsonResponse
+    {
+        $result = \App\Helpers\LimitsHelper::syncAllUsersToFreePlan();
+
+        return $this->successResponse(
+            $result,
+            "تم تحديث {$result['synced']} مستخدم إلى {$result['plan']}"
+        );
+    }
 }

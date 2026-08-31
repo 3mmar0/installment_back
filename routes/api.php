@@ -80,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('admin/system/cache-clear', 'clearCache');
         Route::get('admin/system/users', 'users');
         Route::post('admin/system/broadcast-notification', 'broadcastNotification');
+        Route::post('admin/system/sync-free-plan', 'syncFreePlan');
     });
 
     // Routes below require an active subscription
