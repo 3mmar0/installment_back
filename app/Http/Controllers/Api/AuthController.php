@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Contracts\Services\AuthServiceInterface;
-use App\Helpers\LimitsHelper;
+use App\Enums\RegistrationSource;
 use App\Helpers\TrialHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Http\Traits\ApiResponse;
-use App\Models\Subscription;
 use App\Models\User;
 use App\Enums\UserRole;
 use App\Services\NotificationService;
@@ -58,10 +57,13 @@ class AuthController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', Password::defaults()],
-            'subscription_id' => ['nullable', 'integer', 'exists:subscriptions,id'],
+            'registration_source' => ['nullable', 'in:web,mobile,admin'],
         ]);
 
-        $result = $this->authService->register($data);
+        $result = $this->authService->register([
+            ...$data,
+            'registration_source' => $data['registration_source'] ?? RegistrationSource::Web->value,
+        ]);
         $newUser = $result['user'];
 
         // Notify owners about the new user
@@ -70,12 +72,7 @@ class AuthController extends Controller
             $this->notificationService->notifyNewUserRegistered($owner, $newUser);
         }
 
-        $subscriptionId = $data['subscription_id'] ?? null;
-        $subscription = $subscriptionId
-            ? Subscription::active()->find($subscriptionId)
-            : null;
-
-        TrialHelper::applyRegistrationPlan($result['user'], $subscription);
+        TrialHelper::applyRegistrationPlan($result['user'], null);
 
         return $this->createdResponse([
             'user' => new UserResource($result['user']->load(['userLimit'])),

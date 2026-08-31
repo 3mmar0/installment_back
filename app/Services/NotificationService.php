@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\UserRole;
 use App\Helpers\LimitsHelper;
 use App\Models\InstallmentItem;
 use App\Models\Notification;
@@ -196,6 +197,32 @@ class NotificationService
                 'customer_name' => $customerName,
             ], $extra)
         );
+    }
+
+    /**
+     * Broadcast an in-app notification to all regular users.
+     */
+    public function broadcastToAllUsers(string $title, string $message, array $data = []): int
+    {
+        $count = 0;
+
+        User::query()
+            ->where('role', UserRole::User)
+            ->chunkById(100, function ($users) use ($title, $message, $data, &$count) {
+                foreach ($users as $user) {
+                    $this->create(
+                        $user,
+                        'system_announcement',
+                        $title,
+                        $message,
+                        $data,
+                        enforceLimits: false
+                    );
+                    $count++;
+                }
+            });
+
+        return $count;
     }
 
     /**

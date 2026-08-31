@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Contracts\Services\UserServiceInterface;
+use App\Enums\RegistrationSource;
 use App\Enums\UserRole;
+use App\Helpers\TrialHelper;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -30,9 +32,10 @@ class UserService implements UserServiceInterface
                 'email' => $data['email'],
                 'password' => Hash::make($data['password']),
                 'role' => $data['role'] ?? UserRole::User,
+                'registration_source' => RegistrationSource::Admin,
             ]);
 
-            \App\Helpers\LimitsHelper::createOrUpdateUserLimits($user->id);
+            TrialHelper::applyRegistrationPlan($user, null);
 
             return $user->fresh('userLimit');
         });

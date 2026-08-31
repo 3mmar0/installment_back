@@ -78,6 +78,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('admin/system/queue-stop', 'stopQueue');
         Route::post('admin/system/queue-run', 'runQueue');
         Route::post('admin/system/cache-clear', 'clearCache');
+        Route::get('admin/system/users', 'users');
+        Route::post('admin/system/broadcast-notification', 'broadcastNotification');
     });
 
     // Routes below require an active subscription

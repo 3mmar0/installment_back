@@ -34,7 +34,7 @@ class DatabaseSeeder extends Seeder
 
         if (!Subscription::where('slug', 'free')->exists()) {
             Subscription::create([
-                'name' => 'Free Plan',
+                'name' => 'الخطه المجانية',
                 'slug' => 'free',
                 'currency' => 'EGP',
                 'price' => 0,

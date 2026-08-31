@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\RegistrationSource;
 use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -24,6 +25,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'registration_source',
         'is_platform_admin',
         'trial_used_at',
     ];
@@ -50,6 +52,7 @@ class User extends Authenticatable
             'trial_used_at' => 'datetime',
             'password' => 'hashed',
             'role' => UserRole::class,
+            'registration_source' => RegistrationSource::class,
             'is_platform_admin' => 'boolean',
         ];
     }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\Services\AuthServiceInterface;
+use App\Enums\RegistrationSource;
 use App\Enums\UserRole;
 use App\Exceptions\MailDeliveryException;
 use App\Mail\PasswordResetMail;
@@ -56,7 +57,9 @@ class AuthService implements AuthServiceInterface
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
-            'role' => $data['role'] ?? 'user',
+            'role' => $data['role'] ?? UserRole::User,
+            'registration_source' => RegistrationSource::tryFrom($data['registration_source'] ?? 'web')
+                ?? RegistrationSource::Web,
         ]);
 
         $token = $user->createToken('api-token')->plainTextToken;

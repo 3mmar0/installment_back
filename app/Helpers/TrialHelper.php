@@ -5,7 +5,6 @@ namespace App\Helpers;
 use App\Models\AppSetting;
 use App\Models\Subscription;
 use App\Models\User;
-use Carbon\Carbon;
 
 class TrialHelper
 {
@@ -30,39 +29,19 @@ class TrialHelper
     }
 
     /**
-     * Apply subscription on registration: free plan is perpetual; paid plans get a trial when enabled.
+     * Apply the free plan on registration.
      */
     public static function applyRegistrationPlan(User $user, ?Subscription $subscription): void
     {
-        if (!$subscription) {
-            $subscription = Subscription::active()->where('slug', 'free')->first();
-        }
+        unset($subscription);
+
+        $subscription = Subscription::active()->where('slug', 'free')->first();
 
         if (!$subscription) {
-            LimitsHelper::createOrUpdateUserLimits($user->id);
-
-            return;
-        }
-
-        $price = (float) $subscription->price;
-        $trial = self::settings();
-
-        if ($price <= 0) {
-            LimitsHelper::applySubscriptionToUser($user->id, $subscription);
-
-            return;
-        }
-
-        if ($trial['enabled'] && $user->trial_used_at === null) {
-            $endDate = Carbon::now()->addDays($trial['days']);
-            $features = is_array($subscription->features) ? $subscription->features : [];
-            $features['is_trial'] = true;
-
-            LimitsHelper::applySubscriptionToUser($user->id, $subscription, [
-                'end_date' => $endDate,
-                'features' => $features,
+            LimitsHelper::createOrUpdateUserLimits($user->id, [
+                'subscription_name' => 'الخطه المجانية',
+                'subscription_slug' => 'free',
             ]);
-            $user->forceFill(['trial_used_at' => now()])->save();
 
             return;
         }

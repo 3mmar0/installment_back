@@ -3,9 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\UserResource;
 use App\Http\Traits\ApiResponse;
+use App\Jobs\BroadcastNotificationJob;
+use App\Enums\UserRole;
+use App\Models\User;
 use App\Services\QueueManagementService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class SystemSettingsController extends Controller
 {
@@ -62,6 +67,35 @@ class SystemSettingsController extends Controller
         return $this->successResponse(
             $result,
             'تم مسح ذاكرة التخزين المؤقت بنجاح'
+        );
+    }
+
+    public function users(): JsonResponse
+    {
+        $users = User::query()
+            ->with('userLimit')
+            ->where('role', UserRole::User)
+            ->latest()
+            ->get();
+
+        return $this->successResponse(
+            UserResource::collection($users),
+            'تم جلب المستخدمين بنجاح'
+        );
+    }
+
+    public function broadcastNotification(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'message' => ['required', 'string', 'max:5000'],
+        ]);
+
+        BroadcastNotificationJob::dispatch($data['title'], $data['message']);
+
+        return $this->successResponse(
+            ['queued' => true],
+            'تمت جدولة إرسال الإشعار لجميع المستخدمين'
         );
     }
 }

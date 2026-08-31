@@ -26,6 +26,7 @@ class SubscriptionController extends Controller
     public function publicIndex(): JsonResponse
     {
         $subscriptions = Subscription::active()
+            ->where('slug', 'free')
             ->orderBy('price')
             ->get();
 
