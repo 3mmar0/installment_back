@@ -18,7 +18,7 @@ class InstallmentDateHelper
             return 0;
         }
 
-        return (int) $today->diffInDays($due);
+        return (int) abs($today->diffInDays($due, absolute: true));
     }
 
     /**
@@ -33,7 +33,7 @@ class InstallmentDateHelper
             return 0;
         }
 
-        return (int) $due->diffInDays($today);
+        return (int) abs($due->diffInDays($today, absolute: true));
     }
 
     /**
@@ -48,6 +48,6 @@ class InstallmentDateHelper
             return 0;
         }
 
-        return (int) $then->diffInDays($today);
+        return (int) abs($then->diffInDays($today, absolute: true));
     }
 }

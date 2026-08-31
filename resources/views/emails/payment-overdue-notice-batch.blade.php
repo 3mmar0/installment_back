@@ -49,7 +49,7 @@
                 <tbody>
                     @foreach ($items as $index => $item)
                         @php
-                            $daysOverdue = now()->diffInDays($item->due_date);
+                            $daysOverdue = \App\Helpers\InstallmentDateHelper::daysOverdue($item->due_date);
                             $daysLabel = $daysOverdue === 1 ? 'يوم' : 'أيام';
                         @endphp
                         <tr>

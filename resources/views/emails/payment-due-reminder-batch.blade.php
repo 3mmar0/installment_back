@@ -37,7 +37,7 @@
                 <tbody>
                     @foreach ($items as $index => $item)
                         @php
-                            $daysRemaining = max(0, (int) now()->diffInDays($item->due_date, false));
+                            $daysRemaining = \App\Helpers\InstallmentDateHelper::daysUntilDue($item->due_date);
                             $daysLabel = $daysRemaining === 1 ? 'يوم' : 'أيام';
                         @endphp
                         <tr>
