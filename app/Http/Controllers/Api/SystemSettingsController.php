@@ -89,13 +89,22 @@ class SystemSettingsController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:5000'],
+            'image_url' => ['nullable', 'url', 'max:2048'],
         ]);
 
-        BroadcastNotificationJob::dispatch($data['title'], $data['message']);
+        $payload = [
+            'display_as' => 'modal',
+        ];
+
+        if (!empty($data['image_url'])) {
+            $payload['image_url'] = $data['image_url'];
+        }
+
+        BroadcastNotificationJob::dispatch($data['title'], $data['message'], $payload);
 
         return $this->successResponse(
             ['queued' => true],
-            'تمت جدولة إرسال الإشعار لجميع المستخدمين'
+            'تمت جدولة الإعلان لجميع المستخدمين'
         );
     }
 
