@@ -61,6 +61,13 @@ sudo systemctl reload php8.4-fpm
 sudo nginx -t
 sudo systemctl reload nginx
 
+if [ -f "${APP}/deploy/supervisor/installment-queue.conf" ]; then
+  sudo cp "${APP}/deploy/supervisor/installment-queue.conf" /etc/supervisor/conf.d/installment-queue.conf
+  sudo supervisorctl reread
+  sudo supervisorctl update
+  sudo supervisorctl restart installment-queue:* || sudo supervisorctl start installment-queue:*
+fi
+
 rm -rf "$RELEASE_WORK" "$(dirname "$RELEASE_TAR")"
 
 echo "Deploy completed successfully"

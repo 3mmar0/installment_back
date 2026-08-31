@@ -24,6 +24,88 @@ class QueueManagementService
         return storage_path('logs/queue-worker.log');
     }
 
+    protected function supervisorProgram(): string
+    {
+        return (string) config('queue.supervisor.program', 'installment-queue');
+    }
+
+    protected function usesSupervisor(): bool
+    {
+        return (bool) config('queue.supervisor.enabled', false)
+            && PHP_OS_FAMILY !== 'Windows'
+            && function_exists('shell_exec');
+    }
+
+    protected function supervisorCtl(string $action): ?string
+    {
+        $program = $this->supervisorProgram();
+
+        $command = match ($action) {
+            'status' => "sudo supervisorctl status {$program}:* 2>&1",
+            'start' => "sudo supervisorctl start {$program}:* 2>&1",
+            'stop' => "sudo supervisorctl stop {$program}:* 2>&1",
+            'restart' => "sudo supervisorctl restart {$program}:* 2>&1",
+            default => null,
+        };
+
+        if ($command === null) {
+            return null;
+        }
+
+        return shell_exec($command);
+    }
+
+    /**
+     * @return array{running: bool, pid: int|null, uptime: string|null, state: string|null}
+     */
+    protected function parseSupervisorStatus(?string $output): array
+    {
+        $program = $this->supervisorProgram();
+
+        if (!is_string($output) || trim($output) === '') {
+            return [
+                'running' => false,
+                'pid' => null,
+                'uptime' => null,
+                'state' => null,
+            ];
+        }
+
+        foreach (explode("\n", trim($output)) as $line) {
+            if (!str_contains($line, $program)) {
+                continue;
+            }
+
+            $running = str_contains($line, 'RUNNING');
+            $pid = null;
+            $uptime = null;
+
+            if (preg_match('/pid\s+(\d+)/', $line, $pidMatch)) {
+                $pid = (int) $pidMatch[1];
+            }
+
+            if (preg_match('/uptime\s+([^\s,]+)/', $line, $uptimeMatch)) {
+                $uptime = $uptimeMatch[1];
+            }
+
+            $state = trim((string) preg_replace('/^.*?\s+(RUNNING|STOPPED|STARTING|BACKOFF|FATAL|EXITED|UNKNOWN).*$/', '$1', $line));
+
+            return [
+                'running' => $running,
+                'pid' => $pid,
+                'uptime' => $uptime,
+                'state' => $state !== $line ? $state : null,
+            ];
+        }
+
+        return [
+            'running' => false,
+            'pid' => null,
+            'uptime' => null,
+            'state' => 'NOT_FOUND',
+        ];
+    }
+
     protected function isProcessRunning(int $pid): bool
     {
         if ($pid <= 0) {
@@ -114,11 +196,33 @@ class QueueManagementService
         return null;
     }
 
+    protected function baseStatus(): array
+    {
+        return [
+            'pending_jobs' => (int) DB::table('jobs')->count(),
+            'failed_jobs' => (int) DB::table('failed_jobs')->count(),
+            'manager' => $this->usesSupervisor() ? 'supervisor' : 'manual',
+            'program' => $this->usesSupervisor() ? $this->supervisorProgram() : null,
+        ];
+    }
+
     /**
-     * @return array{running: bool, pid: int|null, pending_jobs: int, failed_jobs: int, started_at: string|null}
+     * @return array{running: bool, pid: int|null, pending_jobs: int, failed_jobs: int, started_at: string|null, manager: string, program: string|null, uptime: string|null, state: string|null}
      */
     public function getStatus(): array
     {
+        if ($this->usesSupervisor()) {
+            $supervisor = $this->parseSupervisorStatus($this->supervisorCtl('status'));
+
+            return array_merge($this->baseStatus(), [
+                'running' => $supervisor['running'],
+                'pid' => $supervisor['pid'],
+                'started_at' => null,
+                'uptime' => $supervisor['uptime'],
+                'state' => $supervisor['state'],
+            ]);
+        }
+
         $pid = $this->resolveWorkerPid();
         $running = $pid !== null;
 
@@ -127,17 +231,17 @@ class QueueManagementService
             $startedAt = trim((string) File::get($this->startedAtFile())) ?: null;
         }
 
-        return [
+        return array_merge($this->baseStatus(), [
             'running' => $running,
             'pid' => $pid,
-            'pending_jobs' => (int) DB::table('jobs')->count(),
-            'failed_jobs' => (int) DB::table('failed_jobs')->count(),
             'started_at' => $startedAt,
-        ];
+            'uptime' => null,
+            'state' => $running ? 'RUNNING' : 'STOPPED',
+        ]);
     }
 
     /**
-     * @return array{running: bool, pid: int|null, pending_jobs: int, failed_jobs: int, started_at: string|null, already_running?: bool}
+     * @return array{running: bool, pid: int|null, pending_jobs: int, failed_jobs: int, started_at: string|null, manager: string, program: string|null, uptime: string|null, state: string|null, already_running?: bool}
      */
     public function startWorker(): array
     {
@@ -145,6 +249,13 @@ class QueueManagementService
 
         if ($status['running']) {
             return array_merge($status, ['already_running' => true]);
+        }
+
+        if ($this->usesSupervisor()) {
+            $output = $this->supervisorCtl('start');
+            Log::info('Supervisor queue start', ['output' => $output]);
+
+            return $this->getStatus();
         }
 
         if (!function_exists('shell_exec')) {
@@ -180,10 +291,18 @@ class QueueManagementService
     }
 
     /**
-     * @return array{running: bool, pid: int|null, pending_jobs: int, failed_jobs: int, started_at: string|null, stopped: bool}
+     * @return array{running: bool, pid: int|null, pending_jobs: int, failed_jobs: int, started_at: string|null, manager: string, program: string|null, uptime: string|null, state: string|null, stopped: bool}
      */
     public function stopWorker(): array
     {
+        if ($this->usesSupervisor()) {
+            $wasRunning = $this->getStatus()['running'];
+            $output = $this->supervisorCtl('stop');
+            Log::info('Supervisor queue stop', ['output' => $output]);
+
+            return array_merge($this->getStatus(), ['stopped' => $wasRunning]);
+        }
+
         $pid = $this->resolveWorkerPid();
 
         if ($pid === null) {
@@ -192,17 +311,15 @@ class QueueManagementService
 
         if (PHP_OS_FAMILY === 'Windows') {
             shell_exec('taskkill /PID ' . $pid . ' /F 2>NUL');
-        } else {
-            if (function_exists('posix_kill')) {
-                @posix_kill($pid, SIGTERM);
-                usleep(300000);
+        } elseif (function_exists('posix_kill')) {
+            @posix_kill($pid, SIGTERM);
+            usleep(300000);
 
-                if ($this->isProcessRunning($pid)) {
-                    @posix_kill($pid, SIGKILL);
-                }
-            } else {
-                shell_exec('kill ' . escapeshellarg((string) $pid) . ' 2>/dev/null');
+            if ($this->isProcessRunning($pid)) {
+                @posix_kill($pid, SIGKILL);
             }
+        } else {
+            shell_exec('kill ' . escapeshellarg((string) $pid) . ' 2>/dev/null');
         }
 
         $this->clearPidFile();
@@ -215,6 +332,41 @@ class QueueManagementService
      */
     public function runPendingJobs(): array
     {
+        if ($this->usesSupervisor() && $this->getStatus()['running']) {
+            if (!function_exists('shell_exec')) {
+                abort(503, 'تعذر تشغيل قائمة الانتظار: shell_exec غير متاح على الخادم');
+            }
+
+            $php = PHP_BINARY;
+            $artisan = base_path('artisan');
+            $log = storage_path('logs/queue-run-once.log');
+            File::ensureDirectoryExists(dirname($log));
+
+            $command = sprintf(
+                'cd %s && nohup %s %s queue:work database --stop-when-empty --tries=3 --timeout=120 >> %s 2>&1 &',
+                escapeshellarg(base_path()),
+                escapeshellarg($php),
+                escapeshellarg($artisan),
+                escapeshellarg($log)
+            );
+            shell_exec($command);
+
+            return [
+                'started' => true,
+                'pending_jobs' => (int) DB::table('jobs')->count(),
+            ];
+        }
+
+        if ($this->usesSupervisor()) {
+            $output = $this->supervisorCtl('start');
+            Log::info('Supervisor queue start from runPendingJobs', ['output' => $output]);
+
+            return [
+                'started' => true,
+                'pending_jobs' => (int) DB::table('jobs')->count(),
+            ];
+        }
+
         if (!function_exists('shell_exec')) {
             abort(503, 'تعذر تشغيل قائمة الانتظار: shell_exec غير متاح على الخادم');
         }
