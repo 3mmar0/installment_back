@@ -22,9 +22,9 @@ class LimitsHelper
      * @var array<string, mixed>
      */
     protected const DEFAULT_LIMITS = [
-        'customers' => ['from' => 0, 'to' => 10],
-        'installments' => ['from' => 0, 'to' => 20],
-        'notifications' => ['from' => 0, 'to' => 200],
+        'customers' => ['from' => 0, 'to' => 1000],
+        'installments' => ['from' => 0, 'to' => 1000],
+        'notifications' => ['from' => 0, 'to' => 1000],
         'reports' => true,
         'features' => ['basic_reports' => true],
     ];
