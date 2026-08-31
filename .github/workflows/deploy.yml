@@ -11,6 +11,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create deployment package
+        run: |
+          tar -czf release.tar.gz \
+            --exclude='./.git' \
+            --exclude='./vendor' \
+            --exclude='./node_modules' \
+            --exclude='./.env' \
+            --exclude='./.env.*' \
+            --exclude='./storage/logs' \
+            --exclude='./storage/framework/cache/data' \
+            --exclude='./storage/framework/sessions' \
+            --exclude='./storage/framework/views' \
+            --exclude='./release.tar.gz' \
+            .
+
+      - name: Upload release package
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.INSTALLMENT_SSH_HOST }}
+          username: ${{ secrets.INSTALLMENT_SSH_USER }}
+          key: ${{ secrets.INSTALLMENT_SSH_KEY }}
+          source: "release.tar.gz"
+          target: "/tmp/installment-back-release"
+          strip_components: 0
+
       - name: Upload deploy script
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -30,4 +55,4 @@ jobs:
           script_stop: true
           script: |
             chmod +x /home/deploy/bin/deploy-installment-back.sh
-            bash /home/deploy/bin/deploy-installment-back.sh
+            bash /home/deploy/bin/deploy-installment-back.sh /tmp/installment-back-release/release.tar.gz
