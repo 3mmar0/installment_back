@@ -325,6 +325,60 @@
         color: #059669;
     }
 
+    .info-item .info-value--money {
+        color: #1B4F9C;
+        direction: ltr;
+        unicode-bidi: isolate;
+        text-align: left;
+    }
+
+    .info-item .info-value--date {
+        direction: ltr;
+        unicode-bidi: isolate;
+        text-align: left;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .plan-summary-hero {
+        background: linear-gradient(135deg, #1B4F9C 0%, #163f7d 100%);
+        color: #ffffff;
+        padding: 28px 24px;
+        border-radius: 12px;
+        margin: 0 0 16px;
+        text-align: center;
+    }
+
+    .plan-summary-hero-label {
+        font-size: 14px;
+        opacity: 0.92;
+        margin-bottom: 8px;
+    }
+
+    .plan-summary-hero-amount {
+        font-size: 36px;
+        font-weight: 800;
+        margin: 8px 0;
+        direction: ltr;
+        unicode-bidi: isolate;
+    }
+
+    .plan-summary-hero-meta {
+        font-size: 15px;
+        opacity: 0.95;
+        margin-top: 10px;
+        line-height: 1.7;
+    }
+
+    .plan-summary-hero-id {
+        display: inline-block;
+        margin-top: 14px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.16);
+        font-size: 13px;
+        font-weight: 600;
+    }
+
     .footer {
         background-color: #0f172a;
         color: #ffffff;
@@ -373,7 +427,8 @@
 
         .highlight-amount,
         .payment-card-amount,
-        .receipt-amount {
+        .receipt-amount,
+        .plan-summary-hero-amount {
             font-size: 28px;
         }
 

@@ -24,23 +24,49 @@
                 تم إنشاء خطة التقسيط الخاصة بك بنجاح. فيما يلي ملخص الخطة وجدول الدفعات.
             </p>
 
-            <div class="info-box">
-                <div class="info-row">
-                    <span class="info-label">المبلغ الإجمالي</span>
-                    <span class="info-value info-value--accent">@money($installment->total_amount)</span>
+            @php
+                $firstItem = $installment->items->first();
+                $monthlyAmount =
+                    $firstItem?->amount ??
+                    ($installment->months > 0 ? round($installment->total_amount / $installment->months, 2) : null);
+                $installmentCount = $installment->items->count() ?: $installment->months;
+            @endphp
+
+            <h3 class="section-title" style="margin-top: 0;">ملخص الخطة</h3>
+
+            <div class="plan-summary-hero">
+                <div class="plan-summary-hero-label">المبلغ الإجمالي</div>
+                <div class="plan-summary-hero-amount">@money($installment->total_amount)</div>
+                @if ($monthlyAmount)
+                    <div class="plan-summary-hero-meta">
+                        {{ $installment->months }} {{ $installment->months == 1 ? 'قسط' : 'أقساط' }}
+                        · @money($monthlyAmount) شهرياً
+                    </div>
+                @endif
+                @if ($installment->name)
+                    <div class="plan-summary-hero-meta">{{ $installment->name }}</div>
+                @endif
+                <div class="plan-summary-hero-id">رقم الخطة #{{ $installment->id }}</div>
+            </div>
+
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">المدة</div>
+                    <div class="info-value">{{ $installment->months }}
+                        {{ $installment->months == 1 ? 'شهر' : 'أشهر' }}</div>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">المدة</span>
-                    <span class="info-value">{{ $installment->months }}
-                        {{ $installment->months == 1 ? 'شهر' : 'أشهر' }}</span>
+                <div class="info-item">
+                    <div class="info-label">عدد الأقساط</div>
+                    <div class="info-value">{{ $installmentCount }}
+                        {{ $installmentCount == 1 ? 'دفعة' : 'دفعات' }}</div>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">تاريخ البداية</span>
-                    <span class="info-value">{{ $installment->start_date->format('d/m/Y') }}</span>
+                <div class="info-item">
+                    <div class="info-label">تاريخ البداية</div>
+                    <div class="info-value info-value--date">{{ $installment->start_date->format('d/m/Y') }}</div>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">تاريخ الانتهاء</span>
-                    <span class="info-value">{{ $installment->end_date->format('d/m/Y') }}</span>
+                <div class="info-item">
+                    <div class="info-label">تاريخ الانتهاء</div>
+                    <div class="info-value info-value--date">{{ $installment->end_date->format('d/m/Y') }}</div>
                 </div>
             </div>
 
