@@ -239,7 +239,7 @@ class InstallmentController extends Controller
 
         return $this->successResponse(
             $result,
-            'تم إرسال التذكير بنجاح'
+            'تمت جدولة التذكيرات للإرسال'
         );
     }
 }

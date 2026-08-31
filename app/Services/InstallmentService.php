@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Contracts\Services\InstallmentServiceInterface;
 use App\Helpers\InstallmentDateHelper;
 use App\Helpers\LimitsHelper;
+use App\Jobs\SendInstallmentRemindersJob;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
 use App\Models\User;
@@ -638,26 +639,22 @@ class InstallmentService implements InstallmentServiceInterface
                 'notifications_sent' => 0,
                 'emails_sent' => 0,
                 'items_reminded' => 0,
+                'queued' => false,
             ];
         }
 
-        $notificationService = app(NotificationService::class);
         $emailService = app(EmailNotificationService::class);
-        $notificationsSent = 0;
+        $emailPreview = $emailService->buildReminderPreviewForItems($items);
 
-        foreach ($items as $item) {
-            $notificationService->notifyItemDueReminder($user, $item);
-            $notificationsSent++;
-        }
-
-        $emailResult = $emailService->sendItemsReminderEmails($items);
+        SendInstallmentRemindersJob::dispatch($installmentId, $user->id, $itemId);
 
         return [
-            'notifications_sent' => $notificationsSent,
-            'emails_sent' => $emailResult['total_emails'],
+            'notifications_sent' => $items->count(),
+            'emails_sent' => $emailPreview['total_emails'],
             'items_reminded' => $items->count(),
-            'due_reminders_sent' => $emailResult['due_reminders_sent'],
-            'overdue_notices_sent' => $emailResult['overdue_notices_sent'],
+            'due_reminders_sent' => $emailPreview['due_reminders_sent'],
+            'overdue_notices_sent' => $emailPreview['overdue_notices_sent'],
+            'queued' => true,
         ];
     }
 

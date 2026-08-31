@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SendCustomerReminderEmailsJob;
 use App\Mail\InstallmentCreated;
 use App\Mail\PaymentDueReminderBatch;
 use App\Mail\PaymentOverdueNoticeBatch;
@@ -355,5 +356,140 @@ class EmailNotificationService
             $this->getDueSoonItems($user),
             $this->getOverdueItems($user)
         );
+    }
+
+    /**
+     * Preview consolidated emails for a specific set of installment items.
+     *
+     * @param  Collection<int, InstallmentItem>  $items
+     * @return array{due_reminders_sent: int, overdue_notices_sent: int, total_emails: int, items_included: int}
+     */
+    public function buildReminderPreviewForItems(Collection $items): array
+    {
+        $items->loadMissing(['installment.customer']);
+
+        $overdue = $items->filter(
+            fn (InstallmentItem $item) => $item->due_date < now()->startOfDay()
+        )->values();
+
+        $dueSoon = $items->filter(
+            fn (InstallmentItem $item) => $item->due_date >= now()->startOfDay()
+        )->values();
+
+        return $this->buildReminderPreview($dueSoon, $overdue);
+    }
+
+    /**
+     * @param  Collection<int, InstallmentItem>  $dueSoonItems
+     * @param  Collection<int, InstallmentItem>  $overdueItems
+     * @return array{due_reminders_sent: int, overdue_notices_sent: int, total_emails: int, items_included: int}
+     */
+    protected function buildReminderPreview(Collection $dueSoonItems, Collection $overdueItems): array
+    {
+        $dueReminders = $dueSoonItems
+            ->groupBy(fn (InstallmentItem $item) => $item->installment->customer_id)
+            ->count();
+
+        $overdueNotices = $overdueItems
+            ->groupBy(fn (InstallmentItem $item) => $item->installment->customer_id)
+            ->count();
+
+        return [
+            'due_reminders_sent' => $dueReminders,
+            'overdue_notices_sent' => $overdueNotices,
+            'total_emails' => $dueReminders + $overdueNotices,
+            'items_included' => $dueSoonItems->count() + $overdueItems->count(),
+        ];
+    }
+
+    /**
+     * Queue consolidated reminder emails per customer (used by jobs and schedulers).
+     */
+    public function dispatchPaymentReminders(User $user, ?int $customerId = null): void
+    {
+        if (!$this->isEnabled()) {
+            return;
+        }
+
+        $dueSoon = $this->getDueSoonItems($user, $customerId);
+        $overdue = $this->getOverdueItems($user, $customerId);
+
+        $customerIds = $dueSoon
+            ->pluck('installment.customer_id')
+            ->merge($overdue->pluck('installment.customer_id'))
+            ->unique()
+            ->filter();
+
+        foreach ($customerIds as $id) {
+            SendCustomerReminderEmailsJob::dispatch($user->id, (int) $id);
+        }
+    }
+
+    /**
+     * Queue all payment reminder emails for a user and return a delivery preview.
+     *
+     * @return array{due_reminders_sent: int, overdue_notices_sent: int, total_emails: int, items_included: int, queued: bool, disabled?: bool}
+     */
+    public function queueAllPaymentReminders(User $user): array
+    {
+        if (!$this->isEnabled()) {
+            return [
+                'due_reminders_sent' => 0,
+                'overdue_notices_sent' => 0,
+                'total_emails' => 0,
+                'items_included' => 0,
+                'queued' => false,
+                'disabled' => true,
+            ];
+        }
+
+        $preview = $this->buildReminderPreview(
+            $this->getDueSoonItems($user),
+            $this->getOverdueItems($user)
+        );
+
+        if ($preview['total_emails'] === 0) {
+            return array_merge($preview, ['queued' => false]);
+        }
+
+        $this->dispatchPaymentReminders($user);
+
+        return array_merge($preview, ['queued' => true]);
+    }
+
+    /**
+     * Queue consolidated reminder emails for one customer and return a delivery preview.
+     *
+     * @return array{due_reminders_sent: int, overdue_notices_sent: int, total_emails: int, items_included: int, queued: bool, disabled?: bool}
+     */
+    public function queueCustomerPaymentReminders(Customer $customer, User $user): array
+    {
+        if (!$this->isEnabled()) {
+            return [
+                'due_reminders_sent' => 0,
+                'overdue_notices_sent' => 0,
+                'total_emails' => 0,
+                'items_included' => 0,
+                'queued' => false,
+                'disabled' => true,
+            ];
+        }
+
+        if (!$user->isOwner() && $customer->user_id !== $user->id) {
+            abort(403, 'غير مصرح لك بإرسال تذكير لهذا العميل');
+        }
+
+        $preview = $this->buildReminderPreview(
+            $this->getDueSoonItems($user, $customer->id),
+            $this->getOverdueItems($user, $customer->id)
+        );
+
+        if ($preview['total_emails'] === 0) {
+            return array_merge($preview, ['queued' => false]);
+        }
+
+        SendCustomerReminderEmailsJob::dispatch($user->id, $customer->id);
+
+        return array_merge($preview, ['queued' => true]);
     }
 }

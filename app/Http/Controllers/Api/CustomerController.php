@@ -159,7 +159,7 @@ class CustomerController extends Controller
             return $this->forbiddenResponse('غير مصرح لك بإرسال تذكير لهذا العميل');
         }
 
-        $result = $this->emailNotificationService->sendCustomerPaymentReminders(
+        $result = $this->emailNotificationService->queueCustomerPaymentReminders(
             $customer,
             $request->user()
         );
@@ -173,7 +173,7 @@ class CustomerController extends Controller
 
         return $this->successResponse(
             $result,
-            "تم إرسال {$result['total_emails']} بريد إلكتروني للعميل بنجاح"
+            "تمت جدولة {$result['total_emails']} بريد إلكتروني للعميل"
         );
     }
 

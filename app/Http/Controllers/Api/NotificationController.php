@@ -6,6 +6,7 @@ use App\Helpers\LimitsHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\NotificationResource;
 use App\Http\Traits\ApiResponse;
+use App\Jobs\GenerateUserPaymentNotificationsJob;
 use App\Services\EmailNotificationService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
@@ -73,16 +74,11 @@ class NotificationController extends Controller
      */
     public function generate(Request $request): JsonResponse
     {
-        $upcomingCount = $this->notificationService->notifyUpcomingPayments($request->user());
-        $overdueCount = $this->notificationService->notifyOverduePayments($request->user());
+        GenerateUserPaymentNotificationsJob::dispatch($request->user()->id);
 
         return $this->successResponse(
-            [
-                'upcoming_notifications' => $upcomingCount,
-                'overdue_notifications' => $overdueCount,
-                'total' => $upcomingCount + $overdueCount,
-            ],
-            'تم إنشاء الإشعارات بنجاح'
+            ['queued' => true],
+            'تمت جدولة إنشاء الإشعارات بنجاح'
         );
     }
 
@@ -109,11 +105,18 @@ class NotificationController extends Controller
      */
     public function sendReminderEmails(Request $request): JsonResponse
     {
-        $result = $this->emailNotificationService->sendAllPaymentReminders($request->user());
+        $result = $this->emailNotificationService->queueAllPaymentReminders($request->user());
+
+        if (($result['items_included'] ?? 0) === 0) {
+            return $this->successResponse(
+                $result,
+                'لا توجد دفعات مستحقة أو متأخرة لإرسال تذكير لها'
+            );
+        }
 
         return $this->successResponse(
             $result,
-            "تم إرسال {$result['total_emails']} بريد إلكتروني للعملاء بنجاح"
+            "تمت جدولة {$result['total_emails']} بريد إلكتروني للإرسال"
         );
     }
 }
