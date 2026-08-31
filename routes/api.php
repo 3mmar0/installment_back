@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\LegalController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\SystemSettingsController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserLimitController;
 use Illuminate\Support\Facades\Route;
@@ -69,6 +70,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('complaint-create', 'store');
         Route::get('complaint-show/{id}', 'show');
         Route::post('complaint-reply/{id}', 'reply')->middleware('platform_admin');
+    });
+
+    Route::middleware('platform_admin')->controller(SystemSettingsController::class)->group(function () {
+        Route::get('admin/system/queue-status', 'queueStatus');
+        Route::post('admin/system/queue-start', 'startQueue');
+        Route::post('admin/system/queue-stop', 'stopQueue');
+        Route::post('admin/system/queue-run', 'runQueue');
+        Route::post('admin/system/cache-clear', 'clearCache');
     });
 
     // Routes below require an active subscription
