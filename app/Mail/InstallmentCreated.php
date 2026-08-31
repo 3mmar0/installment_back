@@ -27,7 +27,7 @@ class InstallmentCreated extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'New Installment Plan Created - Payment Schedule',
+            subject: 'تم إنشاء خطة التقسيط - جدول الدفع',
         );
     }
 

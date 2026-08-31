@@ -28,7 +28,7 @@ class PaymentReceivedConfirmation extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "Payment Received - Thank You!",
+            subject: 'تم استلام الدفعة - شكراً لك',
         );
     }
 

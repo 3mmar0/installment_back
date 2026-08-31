@@ -26,8 +26,10 @@ class PaymentDueReminder extends Mailable
      */
     public function envelope(): Envelope
     {
+        $daysLabel = $this->daysRemaining === 1 ? 'يوم' : 'أيام';
+
         return new Envelope(
-            subject: "Payment Reminder: Due in {$this->daysRemaining} days",
+            subject: "تذكير: موعد الدفع خلال {$this->daysRemaining} {$daysLabel}",
         );
     }
 

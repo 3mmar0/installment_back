@@ -26,8 +26,10 @@ class PaymentOverdueNotice extends Mailable
      */
     public function envelope(): Envelope
     {
+        $daysLabel = $this->daysOverdue === 1 ? 'يوم' : 'أيام';
+
         return new Envelope(
-            subject: "Urgent: Payment Overdue - {$this->daysOverdue} Days",
+            subject: "عاجل: تأخر الدفع {$this->daysOverdue} {$daysLabel}",
         );
     }
 
