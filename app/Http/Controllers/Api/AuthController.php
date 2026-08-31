@@ -144,6 +144,7 @@ class AuthController extends Controller
             'email' => ['required', 'email'],
             'token' => ['required', 'string'],
             'password' => ['required', 'confirmed', Password::defaults()],
+            'password_confirmation' => ['required', 'string'],
         ]);
 
         try {

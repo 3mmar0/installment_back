@@ -1,14 +1,17 @@
 <?php
 
+use App\Enums\ErrorCodes;
+use App\Exceptions\MailDeliveryException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
-use App\Enums\ErrorCodes;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -66,6 +69,28 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
+        $exceptions->render(function (MailDeliveryException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'error_code' => ErrorCodes::MailDeliveryFailed->value,
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 503);
+            }
+        });
+
+        $exceptions->render(function (TransportExceptionInterface $e, Request $request) {
+            if ($request->is('api/*')) {
+                Log::error('Mail transport error', ['error' => $e->getMessage()]);
+
+                return response()->json([
+                    'error_code' => ErrorCodes::MailDeliveryFailed->value,
+                    'success' => false,
+                    'message' => 'تعذر إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً',
+                ], 503);
+            }
+        });
+
         $exceptions->render(function (\Throwable $e, Request $request) {
             if ($request->is('api/*') && !$e instanceof ValidationException) {
                 // Get status code from exception if it's an HTTP exception
@@ -75,11 +100,16 @@ return Application::configure(basePath: dirname(__DIR__))
                     $statusCode = 500;
                 }
 
+                $debug = (bool) config('app.debug');
+                $message = $debug
+                    ? ($e->getMessage() ?: 'An error occurred')
+                    : 'حدث خطأ في الخادم، يرجى المحاولة لاحقاً';
+
                 return response()->json([
                     'error_code' => ErrorCodes::InternalServerError->value,
                     'success' => false,
-                    'message' => $e->getMessage() ?: 'An error occurred',
-                    'error' => config('app.debug') ? [
+                    'message' => $message,
+                    'error' => $debug ? [
                         'exception' => get_class($e),
                         'file' => $e->getFile(),
                         'line' => $e->getLine(),

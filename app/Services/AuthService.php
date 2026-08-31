@@ -4,13 +4,16 @@ namespace App\Services;
 
 use App\Contracts\Services\AuthServiceInterface;
 use App\Enums\UserRole;
+use App\Exceptions\MailDeliveryException;
 use App\Mail\PasswordResetMail;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class AuthService implements AuthServiceInterface
 {
@@ -95,7 +98,16 @@ class AuthService implements AuthServiceInterface
             'email' => $email,
         ]);
 
-        Mail::to($user->email)->send(new PasswordResetMail($user, $resetUrl, $token));
+        try {
+            Mail::to($user->email)->send(new PasswordResetMail($user, $resetUrl, $token));
+        } catch (Throwable $e) {
+            Log::error('Password reset email failed', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw new MailDeliveryException(previous: $e);
+        }
     }
 
     /**
@@ -112,7 +124,7 @@ class AuthService implements AuthServiceInterface
             ],
             function (User $user, string $password): void {
                 $user->forceFill([
-                    'password' => Hash::make($password),
+                    'password' => $password,
                 ])->save();
 
                 $user->tokens()->delete();

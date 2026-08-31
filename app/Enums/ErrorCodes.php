@@ -82,6 +82,7 @@ enum ErrorCodes: string
     case ExternalServiceUnavailable = 'EXT_001';
     case ExternalServiceTimeout = 'EXT_002';
     case ExternalServiceError = 'EXT_003';
+    case MailDeliveryFailed = 'MAIL_001';
 
         // Rate Limiting Errors
     case RateLimitExceeded = 'RATE_001';
