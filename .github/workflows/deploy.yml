@@ -13,18 +13,19 @@ jobs:
 
       - name: Create deployment package
         run: |
-          tar -czf release.tar.gz \
-            --exclude='./.git' \
-            --exclude='./vendor' \
-            --exclude='./node_modules' \
-            --exclude='./.env' \
-            --exclude='./.env.*' \
-            --exclude='./storage/logs' \
-            --exclude='./storage/framework/cache/data' \
-            --exclude='./storage/framework/sessions' \
-            --exclude='./storage/framework/views' \
-            --exclude='./release.tar.gz' \
-            .
+          ARCHIVE="${RUNNER_TEMP}/release.tar.gz"
+          tar -czf "$ARCHIVE" \
+            --exclude='.git' \
+            --exclude='vendor' \
+            --exclude='node_modules' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='storage/logs' \
+            --exclude='storage/framework/cache/data' \
+            --exclude='storage/framework/sessions' \
+            --exclude='storage/framework/views' \
+            -C "$GITHUB_WORKSPACE" .
+          cp "$ARCHIVE" "$GITHUB_WORKSPACE/release.tar.gz"
 
       - name: Upload release package
         uses: appleboy/scp-action@v0.1.7
