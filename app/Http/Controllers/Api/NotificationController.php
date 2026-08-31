@@ -113,7 +113,7 @@ class NotificationController extends Controller
 
         return $this->successResponse(
             $result,
-            "تم إرسال {$result['total_emails']} رسالة تذكير بنجاح"
+            "تم إرسال {$result['total_emails']} بريد إلكتروني للعملاء بنجاح"
         );
     }
 }

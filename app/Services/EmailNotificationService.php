@@ -3,12 +3,15 @@
 namespace App\Services;
 
 use App\Mail\InstallmentCreated;
-use App\Mail\PaymentDueReminder;
-use App\Mail\PaymentOverdueNotice;
+use App\Mail\PaymentDueReminderBatch;
+use App\Mail\PaymentOverdueNoticeBatch;
 use App\Mail\PaymentReceivedConfirmation;
+use App\Models\Customer;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -29,7 +32,137 @@ class EmailNotificationService
     }
 
     /**
-     * Send payment due reminders (exactly 2 days remaining).
+     * @return Builder<InstallmentItem>
+     */
+    protected function unpaidItemsQuery(User $user, ?int $customerId = null): Builder
+    {
+        return InstallmentItem::query()
+            ->whereHas('installment', function ($query) use ($user, $customerId) {
+                $query->where('user_id', $user->id)
+                    ->where('status', 'active');
+
+                if ($customerId !== null) {
+                    $query->where('customer_id', $customerId);
+                }
+            })
+            ->whereNull('paid_at')
+            ->where('status', '!=', 'paid')
+            ->with(['installment.customer']);
+    }
+
+    /**
+     * @return Collection<int, InstallmentItem>
+     */
+    protected function getDueSoonItems(User $user, ?int $customerId = null): Collection
+    {
+        $twoDaysLater = now()->addDays(2)->endOfDay();
+        $oneDayLater = now()->addDays(1)->startOfDay();
+
+        return $this->unpaidItemsQuery($user, $customerId)
+            ->whereBetween('due_date', [$oneDayLater, $twoDaysLater])
+            ->orderBy('due_date')
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, InstallmentItem>
+     */
+    protected function getOverdueItems(User $user, ?int $customerId = null): Collection
+    {
+        return $this->unpaidItemsQuery($user, $customerId)
+            ->where('due_date', '<', now()->startOfDay())
+            ->orderBy('due_date')
+            ->get();
+    }
+
+    /**
+     * @param  Collection<int, InstallmentItem>  $items
+     */
+    protected function sendDueSoonBatch(Customer $customer, Collection $items): bool
+    {
+        if ($items->isEmpty() || !$this->isValidEmail($customer->email)) {
+            return false;
+        }
+
+        try {
+            Mail::to($customer->email)->send(new PaymentDueReminderBatch($customer, $items));
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('Failed to send consolidated due-soon reminder email', [
+                'customer_id' => $customer->id,
+                'items_count' => $items->count(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * @param  Collection<int, InstallmentItem>  $items
+     */
+    protected function sendOverdueBatch(Customer $customer, Collection $items): bool
+    {
+        if ($items->isEmpty() || !$this->isValidEmail($customer->email)) {
+            return false;
+        }
+
+        try {
+            Mail::to($customer->email)->send(new PaymentOverdueNoticeBatch($customer, $items));
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('Failed to send consolidated overdue notice email', [
+                'customer_id' => $customer->id,
+                'items_count' => $items->count(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * @param  Collection<int, InstallmentItem>  $dueSoonItems
+     * @param  Collection<int, InstallmentItem>  $overdueItems
+     * @return array{due_reminders_sent: int, overdue_notices_sent: int, total_emails: int, items_included: int}
+     */
+    protected function sendConsolidatedReminders(
+        Collection $dueSoonItems,
+        Collection $overdueItems
+    ): array {
+        $dueRemindersSent = 0;
+        $overdueNoticesSent = 0;
+
+        foreach ($dueSoonItems->groupBy(fn (InstallmentItem $item) => $item->installment->customer_id) as $items) {
+            /** @var Collection<int, InstallmentItem> $items */
+            $customer = $items->first()?->installment?->customer;
+
+            if ($customer && $this->sendDueSoonBatch($customer, $items)) {
+                $dueRemindersSent++;
+            }
+        }
+
+        foreach ($overdueItems->groupBy(fn (InstallmentItem $item) => $item->installment->customer_id) as $items) {
+            /** @var Collection<int, InstallmentItem> $items */
+            $customer = $items->first()?->installment?->customer;
+
+            if ($customer && $this->sendOverdueBatch($customer, $items)) {
+                $overdueNoticesSent++;
+            }
+        }
+
+        return [
+            'due_reminders_sent' => $dueRemindersSent,
+            'overdue_notices_sent' => $overdueNoticesSent,
+            'total_emails' => $dueRemindersSent + $overdueNoticesSent,
+            'items_included' => $dueSoonItems->count() + $overdueItems->count(),
+        ];
+    }
+
+    /**
+     * Send payment due reminders grouped by customer (one email per customer).
      */
     public function sendPaymentDueReminders(User $user): int
     {
@@ -37,52 +170,16 @@ class EmailNotificationService
             return 0;
         }
 
-        $twoDaysLater = now()->addDays(2)->endOfDay();
-        $oneDayLater = now()->addDays(1)->startOfDay();
+        $result = $this->sendConsolidatedReminders(
+            $this->getDueSoonItems($user),
+            collect()
+        );
 
-        $dueSoon = InstallmentItem::query()
-            ->whereHas('installment', function ($query) use ($user) {
-                $query->where('user_id', $user->id)
-                    ->where('status', 'active');
-            })
-            ->whereNull('paid_at')
-            ->where('status', '!=', 'paid')
-            ->whereBetween('due_date', [$oneDayLater, $twoDaysLater])
-            ->with(['installment.customer'])
-            ->get();
-
-        $count = 0;
-        foreach ($dueSoon as $item) {
-            try {
-                $customerEmail = $item->installment?->customer?->email;
-                if (!$this->isValidEmail($customerEmail)) {
-                    continue;
-                }
-
-                $daysRemaining = now()->diffInDays($item->due_date, false);
-
-                Mail::to($customerEmail)
-                    ->send(new PaymentDueReminder($item, $daysRemaining));
-
-                if ($this->isValidEmail($user->email)) {
-                    Mail::to($user->email)
-                        ->send(new PaymentDueReminder($item, $daysRemaining));
-                }
-
-                $count++;
-            } catch (\Throwable $e) {
-                Log::error('Failed to send payment due reminder email', [
-                    'item_id' => $item->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        return $count;
+        return $result['due_reminders_sent'];
     }
 
     /**
-     * Send overdue payment notices.
+     * Send overdue payment notices grouped by customer (one email per customer).
      */
     public function sendOverduePaymentNotices(User $user): int
     {
@@ -90,45 +187,69 @@ class EmailNotificationService
             return 0;
         }
 
-        $overdue = InstallmentItem::query()
-            ->whereHas('installment', function ($query) use ($user) {
-                $query->where('user_id', $user->id)
-                    ->where('status', 'active');
-            })
-            ->whereNull('paid_at')
-            ->where('status', '!=', 'paid')
-            ->where('due_date', '<', now()->startOfDay())
-            ->with(['installment.customer'])
-            ->get();
+        $result = $this->sendConsolidatedReminders(
+            collect(),
+            $this->getOverdueItems($user)
+        );
 
-        $count = 0;
-        foreach ($overdue as $item) {
-            try {
-                $customerEmail = $item->installment?->customer?->email;
-                if (!$this->isValidEmail($customerEmail)) {
-                    continue;
-                }
+        return $result['overdue_notices_sent'];
+    }
 
-                $daysOverdue = now()->diffInDays($item->due_date);
-
-                Mail::to($customerEmail)
-                    ->send(new PaymentOverdueNotice($item, $daysOverdue));
-
-                if ($this->isValidEmail($user->email)) {
-                    Mail::to($user->email)
-                        ->send(new PaymentOverdueNotice($item, $daysOverdue));
-                }
-
-                $count++;
-            } catch (\Throwable $e) {
-                Log::error('Failed to send overdue payment notice email', [
-                    'item_id' => $item->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
+    /**
+     * Send consolidated reminder emails for one customer.
+     *
+     * @return array{due_reminders_sent: int, overdue_notices_sent: int, total_emails: int, items_included: int, disabled?: bool}
+     */
+    public function sendCustomerPaymentReminders(Customer $customer, User $user): array
+    {
+        if (!$this->isEnabled()) {
+            return [
+                'due_reminders_sent' => 0,
+                'overdue_notices_sent' => 0,
+                'total_emails' => 0,
+                'items_included' => 0,
+                'disabled' => true,
+            ];
         }
 
-        return $count;
+        if (!$user->isOwner() && $customer->user_id !== $user->id) {
+            abort(403, 'غير مصرح لك بإرسال تذكير لهذا العميل');
+        }
+
+        return $this->sendConsolidatedReminders(
+            $this->getDueSoonItems($user, $customer->id),
+            $this->getOverdueItems($user, $customer->id)
+        );
+    }
+
+    /**
+     * Send consolidated reminders for specific installment items (customer only).
+     *
+     * @param  Collection<int, InstallmentItem>  $items
+     * @return array{due_reminders_sent: int, overdue_notices_sent: int, total_emails: int, items_included: int}
+     */
+    public function sendItemsReminderEmails(Collection $items): array
+    {
+        if (!$this->isEnabled() || $items->isEmpty()) {
+            return [
+                'due_reminders_sent' => 0,
+                'overdue_notices_sent' => 0,
+                'total_emails' => 0,
+                'items_included' => 0,
+            ];
+        }
+
+        $items->loadMissing(['installment.customer']);
+
+        $overdue = $items->filter(
+            fn (InstallmentItem $item) => $item->due_date < now()->startOfDay()
+        )->values();
+
+        $dueSoon = $items->filter(
+            fn (InstallmentItem $item) => $item->due_date >= now()->startOfDay()
+        )->values();
+
+        return $this->sendConsolidatedReminders($dueSoon, $overdue);
     }
 
     /**
@@ -206,49 +327,17 @@ class EmailNotificationService
     }
 
     /**
-     * Send due/overdue reminder email for one installment item.
+     * @deprecated Use sendItemsReminderEmails() for consolidated customer emails.
      */
     public function sendItemReminderEmail(InstallmentItem $item, User $user): bool
     {
-        if (!$this->isEnabled()) {
-            return false;
-        }
+        $result = $this->sendItemsReminderEmails(collect([$item]));
 
-        $item->loadMissing(['installment.customer']);
-        $customer = $item->installment?->customer;
-
-        if (!$this->isValidEmail($customer?->email)) {
-            return false;
-        }
-
-        try {
-            if ($item->due_date < now()->startOfDay()) {
-                $daysOverdue = now()->diffInDays($item->due_date);
-                Mail::to($customer->email)->send(new PaymentOverdueNotice($item, $daysOverdue));
-                if ($this->isValidEmail($user->email)) {
-                    Mail::to($user->email)->send(new PaymentOverdueNotice($item, $daysOverdue));
-                }
-            } else {
-                $daysRemaining = max(0, (int) now()->diffInDays($item->due_date, false));
-                Mail::to($customer->email)->send(new PaymentDueReminder($item, $daysRemaining));
-                if ($this->isValidEmail($user->email)) {
-                    Mail::to($user->email)->send(new PaymentDueReminder($item, $daysRemaining));
-                }
-            }
-
-            return true;
-        } catch (\Throwable $e) {
-            Log::error('Failed to send installment item reminder email', [
-                'item_id' => $item->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return false;
-        }
+        return $result['total_emails'] > 0;
     }
 
     /**
-     * Send all payment reminders for a user.
+     * Send all payment reminders for a user (consolidated per customer).
      */
     public function sendAllPaymentReminders(User $user): array
     {
@@ -257,17 +346,14 @@ class EmailNotificationService
                 'due_reminders_sent' => 0,
                 'overdue_notices_sent' => 0,
                 'total_emails' => 0,
+                'items_included' => 0,
                 'disabled' => true,
             ];
         }
 
-        $dueReminders = $this->sendPaymentDueReminders($user);
-        $overdueNotices = $this->sendOverduePaymentNotices($user);
-
-        return [
-            'due_reminders_sent' => $dueReminders,
-            'overdue_notices_sent' => $overdueNotices,
-            'total_emails' => $dueReminders + $overdueNotices,
-        ];
+        return $this->sendConsolidatedReminders(
+            $this->getDueSoonItems($user),
+            $this->getOverdueItems($user)
+        );
     }
 }

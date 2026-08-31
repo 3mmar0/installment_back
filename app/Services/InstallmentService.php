@@ -633,10 +633,6 @@ class InstallmentService implements InstallmentServiceInterface
 
         $items = $query->get();
 
-        if ($itemId === null) {
-            $items = $items->take(1);
-        }
-
         if ($items->isEmpty()) {
             return [
                 'notifications_sent' => 0,
@@ -648,21 +644,20 @@ class InstallmentService implements InstallmentServiceInterface
         $notificationService = app(NotificationService::class);
         $emailService = app(EmailNotificationService::class);
         $notificationsSent = 0;
-        $emailsSent = 0;
 
         foreach ($items as $item) {
             $notificationService->notifyItemDueReminder($user, $item);
             $notificationsSent++;
-
-            if ($emailService->sendItemReminderEmail($item, $user)) {
-                $emailsSent++;
-            }
         }
+
+        $emailResult = $emailService->sendItemsReminderEmails($items);
 
         return [
             'notifications_sent' => $notificationsSent,
-            'emails_sent' => $emailsSent,
+            'emails_sent' => $emailResult['total_emails'],
             'items_reminded' => $items->count(),
+            'due_reminders_sent' => $emailResult['due_reminders_sent'],
+            'overdue_notices_sent' => $emailResult['overdue_notices_sent'],
         ];
     }
 

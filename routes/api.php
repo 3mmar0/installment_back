@@ -101,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('customer-update/{id}', 'update');
             Route::delete('customer-delete/{id}', 'destroy');
             Route::get('customer-stats/{id}', 'stats');
+            Route::post('customer-send-reminders/{id}', 'sendReminders');
         });
 
         // Installment routes

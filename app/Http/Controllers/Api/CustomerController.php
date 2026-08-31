@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Resources\CustomerResource;
 use App\Http\Traits\ApiResponse;
+use App\Services\EmailNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,7 +16,8 @@ class CustomerController extends Controller
     use ApiResponse;
 
     public function __construct(
-        private readonly CustomerServiceInterface $customerService
+        private readonly CustomerServiceInterface $customerService,
+        private readonly EmailNotificationService $emailNotificationService,
     ) {}
 
     /**
@@ -140,6 +142,39 @@ class CustomerController extends Controller
         $stats = $this->customerService->getCustomerStats($customer);
 
         return $this->successResponse($stats, 'تم جلب إحصائيات العميل بنجاح');
+    }
+
+    /**
+     * Send consolidated payment reminder emails to the customer.
+     */
+    public function sendReminders(int $id, Request $request): JsonResponse
+    {
+        $customer = $this->customerService->findCustomerById($id);
+
+        if (!$customer) {
+            return $this->notFoundResponse('العميل غير موجود');
+        }
+
+        if (!$request->user()->isOwner() && $customer->user_id !== $request->user()->id) {
+            return $this->forbiddenResponse('غير مصرح لك بإرسال تذكير لهذا العميل');
+        }
+
+        $result = $this->emailNotificationService->sendCustomerPaymentReminders(
+            $customer,
+            $request->user()
+        );
+
+        if (($result['items_included'] ?? 0) === 0) {
+            return $this->successResponse(
+                $result,
+                'لا توجد دفعات مستحقة أو متأخرة لإرسال تذكير لها'
+            );
+        }
+
+        return $this->successResponse(
+            $result,
+            "تم إرسال {$result['total_emails']} بريد إلكتروني للعميل بنجاح"
+        );
     }
 
     /**
