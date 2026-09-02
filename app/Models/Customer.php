@@ -11,9 +11,11 @@ class Customer extends Model
 
     protected $fillable = [
         'user_id',
+        'client_account_id',
         'name',
         'email',
         'phone',
+        'phone_normalized',
         'address',
         'notes',
     ];
@@ -21,6 +23,11 @@ class Customer extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function clientAccount()
+    {
+        return $this->belongsTo(ClientAccount::class);
     }
 
     public function installments()

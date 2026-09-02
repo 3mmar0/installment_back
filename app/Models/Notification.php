@@ -11,6 +11,7 @@ class Notification extends Model
 
     protected $fillable = [
         'user_id',
+        'client_account_id',
         'type',
         'title',
         'message',
@@ -26,6 +27,11 @@ class Notification extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function clientAccount()
+    {
+        return $this->belongsTo(ClientAccount::class);
     }
 
     public function scopeUnread($query)

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\UserRole;
 use App\Helpers\LimitsHelper;
+use App\Models\ClientAccount;
 use App\Models\InstallmentItem;
 use App\Models\Notification;
 use App\Models\User;
@@ -50,6 +51,26 @@ class NotificationService
         }
 
         return $notification;
+    }
+
+    /**
+     * Create an in-app notification for a client account (no plan limits).
+     */
+    public function createForClient(
+        ClientAccount $client,
+        string $type,
+        string $title,
+        string $message,
+        array $data = []
+    ): Notification {
+        return Notification::create([
+            'user_id' => null,
+            'client_account_id' => $client->id,
+            'type' => $type,
+            'title' => $title,
+            'message' => $message,
+            'data' => $data,
+        ]);
     }
 
     private function formatMoney(float $amount): string

@@ -1,12 +1,17 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\Client\ClientAuthController;
+use App\Http\Controllers\Api\Client\ClientNotificationController;
+use App\Http\Controllers\Api\Client\ClientPaymentRequestController;
+use App\Http\Controllers\Api\Client\ClientPortalController;
 use App\Http\Controllers\Api\ComplaintController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\ExportReportController;
 use App\Http\Controllers\Api\InstallmentController;
 use App\Http\Controllers\Api\LegalController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PaymentRequestController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\SystemSettingsController;
@@ -18,11 +23,6 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | API Routes
 |--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "api" middleware group. Make something great!
-|
 */
 
 // Public routes
@@ -33,6 +33,14 @@ Route::prefix('auth')->controller(AuthController::class)->group(function () {
     Route::post('reset-password', 'resetPassword')->middleware('throttle:10,1');
 });
 
+// Public client auth
+Route::prefix('client/auth')->controller(ClientAuthController::class)->group(function () {
+    Route::post('register', 'register')->middleware('throttle:5,1');
+    Route::post('login', 'login')->middleware('throttle:10,1');
+    Route::post('verify-otp', 'verifyOtp')->middleware('throttle:5,1');
+    Route::post('resend-otp', 'resendOtp')->middleware('throttle:3,1');
+});
+
 // Public subscription plans
 Route::get('subscriptions-public', [SubscriptionController::class, 'publicIndex']);
 
@@ -41,8 +49,35 @@ Route::get('settings/trial', [SettingsController::class, 'trialPublic']);
 Route::get('legal/privacy', [LegalController::class, 'privacy']);
 Route::get('legal/terms', [LegalController::class, 'terms']);
 
-// Protected routes
-Route::middleware(['auth:sanctum', 'track.activity'])->group(function () {
+// Protected client routes
+Route::middleware(['auth:sanctum', 'client', 'track.activity'])->prefix('client')->group(function () {
+    Route::prefix('auth')->controller(ClientAuthController::class)->group(function () {
+        Route::post('logout', 'logout');
+        Route::get('me', 'me');
+        Route::post('refresh', 'refresh');
+    });
+
+    Route::controller(ClientPortalController::class)->group(function () {
+        Route::get('dashboard', 'dashboard');
+        Route::get('installment-list', 'installmentList');
+        Route::get('installment-show/{id}', 'installmentShow');
+    });
+
+    Route::controller(ClientPaymentRequestController::class)->group(function () {
+        Route::post('payment-request-create', 'store');
+        Route::get('payment-request-list', 'index');
+        Route::get('payment-request-attachment/{id}', 'attachment');
+    });
+
+    Route::controller(ClientNotificationController::class)->group(function () {
+        Route::get('notification-list', 'index');
+        Route::get('notification-count', 'count');
+        Route::post('notification-mark-read/{id}', 'markAsRead');
+    });
+});
+
+// Protected vendor routes
+Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function () {
     // Auth routes
     Route::prefix('auth')->controller(AuthController::class)->group(function () {
         Route::post('logout', 'logout');
@@ -127,6 +162,15 @@ Route::middleware(['auth:sanctum', 'track.activity'])->group(function () {
             Route::get('installment-all-stats', 'allStats');
             Route::post('installment-item-pay/{item}', 'markItemPaid');
             Route::post('installment-remind/{id}', 'sendReminders');
+        });
+
+        // Payment request review (vendor)
+        Route::controller(PaymentRequestController::class)->group(function () {
+            Route::get('payment-request-list', 'index');
+            Route::get('payment-request-count', 'pendingCount');
+            Route::post('payment-request-approve/{id}', 'approve');
+            Route::post('payment-request-reject/{id}', 'reject');
+            Route::get('payment-request-attachment/{id}', 'attachment');
         });
     });
 

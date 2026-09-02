@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Contracts\Services\CustomerServiceInterface;
 use App\Helpers\LimitsHelper;
+use App\Helpers\PhoneHelper;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -11,6 +12,9 @@ use Illuminate\Support\Facades\DB;
 
 class CustomerService implements CustomerServiceInterface
 {
+    public function __construct(
+        private readonly ClientLinkService $clientLinkService
+    ) {}
     /**
      * Get customers for a specific user with pagination and optional search.
      *
@@ -73,6 +77,7 @@ class CustomerService implements CustomerServiceInterface
                 'name' => $data['name'],
                 'email' => $data['email'] ?? null,
                 'phone' => $data['phone'] ?? null,
+                'phone_normalized' => PhoneHelper::normalize($data['phone'] ?? null),
                 'address' => $data['address'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
@@ -81,7 +86,9 @@ class CustomerService implements CustomerServiceInterface
                 LimitsHelper::incrementUsage($user->id, 'customers');
             }
 
-            return $customer;
+            $this->clientLinkService->linkForCustomer($customer);
+
+            return $customer->fresh();
         });
     }
 
@@ -91,9 +98,17 @@ class CustomerService implements CustomerServiceInterface
     public function updateCustomer(int $id, array $data, User $user): Customer
     {
         $customer = Customer::findOrFail($id);
-        $customer->update($data);
 
-        return $customer->fresh();
+        if (array_key_exists('phone', $data)) {
+            $data['phone_normalized'] = PhoneHelper::normalize($data['phone']);
+        }
+
+        $customer->update($data);
+        $customer = $customer->fresh();
+
+        $this->clientLinkService->linkForCustomer($customer);
+
+        return $customer;
     }
 
     public function deleteCustomer(int $id, User $user): bool

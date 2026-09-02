@@ -30,6 +30,11 @@ class InstallmentItem extends Model
         return $this->belongsTo(Installment::class);
     }
 
+    public function paymentRequests()
+    {
+        return $this->hasMany(PaymentRequest::class);
+    }
+
     public function markPaid(float $amount, ?string $reference = null, ?string $note = null): void
     {
         $this->update([
