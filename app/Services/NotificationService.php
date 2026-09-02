@@ -202,17 +202,21 @@ class NotificationService
     /**
      * Broadcast an in-app notification to all regular users.
      */
-    public function broadcastToAllUsers(string $title, string $message, array $data = []): int
-    {
+    public function broadcastToAllUsers(
+        string $title,
+        string $message,
+        array $data = [],
+        string $type = 'system_announcement'
+    ): int {
         $count = 0;
 
         User::query()
             ->where('role', UserRole::User)
-            ->chunkById(100, function ($users) use ($title, $message, $data, &$count) {
+            ->chunkById(100, function ($users) use ($title, $message, $data, $type, &$count) {
                 foreach ($users as $user) {
                     $this->create(
                         $user,
-                        'system_announcement',
+                        $type,
                         $title,
                         $message,
                         $data,

@@ -89,6 +89,9 @@ class SystemSettingsController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:5000'],
+            'type' => ['required', 'string', 'in:system_announcement,mobile_app_update'],
+            'action_url' => ['nullable', 'url', 'max:2048'],
+            'image' => ['nullable', 'image', 'max:5120'],
             'image_url' => ['nullable', 'url', 'max:2048'],
         ]);
 
@@ -96,15 +99,31 @@ class SystemSettingsController extends Controller
             'display_as' => 'modal',
         ];
 
-        if (!empty($data['image_url'])) {
+        if (!empty($data['action_url'])) {
+            $payload['action_url'] = $data['action_url'];
+        }
+
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('announcements', 'public');
+            $payload['image_url'] = asset('storage/' . $path);
+        } elseif (!empty($data['image_url'])) {
             $payload['image_url'] = $data['image_url'];
         }
 
-        BroadcastNotificationJob::dispatch($data['title'], $data['message'], $payload);
+        BroadcastNotificationJob::dispatch(
+            $data['title'],
+            $data['message'],
+            $payload,
+            $data['type']
+        );
+
+        $typeLabel = $data['type'] === 'mobile_app_update'
+            ? 'إشعار تحديث تطبيق الجوال'
+            : 'إعلان عام';
 
         return $this->successResponse(
-            ['queued' => true],
-            'تمت جدولة الإعلان لجميع المستخدمين'
+            ['queued' => true, 'type' => $data['type']],
+            "تمت جدولة {$typeLabel} لجميع المستخدمين"
         );
     }
 

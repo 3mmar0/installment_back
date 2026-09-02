@@ -32,6 +32,7 @@ class InstallmentController extends Controller
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'nullable', 'string', 'in:all,active,completed,cancelled,overdue'],
             'customer_id' => ['sometimes', 'integer', 'min:1'],
+            'user_id' => ['sometimes', 'integer', 'min:1'],
         ]);
 
         $installments = $this->installmentService->getInstallmentsForUser(

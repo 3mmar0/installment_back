@@ -16,10 +16,16 @@ class BroadcastNotificationJob implements ShouldQueue
         public string $title,
         public string $message,
         public array $data = [],
+        public string $type = 'system_announcement',
     ) {}
 
     public function handle(NotificationService $notificationService): void
     {
-        $notificationService->broadcastToAllUsers($this->title, $this->message, $this->data);
+        $notificationService->broadcastToAllUsers(
+            $this->title,
+            $this->message,
+            $this->data,
+            $this->type
+        );
     }
 }

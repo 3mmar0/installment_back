@@ -27,10 +27,15 @@ class InstallmentService implements InstallmentServiceInterface
         $search = trim((string) ($filters['search'] ?? ''));
         $status = isset($filters['status']) ? (string) $filters['status'] : null;
         $customerId = isset($filters['customer_id']) ? (int) $filters['customer_id'] : null;
+        $filterUserId = isset($filters['user_id']) ? (int) $filters['user_id'] : null;
 
         $query = Installment::query()
             ->with(['customer', 'items'])
             ->forUser($user);
+
+        if ($user->isOwner() && $filterUserId > 0) {
+            $query->where('installments.user_id', $filterUserId);
+        }
 
         if ($customerId > 0) {
             $query->where('installments.customer_id', $customerId);
