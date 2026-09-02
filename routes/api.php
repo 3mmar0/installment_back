@@ -42,7 +42,7 @@ Route::get('legal/privacy', [LegalController::class, 'privacy']);
 Route::get('legal/terms', [LegalController::class, 'terms']);
 
 // Protected routes
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'track.activity'])->group(function () {
     // Auth routes
     Route::prefix('auth')->controller(AuthController::class)->group(function () {
         Route::post('logout', 'logout');

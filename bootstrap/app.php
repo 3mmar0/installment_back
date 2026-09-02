@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'owner' => \App\Http\Middleware\EnsureOwner::class,
             'platform_admin' => \App\Http\Middleware\EnsurePlatformAdmin::class,
+            'track.activity' => \App\Http\Middleware\TrackUserActivity::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

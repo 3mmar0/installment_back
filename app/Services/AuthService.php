@@ -32,6 +32,7 @@ class AuthService implements AuthServiceInterface
         }
 
         $token = $user->createToken('api-token')->plainTextToken;
+        $user->markAsActive(0);
 
         return [
             'user' => $user,
@@ -63,6 +64,7 @@ class AuthService implements AuthServiceInterface
         ]);
 
         $token = $user->createToken('api-token')->plainTextToken;
+        $user->markAsActive(0);
 
         return [
             'user' => $user,

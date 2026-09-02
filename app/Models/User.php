@@ -28,6 +28,7 @@ class User extends Authenticatable
         'registration_source',
         'is_platform_admin',
         'trial_used_at',
+        'last_active_at',
     ];
 
     /**
@@ -50,6 +51,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'trial_used_at' => 'datetime',
+            'last_active_at' => 'datetime',
             'password' => 'hashed',
             'role' => UserRole::class,
             'registration_source' => RegistrationSource::class,
@@ -60,6 +62,37 @@ class User extends Authenticatable
     public function isOwner(): bool
     {
         return $this->role === UserRole::Owner;
+    }
+
+    /**
+     * Record that this user is using the system.
+     *
+     * Writes are throttled so busy API traffic does not update the row on every request.
+     */
+    public function markAsActive(int $throttleMinutes = 5): bool
+    {
+        if (
+            $throttleMinutes > 0
+            && $this->last_active_at
+            && $this->last_active_at->gt(now()->subMinutes($throttleMinutes))
+        ) {
+            return false;
+        }
+
+        $now = now();
+
+        $this->newQuery()
+            ->whereKey($this->getKey())
+            ->update(['last_active_at' => $now]);
+
+        $this->last_active_at = $now;
+
+        return true;
+    }
+
+    public function isRecentlyActive(int $days = 7): bool
+    {
+        return $this->last_active_at?->gte(now()->subDays($days)) ?? false;
     }
 
     public function isPlatformAdmin(): bool

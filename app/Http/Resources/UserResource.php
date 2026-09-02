@@ -15,6 +15,9 @@ class UserResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $viewer = $request->user();
+        $canSeeActivity = $viewer && ($viewer->isOwner() || $viewer->isPlatformAdmin());
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -24,6 +27,14 @@ class UserResource extends JsonResource
             'is_platform_admin' => $this->isPlatformAdmin(),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
+            'last_active_at' => $this->when(
+                $canSeeActivity,
+                fn () => $this->last_active_at?->toISOString(),
+            ),
+            'is_active' => $this->when(
+                $canSeeActivity,
+                fn () => $this->isRecentlyActive(),
+            ),
             'user_limit' => $this->whenLoaded('userLimit', function () {
                 return new UserLimitResource($this->userLimit);
             }),
