@@ -6,15 +6,19 @@ use App\Contracts\Services\CustomerServiceInterface;
 use App\Helpers\LimitsHelper;
 use App\Helpers\PhoneHelper;
 use App\Models\Customer;
+use App\Models\Installment;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class CustomerService implements CustomerServiceInterface
 {
     public function __construct(
         private readonly ClientLinkService $clientLinkService
     ) {}
+
     /**
      * Get customers for a specific user with pagination and optional search.
      *
@@ -68,7 +72,7 @@ class CustomerService implements CustomerServiceInterface
     public function createCustomer(array $data, User $user): Customer
     {
         return DB::transaction(function () use ($data, $user) {
-            if (!$user->isOwner() && !LimitsHelper::canCreate($user->id, 'customers')) {
+            if (! $user->isOwner() && ! LimitsHelper::canCreate($user->id, 'customers')) {
                 abort(403, LimitsHelper::getLimitExceededMessage('customers'));
             }
 
@@ -82,7 +86,7 @@ class CustomerService implements CustomerServiceInterface
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            if (!$user->isOwner()) {
+            if (! $user->isOwner()) {
                 LimitsHelper::incrementUsage($user->id, 'customers');
             }
 
@@ -115,13 +119,39 @@ class CustomerService implements CustomerServiceInterface
     {
         $customer = Customer::findOrFail($id);
         $owner = $customer->user;
+        $installmentIds = $customer->installments()->pluck('id');
+        $installmentCount = $installmentIds->count();
 
-        $deleted = DB::transaction(function () use ($customer) {
-            return $customer->delete();
+        $attachmentPaths = PaymentRequest::query()
+            ->whereIn('installment_id', $installmentIds)
+            ->pluck('attachment_path')
+            ->filter()
+            ->values()
+            ->all();
+
+        $deleted = DB::transaction(function () use ($customer, $installmentIds) {
+            if ($installmentIds->isNotEmpty()) {
+                Installment::query()->whereIn('id', $installmentIds)->delete();
+            }
+
+            return (bool) $customer->delete();
         });
 
-        if ($deleted && $owner && !$owner->isOwner()) {
-            LimitsHelper::decrementUsage($customer->user_id, 'customers');
+        if ($deleted) {
+            foreach ($attachmentPaths as $path) {
+                Storage::disk('local')->delete($path);
+            }
+
+            if ($owner && ! $owner->isOwner()) {
+                LimitsHelper::decrementUsage($customer->user_id, 'customers');
+                if ($installmentCount > 0) {
+                    LimitsHelper::decrementUsage(
+                        $customer->user_id,
+                        'installments',
+                        $installmentCount
+                    );
+                }
+            }
         }
 
         return $deleted;

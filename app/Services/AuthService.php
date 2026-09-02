@@ -3,12 +3,12 @@
 namespace App\Services;
 
 use App\Contracts\Services\AuthServiceInterface;
+use App\Contracts\Services\UserServiceInterface;
 use App\Enums\RegistrationSource;
 use App\Enums\UserRole;
 use App\Exceptions\MailDeliveryException;
 use App\Mail\PasswordResetMail;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -18,6 +18,10 @@ use Throwable;
 
 class AuthService implements AuthServiceInterface
 {
+    public function __construct(
+        private readonly UserServiceInterface $userService
+    ) {}
+
     /**
      * Authenticate user and generate token.
      */
@@ -25,7 +29,7 @@ class AuthService implements AuthServiceInterface
     {
         $user = User::where('email', $credentials['email'])->first();
 
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
@@ -93,13 +97,13 @@ class AuthService implements AuthServiceInterface
     {
         $user = User::where('email', $email)->first();
 
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
         $token = Password::broker()->createToken($user);
         $frontendUrl = rtrim((string) config('app.frontend_url'), '/');
-        $resetUrl = $frontendUrl . '/reset-password?' . http_build_query([
+        $resetUrl = $frontendUrl.'/reset-password?'.http_build_query([
             'token' => $token,
             'email' => $email,
         ]);
@@ -164,15 +168,12 @@ class AuthService implements AuthServiceInterface
             ]);
         }
 
-        if (!Hash::check($password, $user->password)) {
+        if (! Hash::check($password, $user->password)) {
             throw ValidationException::withMessages([
                 'password' => ['كلمة المرور غير صحيحة'],
             ]);
         }
 
-        DB::transaction(function () use ($user): void {
-            $user->tokens()->delete();
-            $user->delete();
-        });
+        $this->userService->deleteUser($user->id);
     }
 }

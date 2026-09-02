@@ -61,7 +61,7 @@ class CustomerController extends Controller
     {
         $customer = $this->customerService->findCustomerById($id);
 
-        if (!$customer) {
+        if (! $customer) {
             return $this->notFoundResponse('العميل غير موجود');
         }
 
@@ -79,7 +79,7 @@ class CustomerController extends Controller
     {
         $customer = $this->customerService->findCustomerById($id);
 
-        if (!$customer) {
+        if (! $customer) {
             return $this->notFoundResponse('العميل غير موجود');
         }
 
@@ -101,7 +101,7 @@ class CustomerController extends Controller
     {
         $customer = $this->customerService->findCustomerById($id);
 
-        if (!$customer) {
+        if (! $customer) {
             return $this->notFoundResponse('العميل غير موجود');
         }
 
@@ -109,14 +109,14 @@ class CustomerController extends Controller
 
         $this->customerService->deleteCustomer($id, $request->user());
 
-        return $this->deletedResponse('تم حذف العميل بنجاح');
+        return $this->deletedResponse('تم حذف العميل وجميع أقساطه بنجاح');
     }
 
     public function stats(int $id, Request $request): JsonResponse
     {
         $customer = $this->customerService->findCustomerById($id);
 
-        if (!$customer) {
+        if (! $customer) {
             return $this->notFoundResponse('العميل غير موجود');
         }
 
@@ -131,7 +131,7 @@ class CustomerController extends Controller
     {
         $customer = $this->customerService->findCustomerById($id);
 
-        if (!$customer) {
+        if (! $customer) {
             return $this->notFoundResponse('العميل غير موجود');
         }
 

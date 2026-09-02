@@ -6,10 +6,17 @@ use App\Contracts\Services\UserServiceInterface;
 use App\Enums\RegistrationSource;
 use App\Enums\UserRole;
 use App\Helpers\TrialHelper;
+use App\Models\Complaint;
+use App\Models\Customer;
+use App\Models\Installment;
+use App\Models\Notification;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class UserService implements UserServiceInterface
 {
@@ -62,7 +69,7 @@ class UserService implements UserServiceInterface
                 'email' => $data['email'],
             ];
 
-            if (isset($data['password']) && !empty($data['password'])) {
+            if (isset($data['password']) && ! empty($data['password'])) {
                 $updateData['password'] = Hash::make($data['password']);
             }
 
@@ -71,25 +78,58 @@ class UserService implements UserServiceInterface
             }
 
             $user->update($updateData);
+
             return $user->fresh('userLimit');
         });
     }
 
     /**
-     * Delete a user.
+     * Delete a vendor/user and all owned business data.
      */
     public function deleteUser(int $id): bool
     {
         $user = User::findOrFail($id);
 
-        return DB::transaction(function () use ($user) {
-            // Check if user has any customers
-            if ($user->customers()->count() > 0) {
-                throw new \Exception('Cannot delete user with existing customers');
-            }
+        if ($user->isOwner()) {
+            throw ValidationException::withMessages([
+                'user' => ['لا يمكن حذف حساب المدير'],
+            ]);
+        }
 
-            return $user->delete();
+        $attachmentPaths = PaymentRequest::query()
+            ->where('user_id', $user->id)
+            ->pluck('attachment_path')
+            ->filter()
+            ->values()
+            ->all();
+
+        $deleted = DB::transaction(function () use ($user) {
+            $this->purgeVendorOwnedData($user);
+            $user->tokens()->delete();
+
+            return (bool) $user->delete();
         });
+
+        if ($deleted) {
+            foreach ($attachmentPaths as $path) {
+                Storage::disk('local')->delete($path);
+            }
+        }
+
+        return $deleted;
+    }
+
+    /**
+     * Remove customers, installments, notifications, and complaints for a vendor.
+     * Related installment items and payment requests cascade via foreign keys.
+     */
+    private function purgeVendorOwnedData(User $user): void
+    {
+        Installment::query()->where('user_id', $user->id)->delete();
+        Customer::query()->where('user_id', $user->id)->delete();
+        Notification::query()->where('user_id', $user->id)->delete();
+        Complaint::query()->where('user_id', $user->id)->delete();
+        PaymentRequest::query()->where('user_id', $user->id)->delete();
     }
 
     /**

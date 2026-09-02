@@ -9,6 +9,7 @@ use App\Http\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -58,7 +59,7 @@ class UserController extends Controller
     {
         $user = $this->userService->findUserById($id);
 
-        if (!$user) {
+        if (! $user) {
             return $this->notFoundResponse('المستخدم غير موجود');
         }
 
@@ -75,7 +76,7 @@ class UserController extends Controller
     {
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => ['sometimes', 'required', 'email', 'max:255', 'unique:users,email,' . $id],
+            'email' => ['sometimes', 'required', 'email', 'max:255', 'unique:users,email,'.$id],
             'password' => ['sometimes', 'nullable', Password::defaults()],
             'role' => ['sometimes', 'in:owner,user'],
         ]);
@@ -100,7 +101,11 @@ class UserController extends Controller
         try {
             $this->userService->deleteUser($id);
 
-            return $this->deletedResponse('تم حذف المستخدم بنجاح');
+            return $this->deletedResponse('تم حذف المستخدم وجميع بياناته بنجاح');
+        } catch (ValidationException $e) {
+            $message = collect($e->errors())->flatten()->first() ?? 'تعذر حذف المستخدم';
+
+            return $this->errorResponse($message, 422, $e->errors());
         } catch (\Exception $e) {
             return $this->errorResponse($e->getMessage(), 400);
         }
