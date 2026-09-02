@@ -9,9 +9,11 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 interface CustomerServiceInterface
 {
     /**
-     * Get customers for a specific user with pagination.
+     * Get customers for a specific user with pagination and optional search.
+     *
+     * @param  array{page?: int, per_page?: int, search?: string}  $filters
      */
-    public function getCustomersForUser(User $user): LengthAwarePaginator;
+    public function getCustomersForUser(User $user, array $filters = []): LengthAwarePaginator;
 
     /**
      * Create a new customer.

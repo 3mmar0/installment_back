@@ -23,7 +23,16 @@ class CustomerController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $customers = $this->customerService->getCustomersForUser($request->user());
+        $validated = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+        ]);
+
+        $customers = $this->customerService->getCustomersForUser(
+            $request->user(),
+            $validated
+        );
 
         return $this->successResponse(
             CustomerResource::collection($customers)->response()->getData(true),

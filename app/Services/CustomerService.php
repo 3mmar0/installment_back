@@ -12,19 +12,35 @@ use Illuminate\Support\Facades\DB;
 class CustomerService implements CustomerServiceInterface
 {
     /**
-     * Get customers for a specific user with pagination.
+     * Get customers for a specific user with pagination and optional search.
+     *
+     * @param  array{page?: int, per_page?: int, search?: string}  $filters
      */
-    public function getCustomersForUser(User $user): LengthAwarePaginator
+    public function getCustomersForUser(User $user, array $filters = []): LengthAwarePaginator
     {
-        if ($user->isOwner()) {
-            return Customer::with('user')
-                ->latest()
-                ->paginate(20);
+        $perPage = min(max((int) ($filters['per_page'] ?? 20), 1), 100);
+        $page = max((int) ($filters['page'] ?? 1), 1);
+        $search = trim((string) ($filters['search'] ?? ''));
+
+        $query = $user->isOwner()
+            ? Customer::query()->with('user')
+            : $user->customers();
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                if (ctype_digit($search)) {
+                    $builder->where('customers.id', (int) $search);
+                }
+
+                $builder
+                    ->orWhere('customers.name', 'like', "%{$search}%")
+                    ->orWhere('customers.email', 'like', "%{$search}%")
+                    ->orWhere('customers.phone', 'like', "%{$search}%")
+                    ->orWhere('customers.address', 'like', "%{$search}%");
+            });
         }
 
-        return $user->customers()
-            ->latest()
-            ->paginate(20);
+        return $query->latest('customers.id')->paginate($perPage, ['*'], 'page', $page);
     }
 
     /**
