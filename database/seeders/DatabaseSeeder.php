@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Subscription;
 use App\Helpers\TrialHelper;
+use RuntimeException;
 
 class DatabaseSeeder extends Seeder
 {
@@ -19,10 +20,21 @@ class DatabaseSeeder extends Seeder
         $owner = User::where('role', UserRole::Owner)->first();
 
         if (!$owner) {
+            $email = (string) env('SEED_OWNER_EMAIL', '');
+            $password = (string) env('SEED_OWNER_PASSWORD', '');
+
+            // Refuse to invent credentials. A hardcoded owner password is a
+            // published production login the moment the repository is shared.
+            if ($email === '' || $password === '') {
+                throw new RuntimeException(
+                    'SEED_OWNER_EMAIL and SEED_OWNER_PASSWORD must be set to seed the owner account.'
+                );
+            }
+
             $owner = User::create([
-                'name' => 'Owner',
-                'email' => 'superadmin@admin.com',
-                'password' => Hash::make('password'),
+                'name' => (string) env('SEED_OWNER_NAME', 'Owner'),
+                'email' => $email,
+                'password' => Hash::make($password),
                 'role' => UserRole::Owner,
                 'is_platform_admin' => true,
             ]);

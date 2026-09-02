@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Contracts\Services\CustomerServiceInterface;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCustomerRequest;
+use App\Http\Requests\UpdateCustomerRequest;
 use App\Http\Resources\CustomerResource;
 use App\Http\Traits\ApiResponse;
 use App\Services\EmailNotificationService;
@@ -20,9 +21,6 @@ class CustomerController extends Controller
         private readonly EmailNotificationService $emailNotificationService,
     ) {}
 
-    /**
-     * Get all customers for the authenticated user.
-     */
     public function index(Request $request): JsonResponse
     {
         $customers = $this->customerService->getCustomersForUser($request->user());
@@ -33,9 +31,6 @@ class CustomerController extends Controller
         );
     }
 
-    /**
-     * Create a new customer.
-     */
     public function store(StoreCustomerRequest $request): JsonResponse
     {
         /** @var \App\Models\User $authUser */
@@ -53,9 +48,6 @@ class CustomerController extends Controller
         );
     }
 
-    /**
-     * Get a specific customer with installments.
-     */
     public function show(int $id, Request $request): JsonResponse
     {
         $customer = $this->customerService->findCustomerById($id);
@@ -64,12 +56,8 @@ class CustomerController extends Controller
             return $this->notFoundResponse('العميل غير موجود');
         }
 
-        // Check authorization
-        if (!$request->user()->isOwner() && $customer->user_id !== $request->user()->id) {
-            return $this->forbiddenResponse('غير مصرح لك بعرض هذا العميل');
-        }
+        $this->authorize('view', $customer);
 
-        // Load installments with their items
         $customer->load(['installments.items', 'user']);
 
         return $this->successResponse(
@@ -78,54 +66,43 @@ class CustomerController extends Controller
         );
     }
 
-    /**
-     * Update a customer.
-     */
-    public function update(int $id, Request $request): JsonResponse
+    public function update(int $id, UpdateCustomerRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => ['sometimes', 'required', 'email', 'max:255'],
-            'phone' => ['sometimes', 'required', 'string', 'max:255'],
-            'address' => ['sometimes', 'nullable', 'string'],
-            'notes' => ['sometimes', 'nullable', 'string'],
-        ]);
+        $customer = $this->customerService->findCustomerById($id);
 
-        try {
-            $customer = $this->customerService->updateCustomer($id, $data, $request->user());
-
-            return $this->successResponse(
-                new CustomerResource($customer),
-                'تم تحديث العميل بنجاح'
-            );
-        } catch (\Exception $e) {
-            if ($e->getCode() === 403) {
-                return $this->forbiddenResponse($e->getMessage());
-            }
+        if (!$customer) {
             return $this->notFoundResponse('العميل غير موجود');
         }
+
+        $this->authorize('update', $customer);
+
+        $customer = $this->customerService->updateCustomer(
+            $id,
+            $request->validated(),
+            $request->user()
+        );
+
+        return $this->successResponse(
+            new CustomerResource($customer),
+            'تم تحديث العميل بنجاح'
+        );
     }
 
-    /**
-     * Delete a customer.
-     */
     public function destroy(int $id, Request $request): JsonResponse
     {
-        try {
-            $this->customerService->deleteCustomer($id, $request->user());
+        $customer = $this->customerService->findCustomerById($id);
 
-            return $this->deletedResponse('تم حذف العميل بنجاح');
-        } catch (\Exception $e) {
-            if ($e->getCode() === 403) {
-                return $this->forbiddenResponse($e->getMessage());
-            }
+        if (!$customer) {
             return $this->notFoundResponse('العميل غير موجود');
         }
+
+        $this->authorize('delete', $customer);
+
+        $this->customerService->deleteCustomer($id, $request->user());
+
+        return $this->deletedResponse('تم حذف العميل بنجاح');
     }
 
-    /**
-     * Get customer statistics.
-     */
     public function stats(int $id, Request $request): JsonResponse
     {
         $customer = $this->customerService->findCustomerById($id);
@@ -134,19 +111,13 @@ class CustomerController extends Controller
             return $this->notFoundResponse('العميل غير موجود');
         }
 
-        // Check authorization
-        if (!$request->user()->isOwner() && $customer->user_id !== $request->user()->id) {
-            return $this->forbiddenResponse('غير مصرح لك بعرض هذا العميل');
-        }
+        $this->authorize('view', $customer);
 
         $stats = $this->customerService->getCustomerStats($customer);
 
         return $this->successResponse($stats, 'تم جلب إحصائيات العميل بنجاح');
     }
 
-    /**
-     * Send consolidated payment reminder emails to the customer.
-     */
     public function sendReminders(int $id, Request $request): JsonResponse
     {
         $customer = $this->customerService->findCustomerById($id);
@@ -155,9 +126,7 @@ class CustomerController extends Controller
             return $this->notFoundResponse('العميل غير موجود');
         }
 
-        if (!$request->user()->isOwner() && $customer->user_id !== $request->user()->id) {
-            return $this->forbiddenResponse('غير مصرح لك بإرسال تذكير لهذا العميل');
-        }
+        $this->authorize('view', $customer);
 
         $result = $this->emailNotificationService->queueCustomerPaymentReminders(
             $customer,
@@ -177,21 +146,17 @@ class CustomerController extends Controller
         );
     }
 
-    /**
-     * Get customers for select input (lightweight).
-     */
     public function forSelect(Request $request): JsonResponse
     {
         $customers = $this->customerService->getCustomersForUser($request->user());
 
-        // Map to simple array format for select inputs
         $selectData = $customers->getCollection()->map(function ($customer) {
             return [
                 'id' => $customer->id,
                 'name' => $customer->name,
                 'email' => $customer->email,
                 'phone' => $customer->phone,
-                'label' => "{$customer->name} ({$customer->email})", // For display in select
+                'label' => "{$customer->name} ({$customer->email})",
             ];
         });
 

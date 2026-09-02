@@ -134,9 +134,11 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    // No default: a shipped fallback address grants platform-admin rights to
+    // anyone who can read the repository.
     'platform_admin_emails' => array_filter(array_map(
         'trim',
-        explode(',', env('PLATFORM_ADMIN_EMAILS', 'superadmin@admin.com'))
+        explode(',', (string) env('PLATFORM_ADMIN_EMAILS', ''))
     )),
 
 ];

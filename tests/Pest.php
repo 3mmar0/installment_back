@@ -12,7 +12,7 @@
 */
 
 pest()->extend(Tests\TestCase::class)
- // ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+    ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
     ->in('Feature');
 
 /*
@@ -41,7 +41,50 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Create a merchant with an active plan.
+ *
+ * Customer and installment routes sit behind EnsureActiveSubscription, so a plain
+ * User::factory() user is rejected with 402 before reaching the controller.
+ *
+ * @param  array<string, mixed>  $limits
+ */
+function merchantWithPlan(array $limits = []): App\Models\User
 {
-    // ..
+    $user = App\Models\User::factory()->create(['role' => App\Enums\UserRole::User]);
+
+    App\Helpers\LimitsHelper::createOrUpdateUserLimits($user->id, array_merge([
+        'subscription_name' => 'Test Plan',
+        'subscription_slug' => 'test-plan',
+        'customers' => ['from' => 0, 'to' => 100],
+        'installments' => ['from' => 0, 'to' => 100],
+        'notifications' => ['from' => 0, 'to' => 100],
+        'reports' => true,
+        'features' => ['basic_reports' => true],
+        'status' => 'active',
+    ], $limits));
+
+    return $user->refresh();
+}
+
+/**
+ * Create a merchant with an active plan and authenticate as them.
+ *
+ * @param  array<string, mixed>  $limits
+ */
+function actingAsMerchant(array $limits = []): App\Models\User
+{
+    $user = merchantWithPlan($limits);
+
+    Laravel\Sanctum\Sanctum::actingAs($user);
+
+    return $user;
+}
+
+/**
+ * Create an authenticated merchant whose plan cap for $resource is already exhausted.
+ */
+function actingAsMerchantAtCap(string $resource): App\Models\User
+{
+    return actingAsMerchant([$resource => ['from' => 0, 'to' => 0]]);
 }

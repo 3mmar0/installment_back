@@ -48,8 +48,8 @@ class CustomerService implements CustomerServiceInterface
             $customer = Customer::create([
                 'user_id' => $user->id,
                 'name' => $data['name'],
-                'email' => $data['email'],
-                'phone' => $data['phone'],
+                'email' => $data['email'] ?? null,
+                'phone' => $data['phone'] ?? null,
                 'address' => $data['address'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
@@ -68,28 +68,14 @@ class CustomerService implements CustomerServiceInterface
     public function updateCustomer(int $id, array $data, User $user): Customer
     {
         $customer = Customer::findOrFail($id);
-
-        // Check if user can update this customer
-        if (!$user->isOwner() && $customer->user_id !== $user->id) {
-            abort(403, 'Unauthorized to update this customer');
-        }
-
         $customer->update($data);
+
         return $customer->fresh();
     }
 
-    /**
-     * Delete a customer.
-     */
     public function deleteCustomer(int $id, User $user): bool
     {
         $customer = Customer::findOrFail($id);
-
-        // Check if user can delete this customer
-        if (!$user->isOwner() && $customer->user_id !== $user->id) {
-            abort(403, 'Unauthorized to delete this customer');
-        }
-
         $owner = $customer->user;
 
         $deleted = DB::transaction(function () use ($customer) {

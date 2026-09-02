@@ -148,60 +148,6 @@ class UserLimitController extends Controller
     }
 
     /**
-     * Increment resource usage.
-     */
-    public function increment(Request $request, string $resourceType): JsonResponse
-    {
-        $user = $request->user();
-
-        if (!$user) {
-            return $this->unauthorizedResponse();
-        }
-
-        $count = (int) $request->input('count', 1);
-        $succeeded = LimitsHelper::incrementUsage($user->id, $resourceType, $count);
-        $subscriptionInfo = LimitsHelper::getSubscriptionInfo($user->id);
-
-        if (!$succeeded) {
-            return $this->errorResponse('تعذّر زيادة الاستهلاك للمورد المحدد', 422);
-        }
-
-        return $this->successResponse([
-            'resource_type' => $resourceType,
-            'incremented_by' => $count,
-            'remaining' => LimitsHelper::getRemainingCount($user->id, $resourceType),
-            'subscription' => $subscriptionInfo['subscription'] ?? null,
-        ], 'تمت زيادة استهلاك المورد بنجاح');
-    }
-
-    /**
-     * Decrement resource usage.
-     */
-    public function decrement(Request $request, string $resourceType): JsonResponse
-    {
-        $user = $request->user();
-
-        if (!$user) {
-            return $this->unauthorizedResponse();
-        }
-
-        $count = (int) $request->input('count', 1);
-        $succeeded = LimitsHelper::decrementUsage($user->id, $resourceType, $count);
-        $subscriptionInfo = LimitsHelper::getSubscriptionInfo($user->id);
-
-        if (!$succeeded) {
-            return $this->errorResponse('تعذّر تقليل الاستهلاك للمورد المحدد', 422);
-        }
-
-        return $this->successResponse([
-            'resource_type' => $resourceType,
-            'decremented_by' => $count,
-            'remaining' => LimitsHelper::getRemainingCount($user->id, $resourceType),
-            'subscription' => $subscriptionInfo['subscription'] ?? null,
-        ], 'تم تقليل استهلاك المورد بنجاح');
-    }
-
-    /**
      * Determine if a feature is accessible to the authenticated user.
      */
     public function feature(Request $request, string $feature): JsonResponse

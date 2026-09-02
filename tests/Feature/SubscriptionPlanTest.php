@@ -13,13 +13,14 @@ class SubscriptionPlanTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_public_can_list_active_subscription_plans(): void
+    public function test_public_can_list_the_active_free_plan(): void
     {
         $owner = User::factory()->create(['role' => UserRole::Owner]);
 
+        // publicIndex intentionally exposes only the free plan.
         Subscription::create([
             'name' => 'Starter',
-            'slug' => 'starter',
+            'slug' => 'free',
             'currency' => 'EGP',
             'price' => 0,
             'duration' => 'monthly',
@@ -32,7 +33,7 @@ class SubscriptionPlanTest extends TestCase
             'created_by' => $owner->id,
         ]);
 
-        $response = $this->getJson('/api/subscriptions');
+        $response = $this->getJson('/api/subscriptions-public');
 
         $response
             ->assertOk()

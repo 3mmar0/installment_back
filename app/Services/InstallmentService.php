@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\Services\InstallmentServiceInterface;
+use App\Exceptions\PaymentException;
 use App\Helpers\InstallmentDateHelper;
 use App\Helpers\LimitsHelper;
 use App\Jobs\SendInstallmentRemindersJob;
@@ -91,11 +92,6 @@ class InstallmentService implements InstallmentServiceInterface
     public function deleteInstallment(int $id, User $user): bool
     {
         $installment = Installment::findOrFail($id);
-
-        if (!$user->isOwner() && $installment->user_id !== $user->id) {
-            abort(403, 'غير مصرح لك بحذف هذا القسط');
-        }
-
         $owner = $installment->user;
 
         $deleted = DB::transaction(function () use ($installment) {
@@ -115,10 +111,6 @@ class InstallmentService implements InstallmentServiceInterface
     public function updateInstallment(int $id, array $data, User $user): Installment
     {
         $installment = Installment::findOrFail($id);
-
-        if (!$user->isOwner() && $installment->user_id !== $user->id) {
-            abort(403, 'غير مصرح لك بتحديث هذا القسط');
-        }
 
         if (array_key_exists('name', $data)) {
             $installment->name = !empty(trim((string) $data['name']))
@@ -210,50 +202,56 @@ class InstallmentService implements InstallmentServiceInterface
      */
     public function markItemPaid(InstallmentItem $item, array $data, User $user): InstallmentItem
     {
-        // Check authorization
-        if (!$user->isOwner() && $item->installment->user_id !== $user->id) {
-            abort(403, 'Unauthorized to update this installment item');
-        }
+        $paidAmount = round((float) $data['paid_amount'], 2);
 
-        $item = DB::transaction(function () use ($item, $data, $user) {
-            $paidAmount = (float) $data['paid_amount'];
+        $item = DB::transaction(function () use ($item, $data, $paidAmount) {
+            // Re-read under a row lock so two concurrent "mark paid" requests
+            // cannot both pass the already-paid guard below.
+            $locked = InstallmentItem::whereKey($item->getKey())->lockForUpdate()->firstOrFail();
 
-            $item->markPaid(
+            if ($locked->status === 'paid') {
+                throw PaymentException::alreadyPaid();
+            }
+
+            $scheduled = round((float) $locked->amount, 2);
+
+            // There is no partial-payment model yet: markPaid() settles the item
+            // outright, so anything other than the exact amount corrupts the balance.
+            if (abs($paidAmount - $scheduled) > 0.001) {
+                throw PaymentException::amountMismatch($scheduled);
+            }
+
+            $locked->markPaid(
                 $paidAmount,
-                $data['reference'] ?? null,
+                $this->resolvePaymentReference($locked, $data['reference'] ?? null),
                 isset($data['note']) ? trim((string) $data['note']) : null
             );
 
-            $refreshedItem = $item->refresh();
-
-            try {
-                app(\App\Services\NotificationService::class)
-                    ->notifyPaymentReceived($user, $refreshedItem, $paidAmount);
-            } catch (\Throwable $e) {
-                \Log::warning('Payment saved but in-app notification failed', [
-                    'item_id' => $refreshedItem->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            // Check if all items are paid
-            $installment = $item->installment;
+            $installment = $locked->installment;
             $allPaid = $installment->items()->where('status', '!=', 'paid')->count() === 0;
 
             if ($allPaid) {
                 $installment->update(['status' => 'completed']);
             }
 
-            return $item->refresh();
+            return $locked->refresh();
         });
+
+        // Side effects run only once the payment is durably committed, so a
+        // rolled-back transaction can never leave a notification or email behind.
+        try {
+            app(\App\Services\NotificationService::class)
+                ->notifyPaymentReceived($user, $item, $paidAmount);
+        } catch (\Throwable $e) {
+            \Log::warning('Payment saved but in-app notification failed', [
+                'item_id' => $item->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         try {
             app(\App\Services\EmailNotificationService::class)
-                ->sendPaymentReceivedConfirmation(
-                    $item,
-                    (float) ($data['paid_amount'] ?? $item->paid_amount ?? 0),
-                    $user
-                );
+                ->sendPaymentReceivedConfirmation($item, $paidAmount, $user);
         } catch (\Throwable $e) {
             \Log::warning('Payment saved but email failed', [
                 'item_id' => $item->id,
@@ -262,6 +260,21 @@ class InstallmentService implements InstallmentServiceInterface
         }
 
         return $item;
+    }
+
+    /**
+     * Payment references are minted server-side so they can be relied on as an
+     * identifier; the clients previously generated `PAY-<timestamp>` locally.
+     */
+    private function resolvePaymentReference(InstallmentItem $item, ?string $provided): string
+    {
+        $provided = is_string($provided) ? trim($provided) : '';
+
+        if ($provided !== '') {
+            return $provided;
+        }
+
+        return sprintf('PAY-%d-%s', $item->getKey(), now()->format('YmdHis'));
     }
 
     /**
@@ -556,11 +569,6 @@ class InstallmentService implements InstallmentServiceInterface
             return [];
         }
 
-        // Check authorization
-        if (!$user->isOwner() && $installment->user_id !== $user->id) {
-            return [];
-        }
-
         // Load items with payment data
         $items = $installment->items()->get();
 
@@ -622,10 +630,6 @@ class InstallmentService implements InstallmentServiceInterface
 
         if (!$installment) {
             abort(404, 'القسط غير موجود');
-        }
-
-        if (!$user->isOwner() && $installment->user_id !== $user->id) {
-            abort(403, 'غير مصرح لك بإرسال تذكير لهذا القسط');
         }
 
         $query = $installment->items()

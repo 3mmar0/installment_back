@@ -27,10 +27,10 @@ use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::prefix('auth')->controller(AuthController::class)->group(function () {
-    Route::post('login', 'login');
-    Route::post('register', 'register');
-    Route::post('forgot-password', 'forgotPassword');
-    Route::post('reset-password', 'resetPassword');
+    Route::post('login', 'login')->middleware('throttle:10,1');
+    Route::post('register', 'register')->middleware('throttle:10,1');
+    Route::post('forgot-password', 'forgotPassword')->middleware('throttle:5,1');
+    Route::post('reset-password', 'resetPassword')->middleware('throttle:10,1');
 });
 
 // Public subscription plans
@@ -55,8 +55,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('current', 'current');
         Route::get('can-create/{resourceType}', 'canCreate');
         Route::post('refresh', 'refreshUsage');
-        Route::post('increment/{resourceType}', 'increment');
-        Route::post('decrement/{resourceType}', 'decrement');
         Route::get('feature/{feature}', 'feature');
     });
 

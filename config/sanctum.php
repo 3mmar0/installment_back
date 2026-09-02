@@ -47,7 +47,12 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Env-driven and disabled by default. Switching this on invalidates every
+    // token already issued, so it must not be enabled until refresh-capable web
+    // and mobile builds have reached users.
+    'expiration' => filled(env('SANCTUM_TOKEN_EXPIRATION'))
+        ? (int) env('SANCTUM_TOKEN_EXPIRATION')
+        : null,
 
     /*
     |--------------------------------------------------------------------------

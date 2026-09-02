@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Contracts\Services\InstallmentServiceInterface;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\MarkItemPaidRequest;
 use App\Http\Requests\StoreInstallmentRequest;
 use App\Http\Requests\UpdateInstallmentRequest;
 use App\Http\Resources\InstallmentItemResource;
@@ -77,10 +78,7 @@ class InstallmentController extends Controller
             return $this->notFoundResponse('القسط غير موجود');
         }
 
-        // Check authorization
-        if (!$request->user()->isOwner() && $installment->user_id !== $request->user()->id) {
-            return $this->forbiddenResponse('غير مصرح لك بعرض هذا القسط');
-        }
+        $this->authorize('view', $installment);
 
         return $this->successResponse(
             new InstallmentResource($installment),
@@ -88,72 +86,57 @@ class InstallmentController extends Controller
         );
     }
 
-    /**
-     * Update an installment.
-     */
     public function update(int $id, UpdateInstallmentRequest $request): JsonResponse
     {
-        try {
-            $installment = $this->installmentService->updateInstallment(
-                $id,
-                $request->validated(),
-                $request->user()
-            );
+        $installment = $this->installmentService->findInstallmentById($id);
 
-            return $this->successResponse(
-                new InstallmentResource($installment),
-                'تم تحديث القسط بنجاح'
-            );
-        } catch (\Exception $e) {
-            if ($e->getCode() === 403) {
-                return $this->forbiddenResponse($e->getMessage());
-            }
-
+        if (!$installment) {
             return $this->notFoundResponse('القسط غير موجود');
         }
+
+        $this->authorize('update', $installment);
+
+        $installment = $this->installmentService->updateInstallment(
+            $id,
+            $request->validated(),
+            $request->user()
+        );
+
+        return $this->successResponse(
+            new InstallmentResource($installment),
+            'تم تحديث القسط بنجاح'
+        );
     }
 
-    /**
-     * Delete an installment.
-     */
     public function destroy(int $id, Request $request): JsonResponse
     {
-        try {
-            $this->installmentService->deleteInstallment($id, $request->user());
+        $installment = $this->installmentService->findInstallmentById($id);
 
-            return $this->deletedResponse('تم حذف القسط بنجاح');
-        } catch (\Exception $e) {
-            if ($e->getCode() === 403) {
-                return $this->forbiddenResponse($e->getMessage());
-            }
+        if (!$installment) {
             return $this->notFoundResponse('القسط غير موجود');
         }
+
+        $this->authorize('delete', $installment);
+
+        $this->installmentService->deleteInstallment($id, $request->user());
+
+        return $this->deletedResponse('تم حذف القسط بنجاح');
     }
 
-    /**
-     * Mark an installment item as paid.
-     */
-    public function markItemPaid(InstallmentItem $item, Request $request): JsonResponse
+    public function markItemPaid(InstallmentItem $item, MarkItemPaidRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'paid_amount' => ['required', 'numeric', 'min:0'],
-            'note' => ['nullable', 'string', 'max:2000'],
-            'reference' => ['nullable', 'string', 'max:255'],
-        ]);
+        $this->authorize('update', $item);
 
-        try {
-            $updatedItem = $this->installmentService->markItemPaid($item, $data, $request->user());
+        $updatedItem = $this->installmentService->markItemPaid(
+            $item,
+            $request->validated(),
+            $request->user()
+        );
 
-            return $this->successResponse(
-                new InstallmentItemResource($updatedItem),
-                'تم تسجيل الدفعة بنجاح'
-            );
-        } catch (\Exception $e) {
-            if ($e->getCode() === 403) {
-                return $this->forbiddenResponse($e->getMessage());
-            }
-            return $this->errorResponse($e->getMessage());
-        }
+        return $this->successResponse(
+            new InstallmentItemResource($updatedItem),
+            'تم تسجيل الدفعة بنجاح'
+        );
     }
 
     /**
@@ -171,11 +154,15 @@ class InstallmentController extends Controller
      */
     public function stats(int $id, Request $request): JsonResponse
     {
-        $stats = $this->installmentService->getInstallmentStats($id, $request->user());
+        $installment = $this->installmentService->findInstallmentById($id);
 
-        if (empty($stats)) {
+        if (!$installment) {
             return $this->notFoundResponse('القسط غير موجود أو غير مصرح به');
         }
+
+        $this->authorize('view', $installment);
+
+        $stats = $this->installmentService->getInstallmentStats($id, $request->user());
 
         return $this->successResponse($stats, 'تم جلب إحصائيات القسط بنجاح');
     }
@@ -221,6 +208,14 @@ class InstallmentController extends Controller
      */
     public function sendReminders(int $id, Request $request): JsonResponse
     {
+        $installment = $this->installmentService->findInstallmentById($id);
+
+        if (!$installment) {
+            return $this->notFoundResponse('القسط غير موجود');
+        }
+
+        $this->authorize('update', $installment);
+
         $validated = $request->validate([
             'item_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
         ]);

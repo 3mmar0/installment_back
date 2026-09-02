@@ -2,6 +2,7 @@
 
 use App\Enums\ErrorCodes;
 use App\Exceptions\MailDeliveryException;
+use App\Exceptions\PaymentException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -69,6 +70,16 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
+        $exceptions->render(function (PaymentException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'error_code' => $e->errorCode->value,
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], $e->status);
+            }
+        });
+
         $exceptions->render(function (MailDeliveryException $e, Request $request) {
             if ($request->is('api/*')) {
                 return response()->json([
@@ -105,15 +116,24 @@ return Application::configure(basePath: dirname(__DIR__))
                     ? ($e->getMessage() ?: 'An error occurred')
                     : 'حدث خطأ في الخادم، يرجى المحاولة لاحقاً';
 
+                if (! $debug) {
+                    Log::error('Unhandled API exception', [
+                        'exception' => get_class($e),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                    ]);
+                }
+
                 return response()->json([
                     'error_code' => ErrorCodes::InternalServerError->value,
                     'success' => false,
                     'message' => $message,
+                    // Never serialise a stack trace: it leaks source paths, arguments
+                    // and env values to any API caller when APP_DEBUG is left on.
                     'error' => $debug ? [
                         'exception' => get_class($e),
                         'file' => $e->getFile(),
                         'line' => $e->getLine(),
-                        'trace' => $e->getTrace(),
                     ] : null,
                 ], $statusCode >= 100 && $statusCode < 600 ? $statusCode : 500);
             }
