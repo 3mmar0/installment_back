@@ -271,6 +271,7 @@ class PaymentRequestService
             basename($paymentRequest->attachment_path),
             [
                 'Content-Type' => $paymentRequest->attachment_mime ?? 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="'.basename($paymentRequest->attachment_path).'"',
             ]
         );
     }
