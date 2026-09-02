@@ -212,7 +212,7 @@ class PaymentRequestService
         $status = $filters['status'] ?? null;
 
         $query = PaymentRequest::query()
-            ->with(['clientAccount', 'installment', 'installmentItem', 'vendor'])
+            ->with(['clientAccount', 'installment.customer', 'installmentItem', 'vendor'])
             ->when(! $user->isOwner(), fn ($q) => $q->where('user_id', $user->id))
             ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status))
             ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
@@ -231,7 +231,7 @@ class PaymentRequestService
         $status = $filters['status'] ?? null;
 
         $query = PaymentRequest::query()
-            ->with(['installment', 'installmentItem', 'vendor'])
+            ->with(['installment.customer', 'installmentItem', 'vendor'])
             ->where('client_account_id', $client->id)
             ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status))
             ->latest('id');

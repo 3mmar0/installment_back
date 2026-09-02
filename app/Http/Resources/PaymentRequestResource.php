@@ -58,6 +58,14 @@ class PaymentRequestResource extends JsonResource
                     'total_amount' => $this->installment
                         ? (float) $this->installment->total_amount
                         : null,
+                    'customer' => $this->installment?->relationLoaded('customer')
+                        ? [
+                            'id' => $this->installment->customer?->id,
+                            'name' => $this->installment->customer?->name,
+                            'email' => $this->installment->customer?->email,
+                            'phone' => $this->installment->customer?->phone,
+                        ]
+                        : null,
                 ]
             ),
             'installment_item' => $this->when(
