@@ -5,8 +5,8 @@ use App\Http\Controllers\Api\ComplaintController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\ExportReportController;
 use App\Http\Controllers\Api\InstallmentController;
-use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\LegalController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\SystemSettingsController;
@@ -67,7 +67,7 @@ Route::middleware(['auth:sanctum', 'track.activity'])->group(function () {
         Route::get('complaint-list', 'index');
         Route::post('complaint-create', 'store');
         Route::get('complaint-show/{id}', 'show');
-        Route::post('complaint-reply/{id}', 'reply')->middleware('platform_admin');
+        Route::post('complaint-reply/{id}', 'reply');
     });
 
     Route::middleware('platform_admin')->controller(SystemSettingsController::class)->group(function () {

@@ -64,6 +64,11 @@ class User extends Authenticatable
         return $this->role === UserRole::Owner;
     }
 
+    public function canManageComplaints(): bool
+    {
+        return $this->isOwner() || $this->isPlatformAdmin();
+    }
+
     /**
      * Record that this user is using the system.
      *

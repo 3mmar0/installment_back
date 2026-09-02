@@ -23,7 +23,7 @@ class ComplaintController extends Controller
             ->with(['user', 'replier'])
             ->latest();
 
-        if (!$user->isPlatformAdmin()) {
+        if (! $user->canManageComplaints()) {
             $query->where('user_id', $user->id);
         }
 
@@ -40,7 +40,7 @@ class ComplaintController extends Controller
         /** @var \App\Models\User $user */
         $user = $request->user();
 
-        if ($user->isPlatformAdmin()) {
+        if ($user->canManageComplaints()) {
             return $this->forbiddenResponse('لا يمكن لمدير النظام إرسال طلبات');
         }
 
@@ -77,11 +77,11 @@ class ComplaintController extends Controller
 
         $complaint = Complaint::with(['user', 'replier'])->find($id);
 
-        if (!$complaint) {
+        if (! $complaint) {
             return $this->notFoundResponse('الطلب غير موجود');
         }
 
-        if (!$user->isPlatformAdmin() && $complaint->user_id !== $user->id) {
+        if (! $user->canManageComplaints() && $complaint->user_id !== $user->id) {
             return $this->forbiddenResponse('غير مصرح بعرض هذا الطلب');
         }
 
@@ -96,13 +96,13 @@ class ComplaintController extends Controller
         /** @var \App\Models\User $user */
         $user = $request->user();
 
-        if (!$user->isPlatformAdmin()) {
+        if (! $user->canManageComplaints()) {
             return $this->forbiddenResponse('غير مصرح بالرد على الطلبات');
         }
 
         $complaint = Complaint::with(['user', 'replier'])->find($id);
 
-        if (!$complaint) {
+        if (! $complaint) {
             return $this->notFoundResponse('الطلب غير موجود');
         }
 
