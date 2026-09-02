@@ -35,6 +35,8 @@ class ClientInstallmentResource extends JsonResource
                 fn () => [
                     'id' => $this->user?->id,
                     'name' => $this->user?->name,
+                    'phone' => $this->user?->phone,
+                    'email' => $this->user?->email,
                 ]
             ),
             'customer' => $this->when(

@@ -48,6 +48,8 @@ class PaymentRequestResource extends JsonResource
                 fn () => [
                     'id' => $this->vendor?->id,
                     'name' => $this->vendor?->name,
+                    'phone' => $this->vendor?->phone,
+                    'email' => $this->vendor?->email,
                 ]
             ),
             'installment' => $this->when(

@@ -57,6 +57,7 @@ class AuthService implements AuthServiceInterface
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
+            'phone' => $data['phone'] ?? null,
             'password' => Hash::make($data['password']),
             'role' => $data['role'] ?? UserRole::User,
             'registration_source' => RegistrationSource::tryFrom($data['registration_source'] ?? 'web')

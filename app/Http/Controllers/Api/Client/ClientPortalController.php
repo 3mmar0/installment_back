@@ -37,7 +37,7 @@ class ClientPortalController extends Controller
 
         $installments = Installment::query()
             ->whereIn('customer_id', $customerIds)
-            ->with(['user:id,name', 'customer:id,name,email,phone', 'items.paymentRequests' => function ($q) {
+            ->with(['user:id,name,email,phone', 'customer:id,name,email,phone', 'items.paymentRequests' => function ($q) {
                 $q->where('status', 'pending');
             }])
             ->latest('id')
@@ -86,7 +86,7 @@ class ClientPortalController extends Controller
 
         $installments = Installment::query()
             ->whereIn('customer_id', $customerIds)
-            ->with(['user:id,name', 'customer:id,name,email,phone', 'items.paymentRequests' => function ($q) {
+            ->with(['user:id,name,email,phone', 'customer:id,name,email,phone', 'items.paymentRequests' => function ($q) {
                 $q->where('status', 'pending');
             }])
             ->latest('id')
@@ -106,7 +106,7 @@ class ClientPortalController extends Controller
 
         $installment = Installment::query()
             ->whereIn('customer_id', $customerIds)
-            ->with(['user:id,name', 'customer:id,name,email,phone', 'items.paymentRequests' => function ($q) {
+            ->with(['user:id,name,email,phone', 'customer:id,name,email,phone', 'items.paymentRequests' => function ($q) {
                 $q->where('status', 'pending');
             }])
             ->find($id);

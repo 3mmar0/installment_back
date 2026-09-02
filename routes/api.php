@@ -82,6 +82,7 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
     Route::prefix('auth')->controller(AuthController::class)->group(function () {
         Route::post('logout', 'logout');
         Route::get('me', 'me');
+        Route::put('profile', 'updateProfile');
         Route::post('refresh', 'refresh');
         Route::delete('account', 'deleteAccount');
     });

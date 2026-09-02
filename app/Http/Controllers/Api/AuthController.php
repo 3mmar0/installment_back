@@ -56,6 +56,7 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['nullable', 'string', 'max:30'],
             'password' => ['required', 'confirmed', Password::defaults()],
             'registration_source' => ['nullable', 'in:web,mobile,admin'],
         ]);
@@ -99,6 +100,28 @@ class AuthController extends Controller
         return $this->successResponse(
             new UserResource($request->user()->load(['userLimit'])),
             'تم جلب بيانات المستخدم بنجاح'
+        );
+    }
+
+    /**
+     * Update authenticated vendor profile.
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $data = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:30'],
+        ]);
+
+        $user->fill($data);
+        $user->save();
+
+        return $this->successResponse(
+            new UserResource($user->fresh()->load(['userLimit'])),
+            'تم تحديث الملف الشخصي بنجاح'
         );
     }
 
