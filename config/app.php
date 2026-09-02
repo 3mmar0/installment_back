@@ -63,7 +63,7 @@ return [
     |
     */
 
-    'frontend_url' => env('FRONTEND_URL', 'https://installment-front.vercel.app'),
+    'frontend_url' => env('FRONTEND_URL', 'https://installment-front.ammarelgndy.cloud'),
 
     /*
     |--------------------------------------------------------------------------
@@ -73,7 +73,7 @@ return [
 
     'client_portal_url' => env(
         'CLIENT_PORTAL_URL',
-        rtrim((string) env('FRONTEND_URL', 'https://installment-front.vercel.app'), '/').'/client/register'
+        rtrim((string) env('FRONTEND_URL', 'https://installment-front.ammarelgndy.cloud'), '/').'/client/register'
     ),
 
     'mobile_app' => [
