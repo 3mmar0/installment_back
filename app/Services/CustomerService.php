@@ -22,12 +22,11 @@ class CustomerService implements CustomerServiceInterface
         $page = max((int) ($filters['page'] ?? 1), 1);
         $search = trim((string) ($filters['search'] ?? ''));
 
-        $query = $user->isOwner()
-            ? Customer::query()->with('user')
-            : $user->customers();
+        $query = ($user->isOwner() ? Customer::query() : $user->customers())
+            ->with('user');
 
         if ($search !== '') {
-            $query->where(function ($builder) use ($search) {
+            $query->where(function ($builder) use ($search, $user) {
                 if (ctype_digit($search)) {
                     $builder->where('customers.id', (int) $search);
                 }
@@ -37,6 +36,14 @@ class CustomerService implements CustomerServiceInterface
                     ->orWhere('customers.email', 'like', "%{$search}%")
                     ->orWhere('customers.phone', 'like', "%{$search}%")
                     ->orWhere('customers.address', 'like', "%{$search}%");
+
+                if ($user->isOwner()) {
+                    $builder->orWhereHas('user', function ($userQuery) use ($search) {
+                        $userQuery
+                            ->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+                }
             });
         }
 
@@ -48,7 +55,7 @@ class CustomerService implements CustomerServiceInterface
      */
     public function findCustomerById(int $id): ?Customer
     {
-        return Customer::find($id);
+        return Customer::with('user')->find($id);
     }
 
     /**
