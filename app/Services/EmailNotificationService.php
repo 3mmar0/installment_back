@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Jobs\SendCustomerReminderEmailsJob;
+use App\Mail\ClientAppInviteMail;
 use App\Mail\InstallmentCreated;
 use App\Mail\PaymentDueReminderBatch;
 use App\Mail\PaymentOverdueNoticeBatch;
 use App\Mail\PaymentReceivedConfirmation;
+use App\Models\ClientAccount;
 use App\Models\Customer;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
@@ -322,6 +324,46 @@ class EmailNotificationService
         } catch (\Throwable $e) {
             Log::error('Failed to send installment created email', [
                 'installment_id' => $installment->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Invite the customer to install the app / open the client portal when
+     * they have an email but no client portal account yet.
+     */
+    public function sendClientAppInviteIfNeeded(Installment $installment, User $vendor): void
+    {
+        try {
+            $installment->loadMissing('customer');
+            $customer = $installment->customer;
+
+            if (! $customer || ! $this->isValidEmail($customer->email)) {
+                return;
+            }
+
+            if ($customer->client_account_id) {
+                return;
+            }
+
+            $email = strtolower(trim((string) $customer->email));
+
+            $hasClientAccount = ClientAccount::query()
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->exists();
+
+            if ($hasClientAccount) {
+                return;
+            }
+
+            Mail::to($customer->email)->send(
+                new ClientAppInviteMail($customer, $installment, $vendor)
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to send client app invite email', [
+                'installment_id' => $installment->id,
+                'customer_id' => $installment->customer_id,
                 'error' => $e->getMessage(),
             ]);
         }

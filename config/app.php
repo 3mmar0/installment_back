@@ -67,6 +67,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Client portal & mobile app (invite emails)
+    |--------------------------------------------------------------------------
+    */
+
+    'client_portal_url' => env(
+        'CLIENT_PORTAL_URL',
+        rtrim((string) env('FRONTEND_URL', 'https://installment-front.vercel.app'), '/').'/client/register'
+    ),
+
+    'mobile_app' => [
+        'name' => env('MOBILE_APP_NAME', 'أقساطي'),
+        'play_store_url' => env(
+            'PLAY_STORE_URL',
+            'https://play.google.com/store/apps/details?id=com.installmentmanager.app'
+        ),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

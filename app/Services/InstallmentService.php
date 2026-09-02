@@ -194,6 +194,17 @@ class InstallmentService implements InstallmentServiceInterface
             ]);
         }
 
+        // Invite customer to install the app when they have email but no portal account.
+        try {
+            app(\App\Services\EmailNotificationService::class)
+                ->sendClientAppInviteIfNeeded($installment, $user);
+        } catch (\Throwable $e) {
+            \Log::warning('Installment created but client app invite failed', [
+                'installment_id' => $installment->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return $installment;
     }
 
