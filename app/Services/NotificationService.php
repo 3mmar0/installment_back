@@ -24,15 +24,16 @@ class NotificationService
         array $data = [],
         bool $enforceLimits = true
     ): ?Notification {
-        if ($enforceLimits && !$user->isOwner() && !LimitsHelper::canCreate($user->id, 'notifications')) {
+        if ($enforceLimits && ! $user->isOwner() && ! LimitsHelper::canCreate($user->id, 'notifications')) {
             abort(403, LimitsHelper::getLimitExceededMessage('notifications'));
         }
 
-        if (!$enforceLimits && !$user->isOwner() && !LimitsHelper::canCreate($user->id, 'notifications')) {
+        if (! $enforceLimits && ! $user->isOwner() && ! LimitsHelper::canCreate($user->id, 'notifications')) {
             \Log::info('Skipping notification due to plan limit', [
                 'user_id' => $user->id,
                 'type' => $type,
             ]);
+
             return null;
         }
 
@@ -44,7 +45,7 @@ class NotificationService
             'data' => $data,
         ]);
 
-        if (!$user->isOwner()) {
+        if (! $user->isOwner()) {
             LimitsHelper::incrementUsage($user->id, 'notifications');
         }
 
@@ -53,7 +54,7 @@ class NotificationService
 
     private function formatMoney(float $amount): string
     {
-        return number_format($amount, 2) . ' ج.م';
+        return number_format($amount, 2).' ج.م';
     }
 
     /**
@@ -208,23 +209,43 @@ class NotificationService
         array $data = [],
         string $type = 'system_announcement'
     ): int {
+        return $this->broadcastToUsers([], $title, $message, $data, $type);
+    }
+
+    /**
+     * Broadcast an in-app notification to selected regular users.
+     * An empty $userIds list sends to every regular user.
+     *
+     * @param  list<int>  $userIds
+     */
+    public function broadcastToUsers(
+        array $userIds,
+        string $title,
+        string $message,
+        array $data = [],
+        string $type = 'system_announcement'
+    ): int {
         $count = 0;
 
-        User::query()
-            ->where('role', UserRole::User)
-            ->chunkById(100, function ($users) use ($title, $message, $data, $type, &$count) {
-                foreach ($users as $user) {
-                    $this->create(
-                        $user,
-                        $type,
-                        $title,
-                        $message,
-                        $data,
-                        enforceLimits: false
-                    );
-                    $count++;
-                }
-            });
+        $query = User::query()->where('role', UserRole::User);
+
+        if ($userIds !== []) {
+            $query->whereIn('id', $userIds);
+        }
+
+        $query->chunkById(100, function ($users) use ($title, $message, $data, $type, &$count) {
+            foreach ($users as $user) {
+                $this->create(
+                    $user,
+                    $type,
+                    $title,
+                    $message,
+                    $data,
+                    enforceLimits: false
+                );
+                $count++;
+            }
+        });
 
         return $count;
     }
@@ -282,6 +303,7 @@ class NotificationService
                 'installment_id' => $installment->id ?? null,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -307,8 +329,9 @@ class NotificationService
     {
         $notification = $user->notifications()->findOrFail($notificationId);
 
-        if (!$notification->isRead()) {
+        if (! $notification->isRead()) {
             $notification->markAsRead();
+
             return true;
         }
 
