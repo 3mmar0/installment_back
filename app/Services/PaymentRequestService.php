@@ -29,6 +29,13 @@ class PaymentRequestService
             ->findOrFail($data['installment_item_id']);
 
         $installment = $item->installment;
+
+        if ($installment?->isPersonal()) {
+            throw ValidationException::withMessages([
+                'installment_item_id' => ['الأقساط الشخصية تُسجَّل مباشرة من صفحة القسط دون طلب موافقة'],
+            ]);
+        }
+
         $customer = $installment?->customer;
 
         if (! $customer || (int) $customer->client_account_id !== (int) $client->id) {

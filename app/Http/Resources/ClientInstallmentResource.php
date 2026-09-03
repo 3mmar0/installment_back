@@ -20,6 +20,7 @@ class ClientInstallmentResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'is_personal' => $this->isPersonal(),
             'total_amount' => (float) $this->total_amount,
             'products' => $this->products ?? [],
             'start_date' => $this->start_date instanceof \DateTimeInterface
@@ -31,7 +32,7 @@ class ClientInstallmentResource extends JsonResource
             'months' => $this->months,
             'status' => $this->status,
             'vendor' => $this->when(
-                $this->relationLoaded('user'),
+                $this->relationLoaded('user') && ! $this->isPersonal(),
                 fn () => [
                     'id' => $this->user?->id,
                     'name' => $this->user?->name,

@@ -65,6 +65,11 @@ class ClientAccount extends Authenticatable
         return $this->hasMany(Customer::class, 'client_account_id');
     }
 
+    public function personalInstallments()
+    {
+        return $this->hasMany(Installment::class, 'client_account_id');
+    }
+
     public function paymentRequests()
     {
         return $this->hasMany(PaymentRequest::class);

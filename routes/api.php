@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Client\ClientAuthController;
 use App\Http\Controllers\Api\UnifiedAuthController;
 use App\Http\Controllers\Api\Client\ClientNotificationController;
 use App\Http\Controllers\Api\Client\ClientPaymentRequestController;
+use App\Http\Controllers\Api\Client\ClientInstallmentController;
 use App\Http\Controllers\Api\Client\ClientPortalController;
 use App\Http\Controllers\Api\ComplaintController;
 use App\Http\Controllers\Api\CustomerController;
@@ -67,6 +68,13 @@ Route::middleware(['auth:sanctum', 'client', 'track.activity'])->prefix('client'
         Route::get('dashboard', 'dashboard');
         Route::get('installment-list', 'installmentList');
         Route::get('installment-show/{id}', 'installmentShow');
+    });
+
+    Route::controller(ClientInstallmentController::class)->group(function () {
+        Route::post('installment-create', 'store');
+        Route::put('installment-update/{id}', 'update');
+        Route::delete('installment-delete/{id}', 'destroy');
+        Route::post('installment-item-pay/{item}', 'markItemPaid');
     });
 
     Route::controller(ClientPaymentRequestController::class)->group(function () {

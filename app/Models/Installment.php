@@ -12,6 +12,7 @@ class Installment extends Model
     protected $fillable = [
         'user_id',
         'customer_id',
+        'client_account_id',
         'name',
         'total_amount',
         'products',
@@ -35,6 +36,16 @@ class Installment extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function clientAccount()
+    {
+        return $this->belongsTo(ClientAccount::class);
+    }
+
+    public function isPersonal(): bool
+    {
+        return $this->client_account_id !== null && $this->user_id === null;
     }
     public function items()
     {

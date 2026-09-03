@@ -6,8 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ClientInstallmentResource;
 use App\Http\Traits\ApiResponse;
 use App\Models\ClientAccount;
-use App\Models\Installment;
-use App\Models\InstallmentItem;
+use App\Services\ClientInstallmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,13 +14,17 @@ class ClientPortalController extends Controller
 {
     use ApiResponse;
 
+    public function __construct(
+        private readonly ClientInstallmentService $clientInstallmentService
+    ) {}
+
     public function dashboard(Request $request): JsonResponse
     {
         /** @var ClientAccount $client */
         $client = $request->user();
-        $customerIds = $client->customers()->pluck('id');
+        $customerIds = $this->clientInstallmentService->customerIdsForClient($client);
 
-        if ($customerIds->isEmpty()) {
+        if ($customerIds->isEmpty() && ! $client->personalInstallments()->exists()) {
             return $this->successResponse([
                 'linked_customers' => 0,
                 'total_plans' => 0,
@@ -32,11 +35,11 @@ class ClientPortalController extends Controller
                 'pending_count' => 0,
                 'next_due' => null,
                 'installments' => [],
-            ], 'لا توجد أقساط مرتبطة بحسابك بعد');
+            ], 'لا توجد أقساط بعد — يمكنك إنشاء قسط شخصي للمتابعة');
         }
 
-        $installments = Installment::query()
-            ->whereIn('customer_id', $customerIds)
+        $installments = $this->clientInstallmentService
+            ->queryForClient($client)
             ->with(['user:id,name,email,phone', 'customer:id,name,email,phone', 'items.paymentRequests' => function ($q) {
                 $q->where('status', 'pending');
             }])
@@ -82,10 +85,9 @@ class ClientPortalController extends Controller
     {
         /** @var ClientAccount $client */
         $client = $request->user();
-        $customerIds = $client->customers()->pluck('id');
 
-        $installments = Installment::query()
-            ->whereIn('customer_id', $customerIds)
+        $installments = $this->clientInstallmentService
+            ->queryForClient($client)
             ->with(['user:id,name,email,phone', 'customer:id,name,email,phone', 'items.paymentRequests' => function ($q) {
                 $q->where('status', 'pending');
             }])
@@ -102,14 +104,8 @@ class ClientPortalController extends Controller
     {
         /** @var ClientAccount $client */
         $client = $request->user();
-        $customerIds = $client->customers()->pluck('id');
 
-        $installment = Installment::query()
-            ->whereIn('customer_id', $customerIds)
-            ->with(['user:id,name,email,phone', 'customer:id,name,email,phone', 'items.paymentRequests' => function ($q) {
-                $q->where('status', 'pending');
-            }])
-            ->find($id);
+        $installment = $this->clientInstallmentService->findForClient($client, $id);
 
         if (! $installment) {
             return $this->notFoundResponse('القسط غير موجود');
