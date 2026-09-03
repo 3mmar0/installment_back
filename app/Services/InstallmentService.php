@@ -14,7 +14,6 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use App\Services\NotificationService;
 
 class InstallmentService implements InstallmentServiceInterface
 {
@@ -30,8 +29,13 @@ class InstallmentService implements InstallmentServiceInterface
         $customerId = isset($filters['customer_id']) ? (int) $filters['customer_id'] : null;
         $filterUserId = isset($filters['user_id']) ? (int) $filters['user_id'] : null;
 
+        $relations = ['customer', 'items'];
+        if ($user->isOwner()) {
+            $relations[] = 'user';
+        }
+
         $query = Installment::query()
-            ->with(['customer', 'items'])
+            ->with($relations)
             ->forUser($user);
 
         if ($user->isOwner() && $filterUserId > 0) {
@@ -57,6 +61,14 @@ class InstallmentService implements InstallmentServiceInterface
 
                 $builder->orWhere('notes', 'like', "%{$search}%");
                 $builder->orWhere('name', 'like', "%{$search}%");
+
+                if ($user->isOwner()) {
+                    $builder->orWhereHas('user', function ($userQuery) use ($search) {
+                        $userQuery
+                            ->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+                }
             });
         }
 
@@ -98,7 +110,7 @@ class InstallmentService implements InstallmentServiceInterface
             return $installment->delete();
         });
 
-        if ($deleted && $owner && !$owner->isOwner()) {
+        if ($deleted && $owner && ! $owner->isOwner()) {
             LimitsHelper::decrementUsage($installment->user_id, 'installments');
         }
 
@@ -113,7 +125,7 @@ class InstallmentService implements InstallmentServiceInterface
         $installment = Installment::findOrFail($id);
 
         if (array_key_exists('name', $data)) {
-            $installment->name = !empty(trim((string) $data['name']))
+            $installment->name = ! empty(trim((string) $data['name']))
                 ? trim((string) $data['name'])
                 : null;
         }
@@ -128,7 +140,7 @@ class InstallmentService implements InstallmentServiceInterface
      */
     public function createInstallment(array $data, User $user): Installment
     {
-        if (!$user->isOwner() && !LimitsHelper::canCreate($user->id, 'installments')) {
+        if (! $user->isOwner() && ! LimitsHelper::canCreate($user->id, 'installments')) {
             abort(403, LimitsHelper::getLimitExceededMessage('installments'));
         }
 
@@ -142,7 +154,7 @@ class InstallmentService implements InstallmentServiceInterface
             $installment = Installment::create([
                 'user_id' => $user->id,
                 'customer_id' => $data['customer_id'],
-                'name' => !empty(trim((string) ($data['name'] ?? '')))
+                'name' => ! empty(trim((string) ($data['name'] ?? '')))
                     ? trim((string) $data['name'])
                     : null,
                 'total_amount' => $total,
@@ -166,7 +178,7 @@ class InstallmentService implements InstallmentServiceInterface
                 ]);
             }
 
-            if (!$user->isOwner()) {
+            if (! $user->isOwner()) {
                 LimitsHelper::incrementUsage($user->id, 'installments');
             }
 
@@ -576,7 +588,7 @@ class InstallmentService implements InstallmentServiceInterface
     {
         $installment = $this->findInstallmentById($installmentId);
 
-        if (!$installment) {
+        if (! $installment) {
             return [];
         }
 
@@ -639,7 +651,7 @@ class InstallmentService implements InstallmentServiceInterface
     {
         $installment = $this->findInstallmentById($installmentId);
 
-        if (!$installment) {
+        if (! $installment) {
             abort(404, 'القسط غير موجود');
         }
 
