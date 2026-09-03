@@ -191,7 +191,7 @@ class CustomerService implements CustomerServiceInterface
     {
         $installments = $customer->installments();
 
-        return [
+        $stats = [
             'total_installments' => $installments->count(),
             'active_installments' => $installments->where('status', 'active')->count(),
             'total_amount' => $installments->sum('total_amount'),
@@ -200,6 +200,51 @@ class CustomerService implements CustomerServiceInterface
                 ->sum(function ($installment) {
                     return $installment->items->where('status', 'paid')->sum('paid_amount');
                 }),
+        ];
+
+        $portalBreakdown = $this->getClientPortalInstallmentBreakdown($customer);
+        if ($portalBreakdown !== null) {
+            $stats['client_portal_breakdown'] = $portalBreakdown;
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Explain why a linked client may see more installments in the app than on this customer row.
+     *
+     * @return array<string, int>|null
+     */
+    public function getClientPortalInstallmentBreakdown(Customer $customer): ?array
+    {
+        if (! $customer->client_account_id) {
+            return null;
+        }
+
+        $clientId = (int) $customer->client_account_id;
+        $linkedCustomerIds = Customer::query()
+            ->where('client_account_id', $clientId)
+            ->pluck('id');
+
+        $onThisCustomer = (int) $customer->installments()->count();
+
+        $personal = (int) Installment::query()
+            ->where('client_account_id', $clientId)
+            ->whereNull('customer_id')
+            ->count();
+
+        $onOtherLinkedCustomers = (int) Installment::query()
+            ->whereIn('customer_id', $linkedCustomerIds)
+            ->where('customer_id', '!=', $customer->id)
+            ->count();
+
+        $totalInClientApp = $onThisCustomer + $personal + $onOtherLinkedCustomers;
+
+        return [
+            'total_in_client_app' => $totalInClientApp,
+            'on_this_customer' => $onThisCustomer,
+            'personal' => $personal,
+            'on_other_linked_customers' => $onOtherLinkedCustomers,
         ];
     }
 }
