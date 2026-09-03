@@ -27,6 +27,9 @@ class CustomerController extends Controller
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'user_id' => ['sometimes', 'integer', 'min:1'],
+            'has_installments' => ['sometimes', 'nullable', 'string', 'in:yes,no'],
+            'sort' => ['sometimes', 'nullable', 'string', 'in:newest,oldest,name_asc,name_desc'],
         ]);
 
         $customers = $this->customerService->getCustomersForUser(

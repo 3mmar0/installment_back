@@ -11,7 +11,7 @@ interface CustomerServiceInterface
     /**
      * Get customers for a specific user with pagination and optional search.
      *
-     * @param  array{page?: int, per_page?: int, search?: string}  $filters
+     * @param  array{page?: int, per_page?: int, search?: string, user_id?: int, has_installments?: string, sort?: string}  $filters
      */
     public function getCustomersForUser(User $user, array $filters = []): LengthAwarePaginator;
 

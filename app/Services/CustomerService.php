@@ -22,16 +22,29 @@ class CustomerService implements CustomerServiceInterface
     /**
      * Get customers for a specific user with pagination and optional search.
      *
-     * @param  array{page?: int, per_page?: int, search?: string}  $filters
+     * @param  array{page?: int, per_page?: int, search?: string, user_id?: int, has_installments?: string, sort?: string}  $filters
      */
     public function getCustomersForUser(User $user, array $filters = []): LengthAwarePaginator
     {
         $perPage = min(max((int) ($filters['per_page'] ?? 20), 1), 100);
         $page = max((int) ($filters['page'] ?? 1), 1);
         $search = trim((string) ($filters['search'] ?? ''));
+        $hasInstallments = (string) ($filters['has_installments'] ?? '');
+        $sort = (string) ($filters['sort'] ?? 'newest');
 
         $query = ($user->isOwner() ? Customer::query() : $user->customers())
-            ->with('user');
+            ->with('user')
+            ->withCount('installments');
+
+        if ($user->isOwner() && ! empty($filters['user_id'])) {
+            $query->where('customers.user_id', (int) $filters['user_id']);
+        }
+
+        if ($hasInstallments === 'yes') {
+            $query->has('installments');
+        } elseif ($hasInstallments === 'no') {
+            $query->doesntHave('installments');
+        }
 
         if ($search !== '') {
             $query->where(function ($builder) use ($search, $user) {
@@ -55,7 +68,14 @@ class CustomerService implements CustomerServiceInterface
             });
         }
 
-        return $query->latest('customers.id')->paginate($perPage, ['*'], 'page', $page);
+        match ($sort) {
+            'oldest' => $query->oldest('customers.id'),
+            'name_asc' => $query->orderBy('customers.name'),
+            'name_desc' => $query->orderByDesc('customers.name'),
+            default => $query->latest('customers.id'),
+        };
+
+        return $query->paginate($perPage, ['*'], 'page', $page);
     }
 
     /**
