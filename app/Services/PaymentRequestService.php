@@ -6,6 +6,7 @@ use App\Enums\PaymentRequestStatus;
 use App\Models\ClientAccount;
 use App\Models\InstallmentItem;
 use App\Models\PaymentRequest;
+use App\Models\PaymentRequestLog;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
@@ -52,6 +53,21 @@ class PaymentRequestService
             ]);
         }
 
+        $existingRejected = PaymentRequest::query()
+            ->where('installment_item_id', $item->id)
+            ->where('client_account_id', $client->id)
+            ->where('status', PaymentRequestStatus::Rejected)
+            ->first();
+
+        if ($existingRejected) {
+            throw ValidationException::withMessages([
+                'installment_item_id' => [
+                    'يوجد طلب مرفوض لهذه الدفعة. يرجى إعادة إرسال الطلب #'.$existingRejected->id,
+                ],
+                'payment_request_id' => [(string) $existingRejected->id],
+            ]);
+        }
+
         $path = $attachment->store(
             'payment-proofs/'.$client->id,
             'local'
@@ -70,6 +86,10 @@ class PaymentRequestService
             'attachment_size' => $attachment->getSize(),
             'status' => PaymentRequestStatus::Pending,
             'pending_item_id' => $item->id,
+        ]);
+
+        $this->recordLog($paymentRequest, PaymentRequestLog::ACTION_SUBMITTED, [
+            'actor_client_id' => $client->id,
         ]);
 
         $vendor = User::find($installment->user_id);
@@ -93,7 +113,107 @@ class PaymentRequestService
             );
         }
 
-        return $paymentRequest->load(['installment', 'installmentItem', 'vendor', 'clientAccount']);
+        return $paymentRequest->load(['installment', 'installmentItem', 'vendor', 'clientAccount', 'logs']);
+    }
+
+    /**
+     * @param  array{paid_on: string, note?: string}  $data
+     */
+    public function resubmit(
+        PaymentRequest $paymentRequest,
+        ClientAccount $client,
+        array $data,
+        UploadedFile $attachment
+    ): PaymentRequest {
+        if ((int) $paymentRequest->client_account_id !== (int) $client->id) {
+            abort(403, 'غير مصرح بإعادة إرسال هذا الطلب');
+        }
+
+        if ($paymentRequest->status !== PaymentRequestStatus::Rejected) {
+            throw ValidationException::withMessages([
+                'status' => ['يمكن إعادة إرسال الطلبات المرفوضة فقط'],
+            ]);
+        }
+
+        $item = InstallmentItem::with(['installment.customer'])
+            ->findOrFail($paymentRequest->installment_item_id);
+
+        if ($item->status === 'paid' || $item->paid_at) {
+            throw ValidationException::withMessages([
+                'status' => ['هذه الدفعة مسددة مسبقاً'],
+            ]);
+        }
+
+        $existingPending = PaymentRequest::query()
+            ->where('pending_item_id', $item->id)
+            ->where('id', '!=', $paymentRequest->id)
+            ->exists();
+
+        if ($existingPending) {
+            throw ValidationException::withMessages([
+                'status' => ['يوجد طلب دفع قيد المراجعة لهذه الدفعة'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($paymentRequest, $client, $data, $attachment, $item) {
+            $this->recordLog($paymentRequest, PaymentRequestLog::ACTION_RESUBMITTED, [
+                'actor_client_id' => $client->id,
+                'rejection_reason' => $paymentRequest->rejection_reason,
+            ]);
+
+            if ($paymentRequest->attachment_path) {
+                Storage::disk('local')->delete($paymentRequest->attachment_path);
+            }
+
+            $path = $attachment->store(
+                'payment-proofs/'.$client->id,
+                'local'
+            );
+
+            $paymentRequest->update([
+                'paid_on' => $data['paid_on'],
+                'note' => $data['note'] ?? null,
+                'attachment_path' => $path,
+                'attachment_mime' => $attachment->getMimeType(),
+                'attachment_size' => $attachment->getSize(),
+                'status' => PaymentRequestStatus::Pending,
+                'reviewed_by' => null,
+                'reviewed_at' => null,
+                'rejection_reason' => null,
+                'pending_item_id' => $item->id,
+            ]);
+
+            $installment = $item->installment;
+            $vendor = User::find($paymentRequest->user_id);
+            if ($vendor) {
+                $amountFormatted = number_format((float) $paymentRequest->amount, 2).' ج.م';
+                $clientName = $client->name ?: $installment?->customer?->name;
+
+                $this->notificationService->create(
+                    $vendor,
+                    'payment_request',
+                    'إعادة إرسال طلب تأكيد دفع',
+                    "أعاد العميل {$clientName} إرسال طلب الدفع #{$paymentRequest->id} بقيمة {$amountFormatted}",
+                    [
+                        'payment_request_id' => $paymentRequest->id,
+                        'installment_id' => $paymentRequest->installment_id,
+                        'item_id' => $paymentRequest->installment_item_id,
+                        'amount' => (float) $paymentRequest->amount,
+                        'client_name' => $clientName,
+                        'resubmitted' => true,
+                    ],
+                    enforceLimits: false
+                );
+            }
+
+            return $paymentRequest->fresh([
+                'installment',
+                'installmentItem',
+                'vendor',
+                'clientAccount',
+                'logs',
+            ]);
+        });
     }
 
     public function approve(PaymentRequest $paymentRequest, User $vendor): PaymentRequest
@@ -128,6 +248,10 @@ class PaymentRequestService
                 'reviewed_by' => $vendor->id,
                 'reviewed_at' => now(),
                 'pending_item_id' => null,
+            ]);
+
+            $this->recordLog($paymentRequest, PaymentRequestLog::ACTION_APPROVED, [
+                'actor_user_id' => $vendor->id,
             ]);
 
             $client = $paymentRequest->clientAccount;
@@ -174,6 +298,11 @@ class PaymentRequestService
             'reviewed_at' => now(),
             'rejection_reason' => $reason,
             'pending_item_id' => null,
+        ]);
+
+        $this->recordLog($paymentRequest, PaymentRequestLog::ACTION_REJECTED, [
+            'actor_user_id' => $vendor->id,
+            'rejection_reason' => $reason,
         ]);
 
         $client = $paymentRequest->clientAccount;
@@ -231,7 +360,7 @@ class PaymentRequestService
         $status = $filters['status'] ?? null;
 
         $query = PaymentRequest::query()
-            ->with(['installment.customer', 'installmentItem', 'vendor'])
+            ->with(['installment.customer', 'installmentItem', 'vendor', 'logs'])
             ->where('client_account_id', $client->id)
             ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status))
             ->latest('id');
@@ -274,5 +403,38 @@ class PaymentRequestService
                 'Content-Disposition' => 'inline; filename="'.basename($paymentRequest->attachment_path).'"',
             ]
         );
+    }
+
+    /**
+     * @param  array{
+     *     actor_user_id?: int|null,
+     *     actor_client_id?: int|null,
+     *     rejection_reason?: string|null,
+     *     paid_on?: mixed,
+     *     note?: string|null,
+     *     attachment_path?: string|null,
+     *     attachment_mime?: string|null,
+     *     attachment_size?: int|null,
+     * }  $overrides
+     */
+    private function recordLog(
+        PaymentRequest $paymentRequest,
+        string $action,
+        array $overrides = []
+    ): PaymentRequestLog {
+        return PaymentRequestLog::create([
+            'payment_request_id' => $paymentRequest->id,
+            'action' => $action,
+            'paid_on' => $overrides['paid_on'] ?? $paymentRequest->paid_on,
+            'note' => array_key_exists('note', $overrides)
+                ? $overrides['note']
+                : $paymentRequest->note,
+            'attachment_path' => $overrides['attachment_path'] ?? $paymentRequest->attachment_path,
+            'attachment_mime' => $overrides['attachment_mime'] ?? $paymentRequest->attachment_mime,
+            'attachment_size' => $overrides['attachment_size'] ?? $paymentRequest->attachment_size,
+            'rejection_reason' => $overrides['rejection_reason'] ?? null,
+            'actor_user_id' => $overrides['actor_user_id'] ?? null,
+            'actor_client_id' => $overrides['actor_client_id'] ?? null,
+        ]);
     }
 }

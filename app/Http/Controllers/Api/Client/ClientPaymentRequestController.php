@@ -51,6 +51,37 @@ class ClientPaymentRequestController extends Controller
         );
     }
 
+    public function resubmit(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'paid_on' => ['required', 'date', 'before_or_equal:today'],
+            'note' => ['nullable', 'string', 'max:1000'],
+            'attachment' => ['required', 'file', 'mimes:jpeg,jpg,png,webp,pdf', 'max:5120'],
+        ]);
+
+        /** @var ClientAccount $client */
+        $client = $request->user();
+        $paymentRequest = PaymentRequest::findOrFail($id);
+
+        try {
+            $paymentRequest = $this->paymentRequestService->resubmit(
+                $paymentRequest,
+                $client,
+                $data,
+                $request->file('attachment')
+            );
+        } catch (ValidationException $e) {
+            $message = collect($e->errors())->flatten()->first() ?? 'تعذر إعادة إرسال الطلب';
+
+            return $this->errorResponse($message, 422, $e->errors());
+        }
+
+        return $this->successResponse(
+            new PaymentRequestResource($paymentRequest),
+            'تم إعادة إرسال طلب الدفع بنجاح، بانتظار تأكيد البائع'
+        );
+    }
+
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([

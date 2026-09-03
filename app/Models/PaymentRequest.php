@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\PaymentRequestStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PaymentRequest extends Model
 {
@@ -60,6 +61,11 @@ class PaymentRequest extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function logs(): HasMany
+    {
+        return $this->hasMany(PaymentRequestLog::class)->latest('id');
     }
 
     public function isPending(): bool

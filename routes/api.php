@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Client\ClientAuthController;
+use App\Http\Controllers\Api\UnifiedAuthController;
 use App\Http\Controllers\Api\Client\ClientNotificationController;
 use App\Http\Controllers\Api\Client\ClientPaymentRequestController;
 use App\Http\Controllers\Api\Client\ClientPortalController;
@@ -26,11 +27,16 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Public routes
-Route::prefix('auth')->controller(AuthController::class)->group(function () {
-    Route::post('login', 'login')->middleware('throttle:10,1');
-    Route::post('register', 'register')->middleware('throttle:10,1');
-    Route::post('forgot-password', 'forgotPassword')->middleware('throttle:5,1');
-    Route::post('reset-password', 'resetPassword')->middleware('throttle:10,1');
+Route::prefix('auth')->group(function () {
+    Route::controller(AuthController::class)->group(function () {
+        Route::post('login', 'login')->middleware('throttle:10,1');
+        Route::post('register', 'register')->middleware('throttle:10,1');
+        Route::post('forgot-password', 'forgotPassword')->middleware('throttle:5,1');
+        Route::post('reset-password', 'resetPassword')->middleware('throttle:10,1');
+    });
+
+    Route::post('unified-login', [UnifiedAuthController::class, 'login'])
+        ->middleware('throttle:10,1');
 });
 
 // Public client auth
@@ -65,6 +71,7 @@ Route::middleware(['auth:sanctum', 'client', 'track.activity'])->prefix('client'
 
     Route::controller(ClientPaymentRequestController::class)->group(function () {
         Route::post('payment-request-create', 'store');
+        Route::post('payment-request-resubmit/{id}', 'resubmit');
         Route::get('payment-request-list', 'index');
         Route::get('payment-request-attachment/{id}', 'attachment');
     });

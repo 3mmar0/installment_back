@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\PaymentRequestLogResource;
 use App\Enums\PaymentRequestStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -85,6 +86,9 @@ class PaymentRequestResource extends JsonResource
             ),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
+            'logs' => PaymentRequestLogResource::collection(
+                $this->whenLoaded('logs')
+            ),
         ];
     }
 }

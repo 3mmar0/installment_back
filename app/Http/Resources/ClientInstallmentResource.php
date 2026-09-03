@@ -61,6 +61,7 @@ class ClientInstallmentResource extends JsonResource
             : $item->due_date;
 
         $pendingRequest = null;
+        $rejectedRequest = null;
         if ($item->relationLoaded('paymentRequests')) {
             $pending = $item->paymentRequests
                 ->first(fn ($pr) => $pr->status === PaymentRequestStatus::Pending
@@ -78,6 +79,24 @@ class ClientInstallmentResource extends JsonResource
                     'amount' => (float) $pending->amount,
                 ];
             }
+
+            $rejected = $item->paymentRequests
+                ->first(fn ($pr) => $pr->status === PaymentRequestStatus::Rejected
+                    || $pr->status === PaymentRequestStatus::Rejected->value);
+
+            if ($rejected) {
+                $rejectedRequest = [
+                    'id' => $rejected->id,
+                    'status' => $rejected->status instanceof PaymentRequestStatus
+                        ? $rejected->status->value
+                        : $rejected->status,
+                    'paid_on' => $rejected->paid_on instanceof \DateTimeInterface
+                        ? $rejected->paid_on->format('Y-m-d')
+                        : $rejected->paid_on,
+                    'amount' => (float) $rejected->amount,
+                    'rejection_reason' => $rejected->rejection_reason,
+                ];
+            }
         }
 
         return [
@@ -90,6 +109,7 @@ class ClientInstallmentResource extends JsonResource
             'paid_at' => $item->paid_at?->toISOString(),
             'reference' => $item->reference,
             'pending_payment_request' => $pendingRequest,
+            'rejected_payment_request' => $rejectedRequest,
         ];
     }
 }
