@@ -33,11 +33,18 @@ class CustomerService implements CustomerServiceInterface
         $sort = (string) ($filters['sort'] ?? 'newest');
 
         $query = ($user->isOwner() ? Customer::query() : $user->customers())
-            ->with('user')
+            ->with(['user', 'clientAccount:id,name,email,phone'])
             ->withCount('installments');
 
         if ($user->isOwner() && ! empty($filters['user_id'])) {
             $query->where('customers.user_id', (int) $filters['user_id']);
+        }
+
+        $hasClientAccount = (string) ($filters['has_client_account'] ?? '');
+        if ($hasClientAccount === 'yes') {
+            $query->whereNotNull('customers.client_account_id');
+        } elseif ($hasClientAccount === 'no') {
+            $query->whereNull('customers.client_account_id');
         }
 
         if ($hasInstallments === 'yes') {
@@ -83,7 +90,7 @@ class CustomerService implements CustomerServiceInterface
      */
     public function findCustomerById(int $id): ?Customer
     {
-        return Customer::with('user')->find($id);
+        return Customer::with(['user', 'clientAccount:id,name,email,phone'])->find($id);
     }
 
     /**

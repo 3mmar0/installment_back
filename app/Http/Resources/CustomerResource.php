@@ -21,6 +21,16 @@ class CustomerResource extends JsonResource
             'phone' => $this->phone,
             'address' => $this->address,
             'notes' => $this->notes,
+            'has_client_account' => $this->client_account_id !== null,
+            'client_account' => $this->when(
+                $this->relationLoaded('clientAccount') && $this->clientAccount,
+                fn () => [
+                    'id' => $this->clientAccount->id,
+                    'name' => $this->clientAccount->name,
+                    'email' => $this->clientAccount->email,
+                    'phone' => $this->clientAccount->phone,
+                ]
+            ),
             'user' => new UserResource($this->whenLoaded('user')),
             'installments_count' => $this->whenCounted('installments'),
             'installments' => InstallmentResource::collection($this->whenLoaded('installments')),

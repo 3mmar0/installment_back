@@ -29,6 +29,7 @@ class CustomerController extends Controller
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
             'user_id' => ['sometimes', 'integer', 'min:1'],
             'has_installments' => ['sometimes', 'nullable', 'string', 'in:yes,no'],
+            'has_client_account' => ['sometimes', 'nullable', 'string', 'in:yes,no'],
             'sort' => ['sometimes', 'nullable', 'string', 'in:newest,oldest,name_asc,name_desc'],
         ]);
 
@@ -70,7 +71,7 @@ class CustomerController extends Controller
 
         $this->authorize('view', $customer);
 
-        $customer->load(['installments.items', 'user']);
+        $customer->load(['installments.items', 'user', 'clientAccount:id,name,email,phone']);
 
         return $this->successResponse(
             new CustomerResource($customer),
