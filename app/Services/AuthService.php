@@ -58,10 +58,19 @@ class AuthService implements AuthServiceInterface
      */
     public function register(array $data): array
     {
+        $country = $data['country'] ?? 'EG';
+        $currenciesByCountry = [
+            'EG' => 'EGP', 'SA' => 'SAR', 'AE' => 'AED', 'KW' => 'KWD',
+            'QA' => 'QAR', 'BH' => 'BHD', 'OM' => 'OMR', 'JO' => 'JOD',
+            'MA' => 'MAD', 'US' => 'USD', 'GB' => 'GBP',
+        ];
+
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
             'phone' => $data['phone'] ?? null,
+            'country' => $country,
+            'currency' => $currenciesByCountry[$country] ?? 'EGP',
             'password' => Hash::make($data['password']),
             'role' => $data['role'] ?? UserRole::User,
             'registration_source' => RegistrationSource::tryFrom($data['registration_source'] ?? 'web')

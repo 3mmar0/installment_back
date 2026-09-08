@@ -57,6 +57,7 @@ class AuthController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:30'],
+            'country' => ['sometimes', 'required', 'string', 'size:2', 'in:EG,SA,AE,KW,QA,BH,OM,JO,MA,US,GB'],
             'password' => ['required', 'confirmed', Password::defaults()],
             'registration_source' => ['nullable', 'in:web,mobile,admin'],
         ]);
