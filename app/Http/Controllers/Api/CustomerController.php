@@ -9,6 +9,8 @@ use App\Http\Requests\UpdateCustomerRequest;
 use App\Http\Resources\CustomerResource;
 use App\Http\Traits\ApiResponse;
 use App\Services\EmailNotificationService;
+use App\Models\Customer;
+use App\Models\Installment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -72,6 +74,23 @@ class CustomerController extends Controller
         $this->authorize('view', $customer);
 
         $customer->load(['installments.items', 'user', 'clientAccount:id,name,email,phone']);
+
+        // A super admin needs the complete history visible to the linked client,
+        // including installments recorded under another matching customer row.
+        if ($request->user()->canManageMerchantData() && $customer->client_account_id) {
+            $linkedCustomerIds = Customer::query()
+                ->where('client_account_id', $customer->client_account_id)
+                ->pluck('id');
+
+            $customer->setRelation('clientAccountInstallments', Installment::query()
+                ->with(['items', 'customer', 'user'])
+                ->where(function ($query) use ($customer, $linkedCustomerIds) {
+                    $query->where('client_account_id', $customer->client_account_id)
+                        ->orWhereIn('customer_id', $linkedCustomerIds);
+                })
+                ->latest('id')
+                ->get());
+        }
 
         return $this->successResponse(
             new CustomerResource($customer),

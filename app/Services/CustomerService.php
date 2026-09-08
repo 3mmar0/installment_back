@@ -32,11 +32,11 @@ class CustomerService implements CustomerServiceInterface
         $hasInstallments = (string) ($filters['has_installments'] ?? '');
         $sort = (string) ($filters['sort'] ?? 'newest');
 
-        $query = ($user->isOwner() ? Customer::query() : $user->customers())
+        $query = ($user->canManageMerchantData() ? Customer::query() : $user->customers())
             ->with(['user', 'clientAccount:id,name,email,phone'])
             ->withCount('installments');
 
-        if ($user->isOwner() && ! empty($filters['user_id'])) {
+        if ($user->canManageMerchantData() && ! empty($filters['user_id'])) {
             $query->where('customers.user_id', (int) $filters['user_id']);
         }
 
@@ -65,7 +65,7 @@ class CustomerService implements CustomerServiceInterface
                     ->orWhere('customers.phone', 'like', "%{$search}%")
                     ->orWhere('customers.address', 'like', "%{$search}%");
 
-                if ($user->isOwner()) {
+                if ($user->canManageMerchantData()) {
                     $builder->orWhereHas('user', function ($userQuery) use ($search) {
                         $userQuery
                             ->where('name', 'like', "%{$search}%")

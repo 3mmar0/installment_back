@@ -30,7 +30,7 @@ class InstallmentService implements InstallmentServiceInterface
         $filterUserId = isset($filters['user_id']) ? (int) $filters['user_id'] : null;
 
         $relations = ['customer', 'items'];
-        if ($user->isOwner()) {
+        if ($user->canManageMerchantData()) {
             $relations[] = 'user';
         }
 
@@ -38,7 +38,7 @@ class InstallmentService implements InstallmentServiceInterface
             ->with($relations)
             ->forUser($user);
 
-        if ($user->isOwner() && $filterUserId > 0) {
+        if ($user->canManageMerchantData() && $filterUserId > 0) {
             $query->where('installments.user_id', $filterUserId);
         }
 
@@ -62,7 +62,7 @@ class InstallmentService implements InstallmentServiceInterface
                 $builder->orWhere('notes', 'like', "%{$search}%");
                 $builder->orWhere('name', 'like', "%{$search}%");
 
-                if ($user->isOwner()) {
+                if ($user->canManageMerchantData()) {
                     $builder->orWhereHas('user', function ($userQuery) use ($search) {
                         $userQuery
                             ->where('name', 'like', "%{$search}%")

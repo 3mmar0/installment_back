@@ -12,6 +12,6 @@ trait ChecksMerchantOwnership
      */
     protected function owns(User $user, int $resourceUserId): bool
     {
-        return $user->isOwner() || $user->id === $resourceUserId;
+        return $user->canManageMerchantData() || $user->id === $resourceUserId;
     }
 }

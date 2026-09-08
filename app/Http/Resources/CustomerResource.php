@@ -34,6 +34,9 @@ class CustomerResource extends JsonResource
             'user' => new UserResource($this->whenLoaded('user')),
             'installments_count' => $this->whenCounted('installments'),
             'installments' => InstallmentResource::collection($this->whenLoaded('installments')),
+            'client_account_installments' => InstallmentResource::collection(
+                $this->whenLoaded('clientAccountInstallments')
+            ),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

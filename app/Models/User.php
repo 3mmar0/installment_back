@@ -114,6 +114,12 @@ class User extends Authenticatable
         return in_array($this->email, $emails, true);
     }
 
+    /** Whether this account may view and manage records for every merchant. */
+    public function canManageMerchantData(): bool
+    {
+        return $this->isOwner() || $this->isPlatformAdmin();
+    }
+
     public function complaints()
     {
         return $this->hasMany(Complaint::class);
