@@ -114,6 +114,8 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
+            'country' => ['sometimes', 'required', 'string', 'size:2', 'in:EG,SA,AE,KW,QA,BH,OM,JO,MA,US,GB'],
+            'currency' => ['sometimes', 'required', 'string', 'size:3', 'in:EGP,SAR,AED,KWD,QAR,BHD,OMR,JOD,MAD,USD,GBP'],
         ]);
 
         $user->fill($data);

@@ -23,6 +23,8 @@ class UserResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'phone' => $this->phone,
+            'country' => $this->country ?? 'EG',
+            'currency' => $this->currency ?? 'EGP',
             'role' => $this->role,
             'registration_source' => $this->registration_source?->value ?? 'web',
             'is_platform_admin' => $this->isPlatformAdmin(),
