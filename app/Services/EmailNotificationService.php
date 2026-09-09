@@ -15,6 +15,7 @@ use App\Models\InstallmentItem;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -335,6 +336,10 @@ class EmailNotificationService
      */
     public function sendClientAppInviteIfNeeded(Installment $installment, User $vendor): void
     {
+        if (! $this->isEnabled()) {
+            return;
+        }
+
         try {
             $installment->loadMissing('customer');
             $customer = $installment->customer;
@@ -354,6 +359,12 @@ class EmailNotificationService
                 ->exists();
 
             if ($hasClientAccount) {
+                return;
+            }
+
+            $cooldownDays = max(1, (int) config('mail.client_invite_cooldown_days', 30));
+            $cooldownKey = 'client-app-invite:'.hash('sha256', $email);
+            if (! Cache::add($cooldownKey, true, now()->addDays($cooldownDays))) {
                 return;
             }
 

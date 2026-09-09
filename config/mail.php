@@ -115,6 +115,15 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    // Use a monitored address on the same verified sending domain as MAIL_FROM_ADDRESS.
+    'reply_to' => [
+        'address' => env('MAIL_REPLY_TO_ADDRESS'),
+        'name' => env('MAIL_REPLY_TO_NAME'),
+    ],
+
+    // Avoid repeatedly sending the same app invitation to an address.
+    'client_invite_cooldown_days' => (int) env('MAIL_CLIENT_INVITE_COOLDOWN_DAYS', 30),
+
     /*
     |--------------------------------------------------------------------------
     | App notification emails

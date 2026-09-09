@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesTransactionalEnvelope;
 use App\Models\Customer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -12,7 +13,7 @@ use Illuminate\Support\Collection;
 
 class PaymentDueReminderBatch extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, UsesTransactionalEnvelope;
 
     /**
      * @param  Collection<int, \App\Models\InstallmentItem>  $items
@@ -27,8 +28,9 @@ class PaymentDueReminderBatch extends Mailable
         $count = $this->items->count();
         $label = $count === 1 ? 'دفعة' : 'دفعات';
 
-        return new Envelope(
-            subject: "تذكير: {$count} {$label} قريبة الاستحقاق",
+        return $this->transactionalEnvelope(
+            "تذكير: {$count} {$label} قريبة الاستحقاق",
+            'payment-due-reminder'
         );
     }
 
@@ -36,6 +38,7 @@ class PaymentDueReminderBatch extends Mailable
     {
         return new Content(
             view: 'emails.payment-due-reminder-batch',
+            text: 'emails.text.payment-due-reminder-batch',
         );
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesTransactionalEnvelope;
 use App\Models\InstallmentItem;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -11,7 +12,7 @@ use Illuminate\Queue\SerializesModels;
 
 class PaymentReceivedConfirmation extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, UsesTransactionalEnvelope;
 
     /**
      * Create a new message instance.
@@ -27,9 +28,7 @@ class PaymentReceivedConfirmation extends Mailable
      */
     public function envelope(): Envelope
     {
-        return new Envelope(
-            subject: 'تم استلام الدفعة - شكراً لك',
-        );
+        return $this->transactionalEnvelope('تم استلام الدفعة - شكراً لك', 'payment-received');
     }
 
     /**
@@ -39,6 +38,7 @@ class PaymentReceivedConfirmation extends Mailable
     {
         return new Content(
             view: 'emails.payment-received-confirmation-custom',
+            text: 'emails.text.payment-received-confirmation',
         );
     }
 

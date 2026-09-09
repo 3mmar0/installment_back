@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesTransactionalEnvelope;
 use App\Models\Customer;
 use App\Models\Installment;
 use App\Models\User;
@@ -13,7 +14,7 @@ use Illuminate\Queue\SerializesModels;
 
 class ClientAppInviteMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, UsesTransactionalEnvelope;
 
     public string $playStoreUrl;
 
@@ -36,8 +37,9 @@ class ClientAppInviteMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(
-            subject: 'تابع أقساطك وادفع بسهولة عبر تطبيق '.$this->appName,
+        return $this->transactionalEnvelope(
+            'تابع أقساطك وادفع بسهولة عبر تطبيق '.$this->appName,
+            'client-app-invite'
         );
     }
 
@@ -45,6 +47,7 @@ class ClientAppInviteMail extends Mailable
     {
         return new Content(
             view: 'emails.client-app-invite',
+            text: 'emails.text.client-app-invite',
         );
     }
 

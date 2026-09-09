@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesTransactionalEnvelope;
 use App\Models\Customer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -12,7 +13,7 @@ use Illuminate\Support\Collection;
 
 class PaymentOverdueNoticeBatch extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, UsesTransactionalEnvelope;
 
     /**
      * @param  Collection<int, \App\Models\InstallmentItem>  $items
@@ -27,15 +28,14 @@ class PaymentOverdueNoticeBatch extends Mailable
         $count = $this->items->count();
         $label = $count === 1 ? 'دفعة متأخرة' : 'دفعات متأخرة';
 
-        return new Envelope(
-            subject: "عاجل: {$count} {$label}",
-        );
+        return $this->transactionalEnvelope("عاجل: {$count} {$label}", 'payment-overdue-notice');
     }
 
     public function content(): Content
     {
         return new Content(
             view: 'emails.payment-overdue-notice-batch',
+            text: 'emails.text.payment-overdue-notice-batch',
         );
     }
 

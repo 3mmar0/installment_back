@@ -50,6 +50,14 @@ class NotificationService
             LimitsHelper::incrementUsage($user->id, 'notifications');
         }
 
+        $this->notifyPlatformAdmins(
+            $type,
+            $title,
+            $message,
+            $data,
+            $user
+        );
+
         return $notification;
     }
 
@@ -63,7 +71,7 @@ class NotificationService
         string $message,
         array $data = []
     ): Notification {
-        return Notification::create([
+        $notification = Notification::create([
             'user_id' => null,
             'client_account_id' => $client->id,
             'type' => $type,
@@ -71,6 +79,72 @@ class NotificationService
             'message' => $message,
             'data' => $data,
         ]);
+
+        $this->notifyPlatformAdmins(
+            $type,
+            $title,
+            $message,
+            array_merge($data, [
+                'client_account_id' => $client->id,
+                'client_name' => $client->name,
+            ])
+        );
+
+        return $notification;
+    }
+
+    /**
+     * Give every platform administrator an in-app audit notification without
+     * consuming a merchant's notification allowance. This intentionally writes
+     * directly instead of calling create() so mirrored records are not mirrored
+     * again.
+     */
+    public function notifyPlatformAdmins(
+        string $type,
+        string $title,
+        string $message,
+        array $data = [],
+        ?User $actor = null
+    ): void {
+        try {
+            $configuredEmails = array_filter(
+                config('app.platform_admin_emails', []),
+                fn ($email) => is_string($email) && $email !== ''
+            );
+
+            User::query()
+                ->where(function ($query) use ($configuredEmails) {
+                    $query->where('is_platform_admin', true);
+
+                    if ($configuredEmails !== []) {
+                        $query->orWhereIn('email', $configuredEmails);
+                    }
+                })
+                ->when($actor, fn ($query) => $query->whereKeyNot($actor->id))
+                ->each(function (User $admin) use ($type, $title, $message, $data, $actor) {
+                    Notification::create([
+                        'user_id' => $admin->id,
+                        'type' => $type,
+                        'title' => $actor
+                            ? "{$title} — {$actor->name}"
+                            : $title,
+                        'message' => $message,
+                        'data' => array_merge($data, [
+                            'is_platform_admin_copy' => true,
+                            'actor_id' => $actor?->id,
+                            'actor_name' => $actor?->name,
+                            'actor_email' => $actor?->email,
+                        ]),
+                    ]);
+                });
+        } catch (\Throwable $e) {
+            // Monitoring must never prevent the customer-facing operation.
+            \Log::warning('Failed to mirror notification to platform administrators', [
+                'type' => $type,
+                'actor_id' => $actor?->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function formatMoney(float $amount): string

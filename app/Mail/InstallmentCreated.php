@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesTransactionalEnvelope;
 use App\Models\Installment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -11,7 +12,7 @@ use Illuminate\Queue\SerializesModels;
 
 class InstallmentCreated extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, UsesTransactionalEnvelope;
 
     /**
      * Create a new message instance.
@@ -26,9 +27,7 @@ class InstallmentCreated extends Mailable
      */
     public function envelope(): Envelope
     {
-        return new Envelope(
-            subject: 'تم إنشاء خطة التقسيط - جدول الدفع',
-        );
+        return $this->transactionalEnvelope('تم إنشاء خطة التقسيط - جدول الدفع', 'installment-created');
     }
 
     /**
@@ -38,6 +37,7 @@ class InstallmentCreated extends Mailable
     {
         return new Content(
             view: 'emails.installment-created-custom',
+            text: 'emails.text.installment-created',
         );
     }
 

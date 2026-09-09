@@ -7,12 +7,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ComplaintResource;
 use App\Http\Traits\ApiResponse;
 use App\Models\Complaint;
+use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ComplaintController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private readonly NotificationService $notificationService) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -63,6 +67,18 @@ class ComplaintController extends Controller
         ]);
 
         $complaint->load(['user', 'replier']);
+
+        $this->notificationService->notifyPlatformAdmins(
+            'complaint_submitted',
+            'طلب دعم جديد',
+            "أرسل {$user->name} طلباً جديداً: {$complaint->subject}",
+            [
+                'complaint_id' => $complaint->id,
+                'category' => $complaint->category->value,
+                'subject' => $complaint->subject,
+            ],
+            $user
+        );
 
         return $this->createdResponse(
             new ComplaintResource($complaint),
@@ -121,6 +137,18 @@ class ComplaintController extends Controller
         ]);
 
         $complaint->load(['user', 'replier']);
+
+        $this->notificationService->create(
+            $complaint->user,
+            'complaint_replied',
+            'تم الرد على طلبك',
+            "تم الرد على طلبك: {$complaint->subject}",
+            [
+                'complaint_id' => $complaint->id,
+                'status' => $complaint->status->value,
+            ],
+            false
+        );
 
         return $this->successResponse(
             new ComplaintResource($complaint),
