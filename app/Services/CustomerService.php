@@ -10,6 +10,7 @@ use App\Models\Installment;
 use App\Models\PaymentRequest;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -83,6 +84,31 @@ class CustomerService implements CustomerServiceInterface
         };
 
         return $query->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    /**
+     * @return Collection<int, Customer>
+     */
+    public function getCustomersForSelect(User $user, ?string $search = null): Collection
+    {
+        $query = ($user->canManageMerchantData() ? Customer::query() : $user->customers())
+            ->select(['customers.id', 'customers.name', 'customers.email', 'customers.phone']);
+
+        $term = trim((string) $search);
+        if ($term !== '') {
+            $query->where(function ($builder) use ($term) {
+                if (ctype_digit($term)) {
+                    $builder->where('customers.id', (int) $term);
+                }
+
+                $builder
+                    ->orWhere('customers.name', 'like', "%{$term}%")
+                    ->orWhere('customers.email', 'like', "%{$term}%")
+                    ->orWhere('customers.phone', 'like', "%{$term}%");
+            });
+        }
+
+        return $query->orderBy('customers.name')->limit(2000)->get();
     }
 
     /**

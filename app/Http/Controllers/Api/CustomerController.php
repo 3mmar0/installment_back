@@ -8,9 +8,9 @@ use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Http\Resources\CustomerResource;
 use App\Http\Traits\ApiResponse;
-use App\Services\EmailNotificationService;
 use App\Models\Customer;
 use App\Models\Installment;
+use App\Services\EmailNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -180,15 +180,22 @@ class CustomerController extends Controller
 
     public function forSelect(Request $request): JsonResponse
     {
-        $customers = $this->customerService->getCustomersForUser($request->user());
+        $search = trim((string) $request->query('search', ''));
+        $customers = $this->customerService->getCustomersForSelect(
+            $request->user(),
+            $search !== '' ? $search : null
+        );
 
-        $selectData = $customers->getCollection()->map(function ($customer) {
+        $selectData = $customers->map(function ($customer) {
+            $email = trim((string) ($customer->email ?? ''));
+            $label = $email !== '' ? "{$customer->name} ({$email})" : $customer->name;
+
             return [
                 'id' => $customer->id,
                 'name' => $customer->name,
                 'email' => $customer->email,
                 'phone' => $customer->phone,
-                'label' => "{$customer->name} ({$customer->email})",
+                'label' => $label,
             ];
         });
 

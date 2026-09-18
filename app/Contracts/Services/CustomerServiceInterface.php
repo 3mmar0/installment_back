@@ -5,6 +5,7 @@ namespace App\Contracts\Services;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 
 interface CustomerServiceInterface
 {
@@ -14,6 +15,13 @@ interface CustomerServiceInterface
      * @param  array{page?: int, per_page?: int, search?: string, user_id?: int, has_installments?: string, sort?: string}  $filters
      */
     public function getCustomersForUser(User $user, array $filters = []): LengthAwarePaginator;
+
+    /**
+     * Unpaginated customer list for installment create/select dropdowns.
+     *
+     * @return Collection<int, Customer>
+     */
+    public function getCustomersForSelect(User $user, ?string $search = null): Collection;
 
     /**
      * Create a new customer.
