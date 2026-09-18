@@ -17,16 +17,20 @@ class SendUserPaymentRemindersJob implements ShouldQueue
 
     public function __construct(
         public int $userId,
+        public bool $includeOverdue = true,
     ) {}
 
     public function handle(EmailNotificationService $emailNotificationService): void
     {
         $user = User::find($this->userId);
 
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
-        $emailNotificationService->dispatchPaymentReminders($user);
+        $emailNotificationService->dispatchPaymentReminders(
+            $user,
+            includeOverdue: $this->includeOverdue
+        );
     }
 }

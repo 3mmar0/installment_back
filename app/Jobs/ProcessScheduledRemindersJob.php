@@ -3,11 +3,11 @@
 namespace App\Jobs;
 
 use App\Enums\UserRole;
-use App\Jobs\MarkOverdueInstallmentItemsJob;
 use App\Models\ClientAccount;
 use App\Models\InstallmentItem;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Support\OverdueDigestSchedule;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -23,17 +23,35 @@ class ProcessScheduledRemindersJob implements ShouldQueue
     {
         MarkOverdueInstallmentItemsJob::dispatchSync();
 
+        $includeOverdue = OverdueDigestSchedule::isDue();
+
         User::query()
             ->where('role', UserRole::User)
             ->whereHas('installments', fn ($query) => $query->where('status', 'active'))
-            ->chunkById(100, function ($users) {
+            ->chunkById(100, function ($users) use ($includeOverdue) {
                 foreach ($users as $user) {
-                    GenerateUserPaymentNotificationsJob::dispatch($user->id);
-                    SendUserPaymentRemindersJob::dispatch($user->id);
+                    GenerateUserPaymentNotificationsJob::dispatch($user->id, $includeOverdue);
+                    SendUserPaymentRemindersJob::dispatch($user->id, $includeOverdue);
                 }
             });
 
         $this->notifyClientsDueSoon($notificationService);
+
+        if ($includeOverdue) {
+            $this->notifyClientsOverdue($notificationService);
+        }
+    }
+
+    private function notifyClientsOverdue(NotificationService $notificationService): void
+    {
+        ClientAccount::query()
+            ->whereNotNull('email_verified_at')
+            ->whereHas('customers.installments', fn ($q) => $q->where('status', 'active'))
+            ->chunkById(100, function ($clients) use ($notificationService) {
+                foreach ($clients as $client) {
+                    $notificationService->notifyClientOverduePayments($client);
+                }
+            });
     }
 
     private function notifyClientsDueSoon(NotificationService $notificationService): void

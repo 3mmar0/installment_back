@@ -21,6 +21,8 @@ class SendCustomerReminderEmailsJob implements ShouldQueue
     public function __construct(
         public int $userId,
         public int $customerId,
+        public bool $includeDueSoon = true,
+        public bool $includeOverdue = true,
     ) {}
 
     public function handle(EmailNotificationService $emailNotificationService): void
@@ -28,10 +30,15 @@ class SendCustomerReminderEmailsJob implements ShouldQueue
         $user = User::find($this->userId);
         $customer = Customer::find($this->customerId);
 
-        if (!$user || !$customer) {
+        if (! $user || ! $customer) {
             return;
         }
 
-        $emailNotificationService->sendCustomerPaymentReminders($customer, $user);
+        $emailNotificationService->sendCustomerPaymentReminders(
+            $customer,
+            $user,
+            includeDueSoon: $this->includeDueSoon,
+            includeOverdue: $this->includeOverdue
+        );
     }
 }

@@ -19,17 +19,21 @@ class GenerateUserPaymentNotificationsJob implements ShouldQueue
 
     public function __construct(
         public int $userId,
+        public bool $includeOverdue = true,
     ) {}
 
     public function handle(NotificationService $notificationService): void
     {
         $user = User::find($this->userId);
 
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
         $notificationService->notifyUpcomingPayments($user);
-        $notificationService->notifyOverduePayments($user);
+
+        if ($this->includeOverdue) {
+            $notificationService->notifyOverduePayments($user);
+        }
     }
 }

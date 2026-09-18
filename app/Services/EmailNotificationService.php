@@ -84,7 +84,7 @@ class EmailNotificationService
      */
     protected function sendDueSoonBatch(Customer $customer, Collection $items): bool
     {
-        if ($items->isEmpty() || !$this->isValidEmail($customer->email)) {
+        if ($items->isEmpty() || ! $this->isValidEmail($customer->email)) {
             return false;
         }
 
@@ -108,7 +108,7 @@ class EmailNotificationService
      */
     protected function sendOverdueBatch(Customer $customer, Collection $items): bool
     {
-        if ($items->isEmpty() || !$this->isValidEmail($customer->email)) {
+        if ($items->isEmpty() || ! $this->isValidEmail($customer->email)) {
             return false;
         }
 
@@ -170,7 +170,7 @@ class EmailNotificationService
      */
     public function sendPaymentDueReminders(User $user): int
     {
-        if (!$this->isEnabled()) {
+        if (! $this->isEnabled()) {
             return 0;
         }
 
@@ -187,7 +187,7 @@ class EmailNotificationService
      */
     public function sendOverduePaymentNotices(User $user): int
     {
-        if (!$this->isEnabled()) {
+        if (! $this->isEnabled()) {
             return 0;
         }
 
@@ -204,9 +204,13 @@ class EmailNotificationService
      *
      * @return array{due_reminders_sent: int, overdue_notices_sent: int, total_emails: int, items_included: int, disabled?: bool}
      */
-    public function sendCustomerPaymentReminders(Customer $customer, User $user): array
-    {
-        if (!$this->isEnabled()) {
+    public function sendCustomerPaymentReminders(
+        Customer $customer,
+        User $user,
+        bool $includeDueSoon = true,
+        bool $includeOverdue = true,
+    ): array {
+        if (! $this->isEnabled()) {
             return [
                 'due_reminders_sent' => 0,
                 'overdue_notices_sent' => 0,
@@ -216,13 +220,13 @@ class EmailNotificationService
             ];
         }
 
-        if (!$user->isOwner() && $customer->user_id !== $user->id) {
+        if (! $user->isOwner() && $customer->user_id !== $user->id) {
             abort(403, 'غير مصرح لك بإرسال تذكير لهذا العميل');
         }
 
         return $this->sendConsolidatedReminders(
-            $this->getDueSoonItems($user, $customer->id),
-            $this->getOverdueItems($user, $customer->id)
+            $includeDueSoon ? $this->getDueSoonItems($user, $customer->id) : collect(),
+            $includeOverdue ? $this->getOverdueItems($user, $customer->id) : collect()
         );
     }
 
@@ -234,7 +238,7 @@ class EmailNotificationService
      */
     public function sendItemsReminderEmails(Collection $items): array
     {
-        if (!$this->isEnabled() || $items->isEmpty()) {
+        if (! $this->isEnabled() || $items->isEmpty()) {
             return [
                 'due_reminders_sent' => 0,
                 'overdue_notices_sent' => 0,
@@ -261,7 +265,7 @@ class EmailNotificationService
      */
     public function sendPaymentReceivedConfirmation(InstallmentItem $item, float $paidAmount, User $user): void
     {
-        if (!$this->isEnabled()) {
+        if (! $this->isEnabled()) {
             return;
         }
 
@@ -299,7 +303,7 @@ class EmailNotificationService
      */
     public function sendInstallmentCreatedNotification(Installment $installment, User $user): void
     {
-        if (!$this->isEnabled()) {
+        if (! $this->isEnabled()) {
             return;
         }
 
@@ -395,7 +399,7 @@ class EmailNotificationService
      */
     public function sendAllPaymentReminders(User $user): array
     {
-        if (!$this->isEnabled()) {
+        if (! $this->isEnabled()) {
             return [
                 'due_reminders_sent' => 0,
                 'overdue_notices_sent' => 0,
@@ -458,14 +462,18 @@ class EmailNotificationService
     /**
      * Queue consolidated reminder emails per customer (used by jobs and schedulers).
      */
-    public function dispatchPaymentReminders(User $user, ?int $customerId = null): void
-    {
-        if (!$this->isEnabled()) {
+    public function dispatchPaymentReminders(
+        User $user,
+        ?int $customerId = null,
+        bool $includeDueSoon = true,
+        bool $includeOverdue = true,
+    ): void {
+        if (! $this->isEnabled()) {
             return;
         }
 
-        $dueSoon = $this->getDueSoonItems($user, $customerId);
-        $overdue = $this->getOverdueItems($user, $customerId);
+        $dueSoon = $includeDueSoon ? $this->getDueSoonItems($user, $customerId) : collect();
+        $overdue = $includeOverdue ? $this->getOverdueItems($user, $customerId) : collect();
 
         $customerIds = $dueSoon
             ->pluck('installment.customer_id')
@@ -474,7 +482,12 @@ class EmailNotificationService
             ->filter();
 
         foreach ($customerIds as $id) {
-            SendCustomerReminderEmailsJob::dispatch($user->id, (int) $id);
+            SendCustomerReminderEmailsJob::dispatch(
+                $user->id,
+                (int) $id,
+                $includeDueSoon,
+                $includeOverdue
+            );
         }
     }
 
@@ -485,7 +498,7 @@ class EmailNotificationService
      */
     public function queueAllPaymentReminders(User $user): array
     {
-        if (!$this->isEnabled()) {
+        if (! $this->isEnabled()) {
             return [
                 'due_reminders_sent' => 0,
                 'overdue_notices_sent' => 0,
@@ -517,7 +530,7 @@ class EmailNotificationService
      */
     public function queueCustomerPaymentReminders(Customer $customer, User $user): array
     {
-        if (!$this->isEnabled()) {
+        if (! $this->isEnabled()) {
             return [
                 'due_reminders_sent' => 0,
                 'overdue_notices_sent' => 0,
@@ -528,7 +541,7 @@ class EmailNotificationService
             ];
         }
 
-        if (!$user->isOwner() && $customer->user_id !== $user->id) {
+        if (! $user->isOwner() && $customer->user_id !== $user->id) {
             abort(403, 'غير مصرح لك بإرسال تذكير لهذا العميل');
         }
 

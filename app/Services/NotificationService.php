@@ -171,6 +171,36 @@ class NotificationService
     }
 
     /**
+     * @param  Collection<int, InstallmentItem>  $overdue
+     * @return array{title: string, message: string, data: array<string, mixed>}
+     */
+    private function overdueDigest(Collection $overdue): array
+    {
+        $count = $overdue->count();
+        $total = round((float) $overdue->sum(fn (InstallmentItem $item) => (float) $item->amount), 2);
+        $installmentIds = $overdue->pluck('installment_id')->unique()->values();
+        $label = $count === 1 ? 'دفعة متأخرة' : 'دفعات متأخرة';
+
+        $data = [
+            'merged' => true,
+            'count' => $count,
+            'total_amount' => $total,
+            'item_ids' => $overdue->pluck('id')->values()->all(),
+            'installment_ids' => $installmentIds->all(),
+        ];
+
+        if ($installmentIds->count() === 1) {
+            $data['installment_id'] = $installmentIds->first();
+        }
+
+        return [
+            'title' => $label,
+            'message' => "لديك {$count} {$label} بإجمالي {$this->formatMoney($total)}",
+            'data' => $data,
+        ];
+    }
+
+    /**
      * Notify owners about a new user registration.
      */
     public function notifyNewUserRegistered(User $owner, User $newUser): Notification
@@ -231,7 +261,7 @@ class NotificationService
     }
 
     /**
-     * Notify about overdue payments.
+     * Notify about overdue payments as one weekly merged digest.
      */
     public function notifyOverduePayments(User $user): int
     {
@@ -246,30 +276,67 @@ class NotificationService
             ->with(['installment.customer'])
             ->get();
 
-        $count = 0;
-        foreach ($overdue as $item) {
-            $daysOverdue = max(0, (int) now()->diffInDays($item->due_date));
-            $customerName = $item->installment->customer->name;
-            $amountFormatted = $this->formatMoney((float) $item->amount);
-
-            $this->create(
-                $user,
-                'payment_overdue',
-                'دفعة متأخرة',
-                "دفعة بقيمة {$amountFormatted} من العميل {$customerName} متأخرة {$daysOverdue} يوم",
-                [
-                    'installment_id' => $item->installment_id,
-                    'item_id' => $item->id,
-                    'amount' => $item->amount,
-                    'due_date' => $item->due_date,
-                    'days_overdue' => $daysOverdue,
-                    'customer_name' => $customerName,
-                ]
-            );
-            $count++;
+        if ($overdue->isEmpty()) {
+            return 0;
         }
 
-        return $count;
+        $digest = $this->overdueDigest($overdue);
+
+        $this->create(
+            $user,
+            'payment_overdue',
+            $digest['title'],
+            $digest['message'],
+            $digest['data']
+        );
+
+        return 1;
+    }
+
+    /**
+     * Notify a client about overdue payments as one weekly merged digest.
+     */
+    public function notifyClientOverduePayments(ClientAccount $client): int
+    {
+        $customerIds = $client->customers()->pluck('id');
+
+        if ($customerIds->isEmpty()) {
+            return 0;
+        }
+
+        $overdue = InstallmentItem::query()
+            ->whereHas('installment', function ($query) use ($customerIds) {
+                $query->whereIn('customer_id', $customerIds)
+                    ->where('status', 'active');
+            })
+            ->whereNull('paid_at')
+            ->where('status', '!=', 'paid')
+            ->where('due_date', '<', now()->startOfDay())
+            ->with(['installment.user'])
+            ->get();
+
+        if ($overdue->isEmpty()) {
+            return 0;
+        }
+
+        $digest = $this->overdueDigest($overdue);
+        $vendorNames = $overdue
+            ->map(fn (InstallmentItem $item) => $item->installment->user->name ?? 'البائع')
+            ->unique()
+            ->values();
+        $vendorLabel = $vendorNames->count() === 1
+            ? (string) $vendorNames->first()
+            : 'البائعين';
+
+        $this->createForClient(
+            $client,
+            'payment_overdue',
+            $digest['title'],
+            "{$digest['message']} لدى {$vendorLabel}",
+            $digest['data']
+        );
+
+        return 1;
     }
 
     /**
