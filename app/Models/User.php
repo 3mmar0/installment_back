@@ -159,4 +159,9 @@ class User extends Authenticatable
     {
         return $this->hasOne(SubscriptionAssignment::class)->latestOfMany();
     }
+
+    public function deviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
 }
