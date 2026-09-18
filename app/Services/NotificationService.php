@@ -4,11 +4,13 @@ namespace App\Services;
 
 use App\Enums\UserRole;
 use App\Helpers\LimitsHelper;
+use App\Jobs\SendPushNotificationJob;
 use App\Models\ClientAccount;
 use App\Models\InstallmentItem;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 class NotificationService
 {
@@ -30,7 +32,7 @@ class NotificationService
         }
 
         if (! $enforceLimits && ! $user->isOwner() && ! LimitsHelper::canCreate($user->id, 'notifications')) {
-            \Log::info('Skipping notification due to plan limit', [
+            Log::info('Skipping notification due to plan limit', [
                 'user_id' => $user->id,
                 'type' => $type,
             ]);
@@ -49,6 +51,8 @@ class NotificationService
         if (! $user->isOwner()) {
             LimitsHelper::incrementUsage($user->id, 'notifications');
         }
+
+        $this->queuePushNotification($notification);
 
         $this->notifyPlatformAdmins(
             $type,
@@ -79,6 +83,8 @@ class NotificationService
             'message' => $message,
             'data' => $data,
         ]);
+
+        $this->queuePushNotification($notification);
 
         $this->notifyPlatformAdmins(
             $type,
@@ -139,9 +145,21 @@ class NotificationService
                 });
         } catch (\Throwable $e) {
             // Monitoring must never prevent the customer-facing operation.
-            \Log::warning('Failed to mirror notification to platform administrators', [
+            Log::warning('Failed to mirror notification to platform administrators', [
                 'type' => $type,
                 'actor_id' => $actor?->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function queuePushNotification(Notification $notification): void
+    {
+        try {
+            SendPushNotificationJob::dispatch($notification->id);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to queue FCM push', [
+                'notification_id' => $notification->id,
                 'error' => $e->getMessage(),
             ]);
         }
@@ -394,7 +412,7 @@ class NotificationService
                 false // never block installment creation on notification limits
             );
         } catch (\Throwable $e) {
-            \Log::warning('notifyInstallmentCreated failed', [
+            Log::warning('notifyInstallmentCreated failed', [
                 'installment_id' => $installment->id ?? null,
                 'error' => $e->getMessage(),
             ]);

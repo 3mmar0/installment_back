@@ -89,4 +89,9 @@ class ClientAccount extends Authenticatable
     {
         return $this->notifications()->whereNull('read_at');
     }
+
+    public function deviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
 }

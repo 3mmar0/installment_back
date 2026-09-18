@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Client\ClientInstallmentController;
 use App\Http\Controllers\Api\Client\ClientPortalController;
 use App\Http\Controllers\Api\ComplaintController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\DeviceTokenController;
 use App\Http\Controllers\Api\ExportReportController;
 use App\Http\Controllers\Api\InstallmentController;
 use App\Http\Controllers\Api\LegalController;
@@ -89,6 +90,9 @@ Route::middleware(['auth:sanctum', 'client', 'track.activity'])->prefix('client'
         Route::get('notification-count', 'count');
         Route::post('notification-mark-read/{id}', 'markAsRead');
     });
+
+    Route::post('device-token', [DeviceTokenController::class, 'store']);
+    Route::delete('device-token', [DeviceTokenController::class, 'destroy']);
 });
 
 // Protected vendor routes
@@ -101,6 +105,9 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
         Route::post('refresh', 'refresh');
         Route::delete('account', 'deleteAccount');
     });
+
+    Route::post('device-token', [DeviceTokenController::class, 'store']);
+    Route::delete('device-token', [DeviceTokenController::class, 'destroy']);
 
     Route::prefix('limits')->controller(UserLimitController::class)->group(function () {
         Route::get('current', 'current');
