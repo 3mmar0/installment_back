@@ -10,8 +10,12 @@ trait ChecksMerchantOwnership
      * Platform owners may access any merchant's records; merchants may only
      * access records they own.
      */
-    protected function owns(User $user, int $resourceUserId): bool
+    protected function owns(User $user, ?int $resourceUserId): bool
     {
-        return $user->canManageMerchantData() || $user->id === $resourceUserId;
+        if ($user->canManageMerchantData()) {
+            return true;
+        }
+
+        return $resourceUserId !== null && $user->id === $resourceUserId;
     }
 }

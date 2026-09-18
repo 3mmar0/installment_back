@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Installment extends Model
 {
@@ -33,6 +33,7 @@ class Installment extends Model
     {
         return $this->belongsTo(User::class);
     }
+
     public function customer()
     {
         return $this->belongsTo(Customer::class);
@@ -47,6 +48,7 @@ class Installment extends Model
     {
         return $this->client_account_id !== null && $this->user_id === null;
     }
+
     public function items()
     {
         return $this->hasMany(InstallmentItem::class);
@@ -54,8 +56,15 @@ class Installment extends Model
 
     public function scopeForUser($query, User $user)
     {
-        return $user->canManageMerchantData()
-            ? $query
-            : $query->where('installments.user_id', $user->id);
+        if ($user->canManageMerchantData()) {
+            return $query;
+        }
+
+        return $query->where(function ($builder) use ($user) {
+            $builder->where('installments.user_id', $user->id)
+                ->orWhereHas('customer', function ($customerQuery) use ($user) {
+                    $customerQuery->where('customers.user_id', $user->id);
+                });
+        });
     }
 }

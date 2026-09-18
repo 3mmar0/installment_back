@@ -7,6 +7,7 @@ use App\Exceptions\PaymentException;
 use App\Helpers\InstallmentDateHelper;
 use App\Helpers\LimitsHelper;
 use App\Jobs\SendInstallmentRemindersJob;
+use App\Models\Customer;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
 use App\Models\User;
@@ -144,16 +145,24 @@ class InstallmentService implements InstallmentServiceInterface
             abort(403, LimitsHelper::getLimitExceededMessage('installments'));
         }
 
-        $installment = DB::transaction(function () use ($data, $user) {
+        $installment = DB::transaction(function () use ($data) {
             $start = Carbon::parse($data['start_date'])->startOfDay();
             $months = (int) $data['months'];
             $total = round((float) $data['total_amount'], 2);
             $base = floor(($total / $months) * 100) / 100;
             $remainder = round($total - ($base * $months), 2);
 
+            $customer = Customer::query()->findOrFail($data['customer_id']);
+            $merchantId = (int) $customer->user_id;
+            $merchant = User::query()->findOrFail($merchantId);
+
+            if (! $merchant->isOwner() && ! LimitsHelper::canCreate($merchantId, 'installments')) {
+                abort(403, LimitsHelper::getLimitExceededMessage('installments'));
+            }
+
             $installment = Installment::create([
-                'user_id' => $user->id,
-                'customer_id' => $data['customer_id'],
+                'user_id' => $merchantId,
+                'customer_id' => $customer->id,
                 'name' => ! empty(trim((string) ($data['name'] ?? '')))
                     ? trim((string) $data['name'])
                     : null,
@@ -178,8 +187,8 @@ class InstallmentService implements InstallmentServiceInterface
                 ]);
             }
 
-            if (! $user->isOwner()) {
-                LimitsHelper::incrementUsage($user->id, 'installments');
+            if (! $merchant->isOwner()) {
+                LimitsHelper::incrementUsage($merchantId, 'installments');
             }
 
             return $installment->refresh()->load(['customer', 'items']);
