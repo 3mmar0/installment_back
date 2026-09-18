@@ -426,48 +426,8 @@ class InstallmentService implements InstallmentServiceInterface
                 ];
             });
 
-        // Overdue payments table
-        $overduePayments = $baseQuery->clone()
-            ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
-            ->join('customers', 'customers.id', '=', 'installments.customer_id')
-            ->whereNull('installment_items.paid_at')
-            ->where('installment_items.status', '!=', 'paid')
-            ->where('installments.status', 'active')
-            ->where('installment_items.due_date', '<', $now)
-            ->orderBy('installment_items.due_date')
-            ->select(
-                'installments.id as installment_id',
-                'installments.total_amount',
-                'installments.months',
-                'installments.status',
-                'installments.created_at',
-                'installment_items.id as item_id',
-                'installment_items.due_date',
-                'installment_items.amount',
-                'installment_items.status as item_status',
-                'customers.name as customer_name',
-                'customers.email as customer_email',
-                'customers.phone as customer_phone'
-            )
-            ->limit(20)
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'item_id' => $item->item_id,
-                    'installment_id' => $item->installment_id,
-                    'customer_name' => $item->customer_name,
-                    'customer_email' => $item->customer_email,
-                    'customer_phone' => $item->customer_phone,
-                    'total_amount' => $item->total_amount,
-                    'months' => $item->months,
-                    'due_date' => $item->due_date,
-                    'amount' => $item->amount,
-                    'status' => $item->status,
-                    'item_status' => $item->item_status,
-                    'created_at' => $item->created_at,
-                    'days_overdue' => InstallmentDateHelper::daysOverdue($item->due_date),
-                ];
-            });
+        // Overdue payments table — one row per installment (merged like weekly digest)
+        $overduePayments = $this->overduePaymentsForDashboard($user, $now);
 
         // Recent payments table
         $recentPayments = $baseQuery->clone()
@@ -588,6 +548,68 @@ class InstallmentService implements InstallmentServiceInterface
             'topCustomers' => $topCustomers,
             'monthlyTrend' => $monthlyTrend,
         ];
+    }
+
+    /**
+     * One dashboard row per installment that has overdue items.
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    public function overduePaymentsForDashboard(User $user, ?\DateTimeInterface $now = null)
+    {
+        $now = $now ? \Illuminate\Support\Carbon::parse($now)->startOfDay() : now()->startOfDay();
+
+        return Installment::query()->forUser($user)
+            ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
+            ->join('customers', 'customers.id', '=', 'installments.customer_id')
+            ->whereNull('installment_items.paid_at')
+            ->where('installment_items.status', '!=', 'paid')
+            ->where('installments.status', 'active')
+            ->where('installment_items.due_date', '<', $now)
+            ->orderBy('installment_items.due_date')
+            ->select(
+                'installments.id as installment_id',
+                'installments.total_amount',
+                'installments.months',
+                'installments.status',
+                'installments.created_at',
+                'installment_items.id as item_id',
+                'installment_items.due_date',
+                'installment_items.amount',
+                'installment_items.status as item_status',
+                'customers.name as customer_name',
+                'customers.email as customer_email',
+                'customers.phone as customer_phone'
+            )
+            ->limit(500)
+            ->get()
+            ->groupBy('installment_id')
+            ->map(function ($items) {
+                $oldest = $items->sortBy('due_date')->first();
+                $count = $items->count();
+
+                return [
+                    'item_id' => $oldest->item_id,
+                    'item_ids' => $items->pluck('item_id')->values()->all(),
+                    'installment_id' => $oldest->installment_id,
+                    'customer_name' => $oldest->customer_name,
+                    'customer_email' => $oldest->customer_email,
+                    'customer_phone' => $oldest->customer_phone,
+                    'total_amount' => $oldest->total_amount,
+                    'months' => $oldest->months,
+                    'due_date' => $oldest->due_date,
+                    'amount' => round((float) $items->sum('amount'), 2),
+                    'status' => $oldest->status,
+                    'item_status' => $count > 1 ? 'overdue' : $oldest->item_status,
+                    'created_at' => $oldest->created_at,
+                    'days_overdue' => InstallmentDateHelper::daysOverdue($oldest->due_date),
+                    'count' => $count,
+                    'merged' => $count > 1,
+                ];
+            })
+            ->sortByDesc('days_overdue')
+            ->take(20)
+            ->values();
     }
 
     /**
