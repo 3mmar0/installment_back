@@ -47,7 +47,17 @@ it('creates one merged overdue notification for a merchant with several late ite
     expect($created)->toBe(1)
         ->and($overdue)->toHaveCount(1)
         ->and($overdue->first()->data['merged'])->toBeTrue()
-        ->and($overdue->first()->data['count'])->toBe(2);
+        ->and($overdue->first()->data['count'])->toBe(2)
+        ->and($overdue->first()->data['items'])->toHaveCount(2)
+        ->and($overdue->first()->data['items'][0])->toHaveKeys([
+            'item_id',
+            'installment_id',
+            'customer_id',
+            'customer_name',
+            'merchant_name',
+            'amount',
+            'due_date',
+        ]);
 });
 
 it('does not send overdue emails or notifications on a non-digest weekday', function () {
@@ -121,6 +131,26 @@ it('sends clients one weekly merged overdue notification instead of one per item
     expect($overdue)->toHaveCount(1)
         ->and($overdue->first()->data['merged'])->toBeTrue()
         ->and($overdue->first()->data['count'])->toBe(3);
+});
+
+it('sends platform admins one merged overdue digest with item details on Friday', function () {
+    $this->travelTo(Carbon::parse('2026-09-18 08:00:00', 'UTC'));
+
+    $platformAdmin = App\Models\User::factory()->create(['is_platform_admin' => true]);
+    seedMerchantWithOverdueAndDueSoon();
+
+    (new ProcessScheduledRemindersJob)->handle(app(NotificationService::class));
+
+    $digest = Notification::query()
+        ->where('user_id', $platformAdmin->id)
+        ->where('type', 'payment_overdue')
+        ->get();
+
+    expect($digest)->toHaveCount(1)
+        ->and($digest->first()->data['is_platform_admin_digest'])->toBeTrue()
+        ->and($digest->first()->data['merged'])->toBeTrue()
+        ->and($digest->first()->data['count'])->toBe(2)
+        ->and($digest->first()->data['items'])->toHaveCount(2);
 });
 
 it('does not notify clients about overdue installments on a non-digest weekday', function () {

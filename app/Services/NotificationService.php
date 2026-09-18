@@ -112,20 +112,12 @@ class NotificationService
         array $data = [],
         ?User $actor = null
     ): void {
+        if (in_array($type, ['payment_due', 'payment_overdue'], true)) {
+            return;
+        }
+
         try {
-            $configuredEmails = array_filter(
-                config('app.platform_admin_emails', []),
-                fn ($email) => is_string($email) && $email !== ''
-            );
-
-            User::query()
-                ->where(function ($query) use ($configuredEmails) {
-                    $query->where('is_platform_admin', true);
-
-                    if ($configuredEmails !== []) {
-                        $query->orWhereIn('email', $configuredEmails);
-                    }
-                })
+            $this->platformAdminsQuery()
                 ->when($actor, fn ($query) => $query->whereKeyNot($actor->id))
                 ->each(function (User $admin) use ($type, $title, $message, $data, $actor) {
                     Notification::create([
@@ -187,6 +179,7 @@ class NotificationService
             'total_amount' => $total,
             'item_ids' => $overdue->pluck('id')->values()->all(),
             'installment_ids' => $installmentIds->all(),
+            'items' => $this->overdueItemRows($overdue),
         ];
 
         if ($installmentIds->count() === 1) {
@@ -198,6 +191,105 @@ class NotificationService
             'message' => "لديك {$count} {$label} بإجمالي {$this->formatMoney($total)}",
             'data' => $data,
         ];
+    }
+
+    /**
+     * @param  Collection<int, InstallmentItem>  $overdue
+     * @return list<array<string, mixed>>
+     */
+    private function overdueItemRows(Collection $overdue): array
+    {
+        return $overdue->map(function (InstallmentItem $item) {
+            $due = $item->due_date instanceof \DateTimeInterface
+                ? $item->due_date->format('Y-m-d')
+                : (string) $item->due_date;
+
+            return [
+                'item_id' => $item->id,
+                'installment_id' => $item->installment_id,
+                'customer_id' => $item->installment->customer_id,
+                'customer_name' => $item->installment->customer->name ?? 'العميل',
+                'merchant_id' => $item->installment->user_id,
+                'merchant_name' => $item->installment->user->name ?? 'البائع',
+                'amount' => (float) $item->amount,
+                'due_date' => $due,
+                'days_overdue' => max(0, (int) now()->startOfDay()->diffInDays($item->due_date)),
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * One weekly overdue digest for every platform admin.
+     */
+    public function notifyPlatformAdminsOverdueDigest(): int
+    {
+        $overdue = InstallmentItem::query()
+            ->whereHas('installment', fn ($query) => $query->where('status', 'active'))
+            ->whereNull('paid_at')
+            ->where('status', '!=', 'paid')
+            ->where('due_date', '<', now()->startOfDay())
+            ->with(['installment.customer', 'installment.user'])
+            ->orderBy('due_date')
+            ->get();
+
+        if ($overdue->isEmpty()) {
+            return 0;
+        }
+
+        $digest = $this->overdueDigest($overdue);
+        $count = (int) $digest['data']['count'];
+        $label = $count === 1 ? 'دفعة متأخرة' : 'دفعات متأخرة';
+
+        return $this->createForPlatformAdmins(
+            'payment_overdue',
+            'ملخص الدفعات المتأخرة',
+            "هناك {$count} {$label} بإجمالي {$this->formatMoney((float) $digest['data']['total_amount'])}",
+            array_merge($digest['data'], [
+                'is_platform_admin_digest' => true,
+            ])
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function createForPlatformAdmins(string $type, string $title, string $message, array $data): int
+    {
+        $created = 0;
+
+        $this->platformAdminsQuery()->each(function (User $admin) use ($type, $title, $message, $data, &$created) {
+            $notification = Notification::create([
+                'user_id' => $admin->id,
+                'type' => $type,
+                'title' => $title,
+                'message' => $message,
+                'data' => $data,
+            ]);
+
+            $this->queuePushNotification($notification);
+            $created++;
+        });
+
+        return $created;
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Builder<User>
+     */
+    private function platformAdminsQuery()
+    {
+        $configuredEmails = array_filter(
+            config('app.platform_admin_emails', []),
+            fn ($email) => is_string($email) && $email !== ''
+        );
+
+        return User::query()->where(function ($query) use ($configuredEmails) {
+            $query->where('is_platform_admin', true);
+
+            if ($configuredEmails !== []) {
+                $query->orWhereIn('email', $configuredEmails);
+            }
+        });
     }
 
     /**
@@ -273,7 +365,7 @@ class NotificationService
             ->whereNull('paid_at')
             ->where('status', '!=', 'paid')
             ->where('due_date', '<', now()->startOfDay())
-            ->with(['installment.customer'])
+            ->with(['installment.customer', 'installment.user'])
             ->get();
 
         if ($overdue->isEmpty()) {
@@ -312,7 +404,7 @@ class NotificationService
             ->whereNull('paid_at')
             ->where('status', '!=', 'paid')
             ->where('due_date', '<', now()->startOfDay())
-            ->with(['installment.user'])
+            ->with(['installment.user', 'installment.customer'])
             ->get();
 
         if ($overdue->isEmpty()) {

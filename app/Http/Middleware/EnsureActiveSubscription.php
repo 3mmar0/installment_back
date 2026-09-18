@@ -15,16 +15,19 @@ class EnsureActiveSubscription
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
-        if (!$user) {
+        if (! $user) {
             return $this->unauthorizedResponse();
         }
 
-        // Owners bypass subscription checks
-        if (method_exists($user, 'isOwner') && $user->isOwner()) {
+        // Owners and platform admins bypass subscription checks
+        if (
+            (method_exists($user, 'isOwner') && $user->isOwner())
+            || (method_exists($user, 'isPlatformAdmin') && $user->isPlatformAdmin())
+        ) {
             return $next($request);
         }
 
-        if (!LimitsHelper::isSubscriptionActive($user->id)) {
+        if (! LimitsHelper::isSubscriptionActive($user->id)) {
             $info = LimitsHelper::getSubscriptionInfo($user->id);
 
             return $this->errorResponse('Subscription inactive or expired', 402, [

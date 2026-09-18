@@ -39,6 +39,7 @@ class ProcessScheduledRemindersJob implements ShouldQueue
 
         if ($includeOverdue) {
             $this->notifyClientsOverdue($notificationService);
+            $notificationService->notifyPlatformAdminsOverdueDigest();
         }
     }
 
