@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\DeviceToken;
 use App\Models\Notification;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class FcmPushService
 {
@@ -60,7 +61,11 @@ class FcmPushService
             if ($result['ok']) {
                 $device->forceFill(['last_used_at' => now()])->save();
                 $sent++;
+
+                continue;
             }
+
+            $this->handleFailedResult($notification, $device, $result);
         }
 
         return $sent;
@@ -98,5 +103,26 @@ class FcmPushService
 
         return in_array($status, ['NOT_FOUND', 'UNREGISTERED'], true)
             || $code === 'UNREGISTERED';
+    }
+
+    private function handleFailedResult(Notification $notification, DeviceToken $device, array $result): void
+    {
+        $status = (int) ($result['status'] ?? 0);
+        $errorStatus = $result['json']['error']['status'] ?? null;
+
+        Log::warning('FCM send returned non-success response', [
+            'notification_id' => $notification->id,
+            'token_id' => $device->id,
+            'status' => $status,
+            'error_status' => $errorStatus,
+        ]);
+
+        if (in_array($status, [401, 403], true)) {
+            cache()->forget('fcm_access_token');
+        }
+
+        if ($status === 429 || $status >= 500) {
+            throw new RuntimeException("Retryable FCM response: {$status}");
+        }
     }
 }

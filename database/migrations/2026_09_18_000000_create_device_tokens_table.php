@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('device_tokens', function (Blueprint $table) {
             $table->id();
-            $table->string('token')->unique();
+            $table->string('token', 512)->unique();
             $table->string('platform', 16);
             $table->foreignId('user_id')->nullable()->constrained()->cascadeOnDelete();
             $table->foreignId('client_account_id')->nullable()->constrained('client_accounts')->cascadeOnDelete();

@@ -128,6 +128,48 @@ it('deletes unregistered FCM tokens', function () {
     expect(DeviceToken::query()->where('token', 'stale-token')->exists())->toBeFalse();
 });
 
+it('throws for retryable FCM server errors', function () {
+    config([
+        'services.fcm.enabled' => true,
+        'services.fcm.project_id' => 'aqsaty-test',
+        'services.fcm.credentials' => base_path('tests/fixtures/firebase-service-account.json'),
+    ]);
+
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'ya29.test',
+            'expires_in' => 3600,
+            'token_type' => 'Bearer',
+        ]),
+        'https://fcm.googleapis.com/v1/projects/aqsaty-test/messages:send' => Http::response([
+            'error' => [
+                'status' => 'UNAVAILABLE',
+                'message' => 'Service unavailable',
+            ],
+        ], 503),
+    ]);
+
+    $user = merchantWithPlan();
+    DeviceToken::query()->create([
+        'token' => 'retryable-token',
+        'platform' => 'android',
+        'user_id' => $user->id,
+    ]);
+
+    $notification = Notification::query()->create([
+        'user_id' => $user->id,
+        'type' => 'payment_due',
+        'title' => 'عنوان',
+        'message' => 'نص',
+        'data' => [],
+    ]);
+
+    expect(fn () => app(FcmPushService::class)->sendForNotification($notification))
+        ->toThrow(\RuntimeException::class);
+
+    expect(DeviceToken::query()->where('token', 'retryable-token')->exists())->toBeTrue();
+});
+
 it('queues a push job after creating an in-app notification', function () {
     Queue::fake();
 

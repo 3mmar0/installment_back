@@ -17,7 +17,7 @@ class DeviceTokenController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'token' => ['required', 'string', 'max:255'],
+            'token' => ['required', 'string', 'max:512'],
             'platform' => ['required', 'in:android,ios'],
         ]);
 
@@ -43,7 +43,7 @@ class DeviceTokenController extends Controller
     public function destroy(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'token' => ['required', 'string', 'max:255'],
+            'token' => ['required', 'string', 'max:512'],
         ]);
 
         $owner = $request->user();

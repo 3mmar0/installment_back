@@ -90,11 +90,11 @@ it('rejects an unauthenticated device-token request', function () {
     ])->assertUnauthorized();
 });
 
-it('rejects a token longer than 255 characters', function () {
+it('rejects a token longer than 512 characters', function () {
     actingAsMerchant();
 
     $this->postJson('/api/device-token', [
-        'token' => str_repeat('a', 256),
+        'token' => str_repeat('a', 513),
         'platform' => 'android',
     ])->assertUnprocessable();
 });
