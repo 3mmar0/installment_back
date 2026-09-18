@@ -8,7 +8,7 @@ class OverdueDigestSchedule
 {
     public static function weekday(): int
     {
-        return max(1, min(7, (int) config('notifications.overdue_digest_weekday', 1)));
+        return max(1, min(7, (int) config('notifications.overdue_digest_weekday', 5)));
     }
 
     public static function isDue(?CarbonInterface $now = null): bool

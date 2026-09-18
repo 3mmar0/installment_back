@@ -73,7 +73,7 @@ it('does not send overdue emails or notifications on a non-digest weekday', func
 it('sends one merged overdue email and one overdue notification on the digest weekday', function () {
     config(['mail.notifications_enabled' => true]);
     Mail::fake();
-    $this->travelTo(Carbon::parse('2026-09-21 08:00:00', 'UTC')); // Monday
+    $this->travelTo(Carbon::parse('2026-09-18 08:00:00', 'UTC')); // Friday
 
     $seeded = seedMerchantWithOverdueAndDueSoon();
 
@@ -93,7 +93,7 @@ it('sends one merged overdue email and one overdue notification on the digest we
 });
 
 it('sends clients one weekly merged overdue notification instead of one per item', function () {
-    $this->travelTo(Carbon::parse('2026-09-21 08:00:00', 'UTC')); // Monday
+    $this->travelTo(Carbon::parse('2026-09-18 08:00:00', 'UTC')); // Friday
 
     $user = merchantWithPlan();
     $client = ClientAccount::query()->create([
