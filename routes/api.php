@@ -2,10 +2,9 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Client\ClientAuthController;
-use App\Http\Controllers\Api\UnifiedAuthController;
+use App\Http\Controllers\Api\Client\ClientInstallmentController;
 use App\Http\Controllers\Api\Client\ClientNotificationController;
 use App\Http\Controllers\Api\Client\ClientPaymentRequestController;
-use App\Http\Controllers\Api\Client\ClientInstallmentController;
 use App\Http\Controllers\Api\Client\ClientPortalController;
 use App\Http\Controllers\Api\ComplaintController;
 use App\Http\Controllers\Api\CustomerController;
@@ -18,8 +17,10 @@ use App\Http\Controllers\Api\PaymentRequestController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\SystemSettingsController;
+use App\Http\Controllers\Api\UnifiedAuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserLimitController;
+use App\Http\Controllers\Api\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -29,6 +30,9 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Public routes
+Route::get('webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify']);
+Route::post('webhooks/whatsapp', [WhatsAppWebhookController::class, 'receive']);
+
 Route::prefix('auth')->group(function () {
     Route::controller(AuthController::class)->group(function () {
         Route::post('login', 'login')->middleware('throttle:10,1');
