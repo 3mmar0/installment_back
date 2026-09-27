@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Contracts\Services\AuthServiceInterface;
 use App\Enums\RegistrationSource;
+use App\Helpers\LocaleHelper;
 use App\Helpers\TrialHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
@@ -57,7 +58,7 @@ class AuthController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:30'],
-            'country' => ['sometimes', 'required', 'string', 'size:2', 'in:EG,SA,AE,KW,QA,BH,OM,JO,MA,US,GB'],
+            'country' => ['required', 'string', 'size:2', 'in:'.implode(',', LocaleHelper::countryCodes())],
             'password' => ['required', 'confirmed', Password::defaults()],
             'registration_source' => ['nullable', 'in:web,mobile,admin'],
         ]);
@@ -115,9 +116,13 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
-            'country' => ['sometimes', 'required', 'string', 'size:2', 'in:EG,SA,AE,KW,QA,BH,OM,JO,MA,US,GB'],
-            'currency' => ['sometimes', 'required', 'string', 'size:3', 'in:EGP,SAR,AED,KWD,QAR,BHD,OMR,JOD,MAD,USD,GBP'],
+            'country' => ['sometimes', 'required', 'string', 'size:2', 'in:'.implode(',', LocaleHelper::countryCodes())],
+            'currency' => ['sometimes', 'required', 'string', 'size:3', 'in:'.implode(',', array_values(LocaleHelper::CURRENCIES_BY_COUNTRY))],
         ]);
+
+        if (isset($data['country']) && ! isset($data['currency'])) {
+            $data['currency'] = LocaleHelper::currencyForCountry($data['country']);
+        }
 
         $user->fill($data);
         $user->save();

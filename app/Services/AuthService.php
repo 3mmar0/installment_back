@@ -6,6 +6,7 @@ use App\Contracts\Services\AuthServiceInterface;
 use App\Contracts\Services\UserServiceInterface;
 use App\Enums\RegistrationSource;
 use App\Enums\UserRole;
+use App\Helpers\LocaleHelper;
 use App\Exceptions\MailDeliveryException;
 use App\Mail\PasswordResetMail;
 use App\Models\ClientAccount;
@@ -60,19 +61,14 @@ class AuthService implements AuthServiceInterface
      */
     public function register(array $data): array
     {
-        $country = $data['country'] ?? 'EG';
-        $currenciesByCountry = [
-            'EG' => 'EGP', 'SA' => 'SAR', 'AE' => 'AED', 'KW' => 'KWD',
-            'QA' => 'QAR', 'BH' => 'BHD', 'OM' => 'OMR', 'JO' => 'JOD',
-            'MA' => 'MAD', 'US' => 'USD', 'GB' => 'GBP',
-        ];
+        $country = strtoupper(trim((string) ($data['country'] ?? 'EG')));
 
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
             'phone' => $data['phone'] ?? null,
             'country' => $country,
-            'currency' => $currenciesByCountry[$country] ?? 'EGP',
+            'currency' => LocaleHelper::currencyForCountry($country),
             'password' => Hash::make($data['password']),
             'role' => $data['role'] ?? UserRole::User,
             'registration_source' => RegistrationSource::tryFrom($data['registration_source'] ?? 'web')
