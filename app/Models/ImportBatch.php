@@ -23,6 +23,7 @@ class ImportBatch extends Model
     protected $fillable = [
         'user_id',
         'type',
+        'customer_id',
         'file_path',
         'original_name',
         'status',
@@ -38,6 +39,7 @@ class ImportBatch extends Model
 
     protected $casts = [
         'report' => 'array',
+        'customer_id' => 'integer',
         'total_rows' => 'integer',
         'processed_rows' => 'integer',
         'imported_count' => 'integer',
@@ -49,6 +51,11 @@ class ImportBatch extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
     }
 
     /**

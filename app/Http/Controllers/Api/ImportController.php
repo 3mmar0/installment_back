@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ImportFileRequest;
 use App\Http\Traits\ApiResponse;
 use App\Jobs\ProcessCustomerImportJob;
+use App\Models\Customer;
 use App\Models\ImportBatch;
 use App\Models\User;
 use App\Services\ImportService;
@@ -25,9 +26,13 @@ class ImportController extends Controller
     /**
      * Download the fixed import template. Public: the file carries no data.
      */
-    public function template(): \Symfony\Component\HttpFoundation\Response
+    public function template(Request $request): \Symfony\Component\HttpFoundation\Response
     {
-        $spreadsheet = $this->importService->buildTemplate();
+        $type = $request->query('type') === ImportService::TYPE_INSTALLMENTS
+            ? ImportService::TYPE_INSTALLMENTS
+            : ImportService::TYPE_CUSTOMERS;
+
+        $spreadsheet = $this->importService->buildTemplate($type);
 
         $tmp = tempnam(sys_get_temp_dir(), 'tpl');
         if ($tmp === false) {
@@ -52,9 +57,13 @@ class ImportController extends Controller
             ], 500);
         }
 
+        $filename = $type === ImportService::TYPE_INSTALLMENTS
+            ? 'installments_import_template.xlsx'
+            : 'customers_import_template.xlsx';
+
         return response($binary, 200, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="customers_import_template.xlsx"',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
             'Cache-Control' => 'no-store, no-cache',
         ]);
     }
@@ -67,25 +76,43 @@ class ImportController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        $type = $request->input('type') === ImportService::TYPE_INSTALLMENTS
+            ? ImportService::TYPE_INSTALLMENTS
+            : ImportService::TYPE_CUSTOMERS;
+
+        $customerId = null;
+        if ($type === ImportService::TYPE_INSTALLMENTS) {
+            $customer = Customer::where('user_id', $user->id)
+                ->find($request->integer('customer_id'));
+
+            if (! $customer) {
+                return $this->notFoundResponse('العميل غير موجود.');
+            }
+            $customerId = $customer->id;
+        }
+
         $file = $request->file('file');
         $path = $file->store('imports', 'local');
 
-        $parsed = $this->importService->parse(Storage::disk('local')->path($path));
+        $parsed = $this->importService->parse(Storage::disk('local')->path($path), $type);
 
         if (! $parsed['version_ok']) {
             Storage::disk('local')->delete($path);
 
             return $this->errorResponse(
-                'إصدار النموذج غير مدعوم. يرجى تنزيل أحدث نموذج قبل الرفع.',
+                $type === ImportService::TYPE_INSTALLMENTS
+                    ? 'الملف لا يطابق نموذج الأقساط. يرجى تنزيل أحدث نموذج للأقساط قبل الرفع.'
+                    : 'إصدار النموذج غير مدعوم. يرجى تنزيل أحدث نموذج قبل الرفع.',
                 422
             );
         }
 
-        $prepared = $this->importService->prepare($parsed['rows'], $user);
+        $prepared = $this->importService->prepare($parsed['rows'], $user, $type, $customerId);
 
         $batch = ImportBatch::create([
             'user_id' => $user->id,
-            'type' => 'customers',
+            'type' => $type,
+            'customer_id' => $customerId,
             'file_path' => $path,
             'original_name' => $file->getClientOriginalName(),
             'status' => ImportBatch::STATUS_PREVIEWED,
@@ -153,6 +180,7 @@ class ImportController extends Controller
 
         $payload = [
             'batch_id' => $batch->id,
+            'type' => $batch->type,
             'status' => $batch->status,
             'percent' => $batch->percent(),
             'total_rows' => $batch->total_rows,

@@ -51,8 +51,9 @@ class ProcessCustomerImportJob implements ShouldQueue
         $batch->update(['status' => ImportBatch::STATUS_PROCESSING]);
 
         try {
+            $type = $batch->type ?: 'customers';
             $path = Storage::disk('local')->path($batch->file_path);
-            $parsed = $importService->parse($path);
+            $parsed = $importService->parse($path, $type);
 
             if (! $parsed['version_ok']) {
                 $this->markFailed($batch, 'إصدار النموذج غير مدعوم. يرجى تنزيل أحدث نموذج.');
@@ -68,7 +69,9 @@ class ProcessCustomerImportJob implements ShouldQueue
                         'processed_rows' => $processed,
                         'total_rows' => $total,
                     ])->save();
-                }
+                },
+                $type,
+                $batch->customer_id,
             );
 
             $batch->update([
@@ -85,7 +88,7 @@ class ProcessCustomerImportJob implements ShouldQueue
                 ],
             ]);
 
-            $this->notifySummary($notificationService, $user, $result);
+            $this->notifySummary($notificationService, $user, $result, $batch->type ?: 'customers');
         } catch (\Throwable $e) {
             Log::error('Customer import job failed', [
                 'batch_id' => $batch->id,
@@ -106,20 +109,32 @@ class ProcessCustomerImportJob implements ShouldQueue
         }
     }
 
-    private function notifySummary(NotificationService $notificationService, User $user, array $result): void
+    private function notifySummary(NotificationService $notificationService, User $user, array $result, string $type): void
     {
         try {
-            $notificationService->create(
-                $user,
-                'import_completed',
-                'اكتمل استيراد العملاء',
-                sprintf(
+            if ($type === 'installments') {
+                $title = 'اكتمل استيراد الأقساط';
+                $body = sprintf(
+                    'تم استيراد %d قسط. الصفوف التي تعذّر استيرادها: %d.',
+                    $result['imported_count'],
+                    $result['failed_count']
+                );
+            } else {
+                $title = 'اكتمل استيراد العملاء';
+                $body = sprintf(
                     'تم استيراد %d قسط و%d عميل جديد. الصفوف التي تعذّر استيرادها: %d.',
                     $result['imported_count'],
                     $result['created_customers'],
                     $result['failed_count']
-                ),
-                ['type' => 'customer_import'],
+                );
+            }
+
+            $notificationService->create(
+                $user,
+                'import_completed',
+                $title,
+                $body,
+                ['type' => $type === 'installments' ? 'installment_import' : 'customer_import'],
                 enforceLimits: false
             );
         } catch (\Throwable $e) {

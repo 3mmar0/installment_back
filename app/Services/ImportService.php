@@ -26,21 +26,32 @@ class ImportService
     /** Bump when the template layout changes; older files are rejected. */
     public const TEMPLATE_VERSION = 1;
 
+    /** Import types. */
+    public const TYPE_CUSTOMERS = 'customers';
+
+    public const TYPE_INSTALLMENTS = 'installments';
+
     /** Hidden cell that carries the template version marker. */
     private const VERSION_CELL = 'N1';
 
-    /** Data sheet title. */
-    private const DATA_SHEET = 'البيانات';
+    /** Hidden cell that carries the template type marker. */
+    private const TYPE_CELL = 'M1';
+
+    /** Data sheet title for the customers template. */
+    private const DATA_SHEET_CUSTOMERS = 'البيانات';
+
+    /** Data sheet title for the installments template. */
+    private const DATA_SHEET_INSTALLMENTS = 'الأقساط';
 
     /** Maximum number of data rows accepted from one file. */
     public const MAX_ROWS = 1000;
 
     /**
-     * Column order (A..K). Index maps to the spreadsheet column letter.
+     * Customers template columns (A..K). Index maps to the spreadsheet column letter.
      *
      * @var array<int, array{key: string, label: string}>
      */
-    private const COLUMNS = [
+    private const COLUMNS_CUSTOMERS = [
         ['key' => 'name', 'label' => 'اسم العميل *'],
         ['key' => 'phone', 'label' => 'رقم الهاتف *'],
         ['key' => 'email', 'label' => 'البريد الإلكتروني'],
@@ -54,31 +65,78 @@ class ImportService
         ['key' => 'installment_notes', 'label' => 'ملاحظات القسط'],
     ];
 
+    /**
+     * Installments template columns (A..F). All rows attach to one chosen customer.
+     *
+     * @var array<int, array{key: string, label: string}>
+     */
+    private const COLUMNS_INSTALLMENTS = [
+        ['key' => 'installment_name', 'label' => 'اسم القسط / المنتج'],
+        ['key' => 'total_amount', 'label' => 'إجمالي المبلغ *'],
+        ['key' => 'months', 'label' => 'عدد الشهور *'],
+        ['key' => 'start_date', 'label' => 'تاريخ أول قسط *'],
+        ['key' => 'paid_count', 'label' => 'عدد الأقساط المدفوعة'],
+        ['key' => 'installment_notes', 'label' => 'ملاحظات القسط'],
+    ];
+
+    /**
+     * The single example row shown inside each template so the layout is clear.
+     * The parser skips any row that still matches this example exactly.
+     *
+     * @var array<string, mixed>
+     */
+    private const EXAMPLE_CUSTOMERS = [
+        'name' => 'أحمد علي',
+        'phone' => '01000000000',
+        'email' => 'ahmed@example.com',
+        'address' => 'القاهرة - مصر الجديدة',
+        'customer_notes' => 'صف مثال — احذفه أو استبدله ببياناتك',
+        'installment_name' => 'تلفزيون سامسونج',
+        'total_amount' => 12000,
+        'months' => 12,
+        'start_date' => '2026-01-01',
+        'paid_count' => 2,
+        'installment_notes' => 'ملاحظة توضيحية',
+    ];
+
+    /** @var array<string, mixed> */
+    private const EXAMPLE_INSTALLMENTS = [
+        'installment_name' => 'تلفزيون سامسونج',
+        'total_amount' => 12000,
+        'months' => 12,
+        'start_date' => '2026-01-01',
+        'paid_count' => 2,
+        'installment_notes' => 'ملاحظة توضيحية',
+    ];
+
     public function __construct(
         private readonly CustomerServiceInterface $customerService,
         private readonly InstallmentServiceInterface $installmentService,
     ) {}
 
     /**
-     * Build the downloadable import template.
+     * Build the downloadable import template for the given type.
      */
-    public function buildTemplate(): Spreadsheet
+    public function buildTemplate(string $type = self::TYPE_CUSTOMERS): Spreadsheet
     {
+        $type = $this->normalizeType($type);
+        $columns = $this->columnsFor($type);
+
         $spreadsheet = new Spreadsheet;
 
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle($this->safeTitle(self::DATA_SHEET));
+        $sheet->setTitle($this->safeTitle($this->dataSheetFor($type)));
         $spreadsheet->getProperties()
-            ->setTitle('نموذج استيراد العملاء والأقساط')
+            ->setTitle($type === self::TYPE_INSTALLMENTS ? 'نموذج استيراد الأقساط' : 'نموذج استيراد العملاء والأقساط')
             ->setCreator('Installment Manager');
 
-        $lastColumn = $this->columnLetter(count(self::COLUMNS) - 1); // K
+        $lastColumn = $this->columnLetter(count($columns) - 1);
 
         // Header row
-        foreach (self::COLUMNS as $index => $column) {
+        foreach ($columns as $index => $column) {
             $letter = $this->columnLetter($index);
             $sheet->setCellValue($letter.'1', $column['label']);
-            $sheet->getColumnDimension($letter)->setWidth($index === 0 || $index === 5 ? 26 : 20);
+            $sheet->getColumnDimension($letter)->setWidth(in_array($column['key'], ['name', 'installment_name'], true) ? 26 : 20);
         }
 
         $sheet->getStyle('A1:'.$lastColumn.'1')->applyFromArray([
@@ -92,14 +150,28 @@ class ImportService
         $sheet->freezePane('A2');
 
         // Keep phone numbers as text so leading zeros survive.
-        $sheet->getStyle('B2:B'.(self::MAX_ROWS + 1))->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        $phoneLetter = $this->letterForKey($columns, 'phone');
+        if ($phoneLetter !== null) {
+            $sheet->getStyle($phoneLetter.'2:'.$phoneLetter.(self::MAX_ROWS + 1))
+                ->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        }
+
         // Dates render in a readable, unambiguous format.
-        $sheet->getStyle('I2:I'.(self::MAX_ROWS + 1))->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+        $dateLetter = $this->letterForKey($columns, 'start_date');
+        if ($dateLetter !== null) {
+            $sheet->getStyle($dateLetter.'2:'.$dateLetter.(self::MAX_ROWS + 1))
+                ->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+        }
 
-        $this->applyValidations($sheet);
+        $this->applyValidations($sheet, $columns);
 
-        // Hidden version marker.
-        $sheet->setCellValue(self::VERSION_CELL, self::TEMPLATE_VERSION);
+        // One example row (row 2) so the expected layout is obvious.
+        $this->writeExampleRow($sheet, $columns, $type);
+
+        // Hidden version + type markers.
+        $sheet->setCellValueExplicit(self::VERSION_CELL, (string) self::TEMPLATE_VERSION, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        $sheet->setCellValueExplicit(self::TYPE_CELL, $type, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        $sheet->getColumnDimension('M')->setVisible(false);
         $sheet->getColumnDimension('N')->setVisible(false);
 
         // Protect the header row while leaving data cells editable.
@@ -107,7 +179,7 @@ class ImportService
             ->getProtection()->setLocked(Protection::PROTECTION_UNPROTECTED);
         $sheet->getProtection()->setSheet(true);
 
-        $this->buildInstructionsSheet($spreadsheet);
+        $this->buildInstructionsSheet($spreadsheet, $type);
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -119,16 +191,22 @@ class ImportService
      *
      * @return array{version_ok: bool, truncated: bool, rows: array<int, array<string, mixed>>}
      */
-    public function parse(string $path): array
+    public function parse(string $path, string $type = self::TYPE_CUSTOMERS): array
     {
+        $type = $this->normalizeType($type);
+        $columns = $this->columnsFor($type);
+
         $reader = IOFactory::createReaderForFile($path);
         $reader->setReadDataOnly(true);
         $spreadsheet = $reader->load($path);
 
-        $sheet = $spreadsheet->getSheetByName(self::DATA_SHEET) ?? $spreadsheet->getSheet(0);
+        $sheet = $spreadsheet->getSheetByName($this->dataSheetFor($type)) ?? $spreadsheet->getSheet(0);
 
         $version = (int) $sheet->getCell(self::VERSION_CELL)->getValue();
-        $versionOk = $version === self::TEMPLATE_VERSION;
+        // Missing type marker (older customers templates) defaults to customers.
+        $fileType = $this->str($sheet->getCell(self::TYPE_CELL)->getValue()) ?? self::TYPE_CUSTOMERS;
+
+        $versionOk = $version === self::TEMPLATE_VERSION && $fileType === $type;
 
         $rows = [];
         $truncated = false;
@@ -138,7 +216,7 @@ class ImportService
 
             for ($rowNumber = 2; $rowNumber <= $highestRow; $rowNumber++) {
                 $raw = [];
-                foreach (self::COLUMNS as $index => $column) {
+                foreach ($columns as $index => $column) {
                     $letter = $this->columnLetter($index);
                     $raw[$column['key']] = $sheet->getCell($letter.$rowNumber)->getValue();
                 }
@@ -147,26 +225,19 @@ class ImportService
                     continue;
                 }
 
+                $parsedRow = $this->normalizeRow($raw, $rowNumber, $type);
+
+                // Skip the built-in example row if the user left it untouched.
+                if ($this->isExampleRow($parsedRow, $type)) {
+                    continue;
+                }
+
                 if (count($rows) >= self::MAX_ROWS) {
                     $truncated = true;
                     break;
                 }
 
-                $rows[] = [
-                    'line' => $rowNumber,
-                    'name' => $this->str($raw['name']),
-                    'phone' => $this->str($raw['phone']),
-                    'email' => $this->str($raw['email']),
-                    'address' => $this->str($raw['address']),
-                    'customer_notes' => $this->str($raw['customer_notes']),
-                    'installment_name' => $this->str($raw['installment_name']),
-                    'total_amount' => $this->numeric($raw['total_amount']),
-                    'months' => $this->numeric($raw['months']),
-                    'start_date' => $this->normalizeDate($raw['start_date']),
-                    'start_date_raw' => $this->str($raw['start_date']),
-                    'paid_count' => $this->numeric($raw['paid_count']),
-                    'installment_notes' => $this->str($raw['installment_notes']),
-                ];
+                $rows[] = $parsedRow;
             }
         }
 
@@ -188,7 +259,35 @@ class ImportService
      * @param  array<int, array<string, mixed>>  $rows
      * @return array<string, mixed>
      */
-    public function prepare(array $rows, User $user): array
+    public function prepare(array $rows, User $user, string $type = self::TYPE_CUSTOMERS, ?int $customerId = null): array
+    {
+        return $this->normalizeType($type) === self::TYPE_INSTALLMENTS
+            ? $this->prepareInstallments($rows, $user, $customerId)
+            : $this->prepareCustomers($rows, $user);
+    }
+
+    /**
+     * Execute the import. Each installment row runs in its own transaction so a
+     * single bad row never rolls back the good ones (partial import).
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  callable(int $processed, int $total): void|null  $onRowProcessed
+     * @return array<string, mixed>
+     */
+    public function import(array $rows, User $user, ?callable $onRowProcessed = null, string $type = self::TYPE_CUSTOMERS, ?int $customerId = null): array
+    {
+        return $this->normalizeType($type) === self::TYPE_INSTALLMENTS
+            ? $this->importInstallments($rows, $user, $customerId, $onRowProcessed)
+            : $this->importCustomers($rows, $user, $onRowProcessed);
+    }
+
+    // ---- customers flow ------------------------------------------------
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<string, mixed>
+     */
+    private function prepareCustomers(array $rows, User $user): array
     {
         $errors = [];
         $warnings = [];
@@ -317,6 +416,7 @@ class ImportService
         $validRows = collect($records)->where('valid', true)->count();
 
         return [
+            'type' => self::TYPE_CUSTOMERS,
             'records' => $records,
             'groups' => $groups,
             'errors' => $errors,
@@ -329,21 +429,18 @@ class ImportService
                 'matched_customers' => $matchedCustomers,
                 'installments' => $installments,
                 'customer_only' => $customerOnly,
+                'customer_name' => null,
             ],
         ];
     }
 
     /**
-     * Execute the import. Each installment row runs in its own transaction so a
-     * single bad row never rolls back the good ones (partial import).
-     *
      * @param  array<int, array<string, mixed>>  $rows
-     * @param  callable(int $processed, int $total): void|null  $onRowProcessed
      * @return array<string, mixed>
      */
-    public function import(array $rows, User $user, ?callable $onRowProcessed = null): array
+    private function importCustomers(array $rows, User $user, ?callable $onRowProcessed = null): array
     {
-        $prepared = $this->prepare($rows, $user);
+        $prepared = $this->prepareCustomers($rows, $user);
         $records = $prepared['records'];
         $groups = $prepared['groups'];
 
@@ -356,15 +453,7 @@ class ImportService
         /** @var array<string, int> $resolved phone => customer id */
         $resolved = [];
 
-        $tick = function () use (&$processed, $total, $onRowProcessed) {
-            $processed++;
-            if ($onRowProcessed !== null) {
-                // Throttle DB writes: report every 5 rows and on the final row.
-                if ($processed % 5 === 0 || $processed === $total) {
-                    $onRowProcessed($processed, $total);
-                }
-            }
-        };
+        $tick = $this->tickFactory($processed, $total, $onRowProcessed);
 
         foreach ($records as $record) {
             if (! $record['valid']) {
@@ -420,6 +509,144 @@ class ImportService
         ];
     }
 
+    // ---- installments flow (attach to one chosen customer) -------------
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<string, mixed>
+     */
+    private function prepareInstallments(array $rows, User $user, ?int $customerId): array
+    {
+        $customer = $customerId === null
+            ? null
+            : Customer::query()->where('user_id', $user->id)->find($customerId);
+
+        $errors = [];
+        $records = [];
+
+        foreach ($rows as $row) {
+            $record = $this->validateInstallmentRow($row);
+
+            if ($customer === null && $record['valid']) {
+                $record['valid'] = false;
+                $record['error'] = 'العميل غير موجود.';
+            }
+
+            if ($record['error'] !== null) {
+                $errors[] = ['line' => $record['line'], 'message' => $record['error']];
+            }
+            $records[] = $record;
+        }
+
+        // Installment quota allocation.
+        $remainingInstallments = $user->isOwner() ? PHP_INT_MAX : LimitsHelper::getRemainingCount($user->id, 'installments');
+        $installments = 0;
+
+        foreach ($records as &$record) {
+            if (! $record['valid']) {
+                continue;
+            }
+
+            if ($installments < $remainingInstallments) {
+                $installments++;
+            } else {
+                $record['valid'] = false;
+                $record['error'] = 'تجاوز حد الباقة لعدد الأقساط المسموح به.';
+                $errors[] = ['line' => $record['line'], 'message' => $record['error']];
+            }
+        }
+        unset($record);
+
+        $validRows = collect($records)->where('valid', true)->count();
+
+        return [
+            'type' => self::TYPE_INSTALLMENTS,
+            'records' => $records,
+            'customer_id' => $customer?->id,
+            'errors' => $errors,
+            'warnings' => [],
+            'summary' => [
+                'total_rows' => count($rows),
+                'valid_rows' => $validRows,
+                'error_rows' => count($rows) - $validRows,
+                'new_customers' => 0,
+                'matched_customers' => $customer !== null ? 1 : 0,
+                'installments' => $installments,
+                'customer_only' => 0,
+                'customer_name' => $customer?->name,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<string, mixed>
+     */
+    private function importInstallments(array $rows, User $user, ?int $customerId, ?callable $onRowProcessed = null): array
+    {
+        $prepared = $this->prepareInstallments($rows, $user, $customerId);
+        $records = $prepared['records'];
+        $resolvedCustomerId = $prepared['customer_id'];
+
+        $total = count($records);
+        $processed = 0;
+        $imported = [];
+        $failed = [];
+
+        $tick = $this->tickFactory($processed, $total, $onRowProcessed);
+
+        foreach ($records as $record) {
+            if (! $record['valid'] || $resolvedCustomerId === null) {
+                $failed[] = ['line' => $record['line'], 'error' => $record['error'] ?? 'صف غير صالح'];
+                $tick();
+
+                continue;
+            }
+
+            try {
+                $this->importInstallmentRow($record, (int) $resolvedCustomerId, $user);
+                $imported[] = $record['line'];
+            } catch (\Throwable $e) {
+                $failed[] = ['line' => $record['line'], 'error' => $this->safeError($e)];
+            }
+
+            $tick();
+        }
+
+        if ($onRowProcessed !== null && ($total === 0 || $processed !== $total)) {
+            $onRowProcessed($total, $total);
+        }
+
+        return [
+            'imported' => $imported,
+            'failed' => $failed,
+            'warnings' => [],
+            'created_customers' => 0,
+            'matched_customers' => $prepared['summary']['matched_customers'],
+            'imported_count' => count($imported),
+            'failed_count' => count($failed),
+            'total_rows' => $total,
+        ];
+    }
+
+    /**
+     * Build the throttled progress callback shared by both import flows.
+     *
+     * @param  callable(int, int): void|null  $onRowProcessed
+     */
+    private function tickFactory(int &$processed, int $total, ?callable $onRowProcessed): callable
+    {
+        return function () use (&$processed, $total, $onRowProcessed) {
+            $processed++;
+            if ($onRowProcessed !== null) {
+                // Throttle DB writes: report every 5 rows and on the final row.
+                if ($processed % 5 === 0 || $processed === $total) {
+                    $onRowProcessed($processed, $total);
+                }
+            }
+        };
+    }
+
     /**
      * Create one installment and mark the first N items as already paid.
      *
@@ -459,7 +686,7 @@ class ImportService
     }
 
     /**
-     * Validate a single parsed row and annotate it for grouping/import.
+     * Validate a single parsed customers-row and annotate it for grouping/import.
      *
      * @param  array<string, mixed>  $row
      * @return array<string, mixed>
@@ -538,6 +765,60 @@ class ImportService
     }
 
     /**
+     * Validate a single parsed installments-row (installments template).
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function validateInstallmentRow(array $row): array
+    {
+        $payload = [
+            'installment_name' => $row['installment_name'],
+            'total_amount' => $row['total_amount'],
+            'months' => $row['months'],
+            'start_date' => $row['start_date'],
+            'paid_count' => $row['paid_count'] ?? 0,
+            'installment_notes' => $row['installment_notes'],
+        ];
+
+        $rules = [
+            'installment_name' => ['nullable', 'string', 'max:255'],
+            'total_amount' => ['required', 'numeric', 'min:0.01'],
+            'months' => ['required', 'integer', 'min:1', 'max:120'],
+            'start_date' => ['required', 'date'],
+            'paid_count' => ['nullable', 'integer', 'min:0', 'lte:months'],
+            'installment_notes' => ['nullable', 'string', 'max:2000'],
+        ];
+
+        $validator = Validator::make($payload, $rules, [], $this->attributeNames());
+
+        if ($row['start_date'] === null && $row['start_date_raw'] !== null) {
+            $validator->after(function ($v) {
+                $v->errors()->add('start_date', 'تاريخ أول قسط غير صالح.');
+            });
+        }
+
+        $error = $validator->fails()
+            ? implode('، ', $validator->errors()->all())
+            : null;
+
+        return [
+            'line' => $row['line'],
+            'valid' => $error === null,
+            'error' => $error,
+            'has_installment' => true,
+            'installment' => [
+                'name' => $row['installment_name'],
+                'total_amount' => $row['total_amount'] !== null ? (float) $row['total_amount'] : null,
+                'months' => $row['months'] !== null ? (int) $row['months'] : null,
+                'start_date' => $row['start_date'],
+                'paid_count' => $row['paid_count'] !== null ? (int) $row['paid_count'] : 0,
+                'notes' => $row['installment_notes'],
+            ],
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $row
      */
     private function rowHasInstallment(array $row): bool
@@ -551,57 +832,139 @@ class ImportService
         return $row['paid_count'] !== null && (int) $row['paid_count'] > 0;
     }
 
-    private function applyValidations($sheet): void
+    /**
+     * Build a normalized parsed row from raw cell values.
+     *
+     * @param  array<string, mixed>  $raw
+     * @return array<string, mixed>
+     */
+    private function normalizeRow(array $raw, int $rowNumber, string $type): array
+    {
+        if ($type === self::TYPE_INSTALLMENTS) {
+            return [
+                'line' => $rowNumber,
+                'installment_name' => $this->str($raw['installment_name']),
+                'total_amount' => $this->numeric($raw['total_amount']),
+                'months' => $this->numeric($raw['months']),
+                'start_date' => $this->normalizeDate($raw['start_date']),
+                'start_date_raw' => $this->str($raw['start_date']),
+                'paid_count' => $this->numeric($raw['paid_count']),
+                'installment_notes' => $this->str($raw['installment_notes']),
+            ];
+        }
+
+        return [
+            'line' => $rowNumber,
+            'name' => $this->str($raw['name']),
+            'phone' => $this->str($raw['phone']),
+            'email' => $this->str($raw['email']),
+            'address' => $this->str($raw['address']),
+            'customer_notes' => $this->str($raw['customer_notes']),
+            'installment_name' => $this->str($raw['installment_name']),
+            'total_amount' => $this->numeric($raw['total_amount']),
+            'months' => $this->numeric($raw['months']),
+            'start_date' => $this->normalizeDate($raw['start_date']),
+            'start_date_raw' => $this->str($raw['start_date']),
+            'paid_count' => $this->numeric($raw['paid_count']),
+            'installment_notes' => $this->str($raw['installment_notes']),
+        ];
+    }
+
+    /**
+     * @param  array<int, array{key: string, label: string}>  $columns
+     */
+    private function applyValidations(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, array $columns): void
     {
         $rangeEnd = self::MAX_ROWS + 1;
 
-        $decimal = function (string $column, string $formula1, string $prompt) use ($sheet, $rangeEnd) {
+        $amount = $this->letterForKey($columns, 'total_amount');
+        $months = $this->letterForKey($columns, 'months');
+        $paid = $this->letterForKey($columns, 'paid_count');
+
+        if ($amount !== null) {
             for ($row = 2; $row <= $rangeEnd; $row++) {
-                $validation = $sheet->getCell($column.$row)->getDataValidation();
-                $validation->setType(DataValidation::TYPE_DECIMAL);
-                $validation->setErrorStyle(DataValidation::STYLE_STOP);
-                $validation->setAllowBlank(true);
-                $validation->setShowInputMessage(true);
-                $validation->setShowErrorMessage(true);
-                $validation->setErrorTitle('قيمة غير صالحة');
-                $validation->setError($prompt);
-                $validation->setOperator(DataValidation::OPERATOR_GREATERTHAN);
-                $validation->setFormula1($formula1);
+                $v = $sheet->getCell($amount.$row)->getDataValidation();
+                $v->setType(DataValidation::TYPE_DECIMAL);
+                $v->setErrorStyle(DataValidation::STYLE_STOP);
+                $v->setAllowBlank(true);
+                $v->setShowInputMessage(true);
+                $v->setShowErrorMessage(true);
+                $v->setErrorTitle('قيمة غير صالحة');
+                $v->setError('أدخل مبلغاً أكبر من صفر.');
+                $v->setOperator(DataValidation::OPERATOR_GREATERTHAN);
+                $v->setFormula1('0');
             }
-        };
-
-        // G: total amount > 0
-        $decimal('G', '0', 'أدخل مبلغاً أكبر من صفر.');
-
-        // H: months whole 1..120
-        for ($row = 2; $row <= $rangeEnd; $row++) {
-            $v = $sheet->getCell('H'.$row)->getDataValidation();
-            $v->setType(DataValidation::TYPE_WHOLE);
-            $v->setErrorStyle(DataValidation::STYLE_STOP);
-            $v->setAllowBlank(true);
-            $v->setShowErrorMessage(true);
-            $v->setErrorTitle('عدد شهور غير صالح');
-            $v->setError('عدد الشهور يجب أن يكون رقماً صحيحاً بين 1 و 120.');
-            $v->setOperator(DataValidation::OPERATOR_BETWEEN);
-            $v->setFormula1('1');
-            $v->setFormula2('120');
         }
 
-        // J: paid count whole >= 0
-        for ($row = 2; $row <= $rangeEnd; $row++) {
-            $v = $sheet->getCell('J'.$row)->getDataValidation();
-            $v->setType(DataValidation::TYPE_WHOLE);
-            $v->setErrorStyle(DataValidation::STYLE_STOP);
-            $v->setAllowBlank(true);
-            $v->setShowErrorMessage(true);
-            $v->setErrorTitle('قيمة غير صالحة');
-            $v->setError('عدد الأقساط المدفوعة يجب أن يكون صفراً أو أكثر.');
-            $v->setOperator(DataValidation::OPERATOR_GREATERTHANOREQUAL);
-            $v->setFormula1('0');
+        if ($months !== null) {
+            for ($row = 2; $row <= $rangeEnd; $row++) {
+                $v = $sheet->getCell($months.$row)->getDataValidation();
+                $v->setType(DataValidation::TYPE_WHOLE);
+                $v->setErrorStyle(DataValidation::STYLE_STOP);
+                $v->setAllowBlank(true);
+                $v->setShowErrorMessage(true);
+                $v->setErrorTitle('عدد شهور غير صالح');
+                $v->setError('عدد الشهور يجب أن يكون رقماً صحيحاً بين 1 و 120.');
+                $v->setOperator(DataValidation::OPERATOR_BETWEEN);
+                $v->setFormula1('1');
+                $v->setFormula2('120');
+            }
+        }
+
+        if ($paid !== null) {
+            for ($row = 2; $row <= $rangeEnd; $row++) {
+                $v = $sheet->getCell($paid.$row)->getDataValidation();
+                $v->setType(DataValidation::TYPE_WHOLE);
+                $v->setErrorStyle(DataValidation::STYLE_STOP);
+                $v->setAllowBlank(true);
+                $v->setShowErrorMessage(true);
+                $v->setErrorTitle('قيمة غير صالحة');
+                $v->setError('عدد الأقساط المدفوعة يجب أن يكون صفراً أو أكثر.');
+                $v->setOperator(DataValidation::OPERATOR_GREATERTHANOREQUAL);
+                $v->setFormula1('0');
+            }
         }
     }
 
-    private function buildInstructionsSheet(Spreadsheet $spreadsheet): void
+    /**
+     * Write the single illustrative example row (row 2) and style it distinctly.
+     *
+     * @param  array<int, array{key: string, label: string}>  $columns
+     */
+    private function writeExampleRow(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, array $columns, string $type): void
+    {
+        $example = $type === self::TYPE_INSTALLMENTS ? self::EXAMPLE_INSTALLMENTS : self::EXAMPLE_CUSTOMERS;
+        $lastColumn = $this->columnLetter(count($columns) - 1);
+
+        foreach ($columns as $index => $column) {
+            $letter = $this->columnLetter($index);
+            $key = $column['key'];
+            if (! array_key_exists($key, $example)) {
+                continue;
+            }
+
+            $value = $example[$key];
+
+            // Keep phone + date as text so the example reads exactly as stored.
+            if (in_array($key, ['phone', 'start_date'], true)) {
+                $sheet->setCellValueExplicit($letter.'2', (string) $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            } else {
+                $sheet->setCellValue($letter.'2', $value);
+            }
+        }
+
+        $sheet->getStyle('A2:'.$lastColumn.'2')->applyFromArray([
+            'font' => ['italic' => true, 'color' => ['rgb' => '8D6E63']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFF8E1']],
+        ]);
+
+        $comment = $sheet->getComment('A2');
+        $comment->getText()->createText('هذا صف مثال توضيحي. احذفه قبل الرفع أو استبدله ببياناتك، وابدأ بإدخال بياناتك من الصف التالي.');
+        $comment->setWidth('220pt');
+        $comment->setHeight('80pt');
+    }
+
+    private function buildInstructionsSheet(Spreadsheet $spreadsheet, string $type): void
     {
         $sheet = $spreadsheet->createSheet();
         $sheet->setTitle($this->safeTitle('تعليمات'));
@@ -610,25 +973,37 @@ class ImportService
         $sheet->setCellValue('A1', 'تعليمات تعبئة ملف الاستيراد');
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
 
-        $lines = [
-            ['العمود', 'الوصف'],
-            ['اسم العميل *', 'إجباري. اسم العميل الكامل.'],
-            ['رقم الهاتف *', 'إجباري. يُستخدم لتجميع الأقساط تحت نفس العميل. اتركه كنص للحفاظ على الصفر في البداية.'],
-            ['البريد الإلكتروني', 'اختياري.'],
-            ['العنوان', 'اختياري.'],
-            ['ملاحظات العميل', 'اختياري.'],
-            ['اسم القسط / المنتج', 'اختياري. اتركه فارغاً لتسجيل العميل فقط بدون قسط.'],
-            ['إجمالي المبلغ', 'إجباري عند وجود قسط. رقم أكبر من صفر.'],
-            ['عدد الشهور', 'إجباري عند وجود قسط. رقم صحيح بين 1 و 120.'],
-            ['تاريخ أول قسط', 'إجباري عند وجود قسط. مثال: 2026-01-15.'],
-            ['عدد الأقساط المدفوعة', 'اختياري. القيمة الافتراضية 0. يعلّم أول N قسط كمدفوع.'],
-            ['ملاحظات القسط', 'اختياري.'],
-            [],
-            ['أمثلة:'],
-            ['اسم العميل', 'رقم الهاتف', 'اسم القسط', 'إجمالي المبلغ', 'عدد الشهور', 'تاريخ أول قسط', 'عدد الأقساط المدفوعة'],
-            ['أحمد علي', '01000000001', 'تلفزيون', '12000', '12', '2026-01-01', '2'],
-            ['سارة محمد', '01000000002', 'ثلاجة', '8000', '8', '2026-02-15', '0'],
-        ];
+        if ($type === self::TYPE_INSTALLMENTS) {
+            $lines = [
+                ['العمود', 'الوصف'],
+                ['اسم القسط / المنتج', 'اختياري. اسم القسط أو المنتج.'],
+                ['إجمالي المبلغ *', 'إجباري. رقم أكبر من صفر.'],
+                ['عدد الشهور *', 'إجباري. رقم صحيح بين 1 و 120.'],
+                ['تاريخ أول قسط *', 'إجباري. مثال: 2026-01-01.'],
+                ['عدد الأقساط المدفوعة', 'اختياري. القيمة الافتراضية 0. يعلّم أول N قسط كمدفوع.'],
+                ['ملاحظات القسط', 'اختياري.'],
+                [],
+                ['ملاحظة:', 'جميع الأقساط في هذا الملف تُضاف للعميل الذي تختاره قبل الرفع.'],
+                ['تنبيه:', 'الصف الأول في ورقة البيانات هو صف مثال — احذفه أو استبدله ببياناتك.'],
+            ];
+        } else {
+            $lines = [
+                ['العمود', 'الوصف'],
+                ['اسم العميل *', 'إجباري. اسم العميل الكامل.'],
+                ['رقم الهاتف *', 'إجباري. يُستخدم لتجميع الأقساط تحت نفس العميل. اتركه كنص للحفاظ على الصفر في البداية.'],
+                ['البريد الإلكتروني', 'اختياري.'],
+                ['العنوان', 'اختياري.'],
+                ['ملاحظات العميل', 'اختياري.'],
+                ['اسم القسط / المنتج', 'اختياري. اتركه فارغاً لتسجيل العميل فقط بدون قسط.'],
+                ['إجمالي المبلغ', 'إجباري عند وجود قسط. رقم أكبر من صفر.'],
+                ['عدد الشهور', 'إجباري عند وجود قسط. رقم صحيح بين 1 و 120.'],
+                ['تاريخ أول قسط', 'إجباري عند وجود قسط. مثال: 2026-01-15.'],
+                ['عدد الأقساط المدفوعة', 'اختياري. القيمة الافتراضية 0. يعلّم أول N قسط كمدفوع.'],
+                ['ملاحظات القسط', 'اختياري.'],
+                [],
+                ['تنبيه:', 'الصف الأول في ورقة البيانات هو صف مثال — احذفه أو استبدله ببياناتك.'],
+            ];
+        }
 
         $row = 3;
         foreach ($lines as $cells) {
@@ -650,6 +1025,74 @@ class ImportService
     }
 
     // ---- small helpers -------------------------------------------------
+
+    private function normalizeType(string $type): string
+    {
+        return $type === self::TYPE_INSTALLMENTS ? self::TYPE_INSTALLMENTS : self::TYPE_CUSTOMERS;
+    }
+
+    /**
+     * @return array<int, array{key: string, label: string}>
+     */
+    private function columnsFor(string $type): array
+    {
+        return $type === self::TYPE_INSTALLMENTS ? self::COLUMNS_INSTALLMENTS : self::COLUMNS_CUSTOMERS;
+    }
+
+    private function dataSheetFor(string $type): string
+    {
+        return $type === self::TYPE_INSTALLMENTS ? self::DATA_SHEET_INSTALLMENTS : self::DATA_SHEET_CUSTOMERS;
+    }
+
+    /**
+     * Locate the spreadsheet column letter for a given column key.
+     *
+     * @param  array<int, array{key: string, label: string}>  $columns
+     */
+    private function letterForKey(array $columns, string $key): ?string
+    {
+        foreach ($columns as $index => $column) {
+            if ($column['key'] === $key) {
+                return $this->columnLetter($index);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether the parsed row still matches the built-in example row exactly.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function isExampleRow(array $row, string $type): bool
+    {
+        $example = $type === self::TYPE_INSTALLMENTS ? self::EXAMPLE_INSTALLMENTS : self::EXAMPLE_CUSTOMERS;
+
+        foreach ($example as $key => $expected) {
+            if (! array_key_exists($key, $row)) {
+                return false;
+            }
+            if ($this->compareText($row[$key]) !== $this->compareText($expected)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function compareText(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_float($value) && floor($value) === $value) {
+            $value = (int) $value;
+        }
+
+        return trim((string) $value);
+    }
 
     private function columnLetter(int $index): string
     {
@@ -686,7 +1129,7 @@ class ImportService
         return $text === '' ? null : $text;
     }
 
-    private function numeric(mixed $value): int|float|null
+    private function numeric(mixed $value): int|float|null|string
     {
         if ($value === null || $value === '') {
             return null;

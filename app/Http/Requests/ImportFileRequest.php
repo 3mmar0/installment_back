@@ -15,6 +15,12 @@ class ImportFileRequest extends FormRequest
     {
         return [
             'file' => ['required', 'file', 'mimes:xlsx', 'max:5120'],
+            'type' => ['nullable', 'in:customers,installments'],
+            'customer_id' => [
+                'nullable',
+                'integer',
+                'required_if:type,installments',
+            ],
         ];
     }
 
@@ -27,6 +33,8 @@ class ImportFileRequest extends FormRequest
             'file.required' => 'يرجى اختيار ملف Excel.',
             'file.mimes' => 'الملف يجب أن يكون بصيغة xlsx.',
             'file.max' => 'حجم الملف يجب ألا يتجاوز 5 ميجابايت.',
+            'type.in' => 'نوع الاستيراد غير صالح.',
+            'customer_id.required_if' => 'يرجى اختيار العميل الذي ستُضاف له الأقساط.',
         ];
     }
 }

@@ -80,6 +80,48 @@ function buildImportXlsx(array $rows, bool $withVersion = true): string
     return $binary;
 }
 
+/**
+ * Build an installments-template xlsx (columns A..F) tied to one chosen customer.
+ *
+ * @param  array<int, array<string, mixed>>  $rows  keyed by column key
+ */
+function buildInstallmentsXlsx(array $rows, bool $withVersion = true, bool $withType = true): string
+{
+    $spreadsheet = new Spreadsheet;
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setTitle('الأقساط');
+
+    if ($withVersion) {
+        $sheet->setCellValue('N1', ImportService::TEMPLATE_VERSION);
+    }
+    if ($withType) {
+        $sheet->setCellValueExplicit('M1', 'installments', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+    }
+
+    $columns = ['installment_name', 'total_amount', 'months', 'start_date', 'paid_count', 'installment_notes'];
+
+    $rowNumber = 2;
+    foreach ($rows as $row) {
+        $col = 1;
+        foreach ($columns as $key) {
+            $letter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
+            if (array_key_exists($key, $row) && $row[$key] !== null) {
+                $sheet->setCellValue($letter.$rowNumber, $row[$key]);
+            }
+            $col++;
+        }
+        $rowNumber++;
+    }
+
+    $tmp = tempnam(sys_get_temp_dir(), 'imp').'.xlsx';
+    (new Xlsx($spreadsheet))->save($tmp);
+    $binary = file_get_contents($tmp);
+    @unlink($tmp);
+    $spreadsheet->disconnectWorksheets();
+
+    return $binary;
+}
+
 function fakeXlsxUpload(string $binary, string $name = 'customers.xlsx'): UploadedFile
 {
     return UploadedFile::fake()->createWithContent($name, $binary);
@@ -348,4 +390,185 @@ it('rejects confirming a batch twice', function () {
 
     $this->postJson('/api/import/confirm', ['batch_id' => $batchId])->assertStatus(202);
     $this->postJson('/api/import/confirm', ['batch_id' => $batchId])->assertStatus(409);
+});
+
+// ---------------------------------------------------------------------------
+// Example row
+// ---------------------------------------------------------------------------
+
+it('keeps the built-in example row out of the parsed data', function () {
+    $service = app(ImportService::class);
+
+    $tmp = tempnam(sys_get_temp_dir(), 'tpl').'.xlsx';
+    (new Xlsx($service->buildTemplate(ImportService::TYPE_CUSTOMERS)))->save($tmp);
+
+    $parsed = $service->parse($tmp, ImportService::TYPE_CUSTOMERS);
+    @unlink($tmp);
+
+    expect($parsed['version_ok'])->toBeTrue()
+        ->and($parsed['rows'])->toBe([]);
+});
+
+it('imports real rows added below the example row', function () {
+    $service = app(ImportService::class);
+
+    $spreadsheet = $service->buildTemplate(ImportService::TYPE_CUSTOMERS);
+    $sheet = $spreadsheet->getActiveSheet();
+    // Row 2 holds the example; the user types real data on row 3.
+    $sheet->setCellValueExplicit('A3', 'عميل حقيقي', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+    $sheet->setCellValueExplicit('B3', '01099999999', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+    $sheet->setCellValue('G3', 5000);
+    $sheet->setCellValue('H3', 5);
+    $sheet->setCellValueExplicit('I3', '2026-01-01', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+    $tmp = tempnam(sys_get_temp_dir(), 'tpl').'.xlsx';
+    (new Xlsx($spreadsheet))->save($tmp);
+    $parsed = $service->parse($tmp, ImportService::TYPE_CUSTOMERS);
+    @unlink($tmp);
+
+    expect($parsed['rows'])->toHaveCount(1)
+        ->and($parsed['rows'][0]['line'])->toBe(3)
+        ->and($parsed['rows'][0]['name'])->toBe('عميل حقيقي');
+});
+
+// ---------------------------------------------------------------------------
+// Installments import (attach to a chosen customer)
+// ---------------------------------------------------------------------------
+
+it('imports installments onto the chosen customer', function () {
+    $merchant = merchantWithPlan();
+    $customer = Customer::factory()->forMerchant($merchant)->create([
+        'name' => 'عميل الأقساط',
+        'phone' => '01000000200',
+        'phone_normalized' => PhoneHelper::normalize('01000000200'),
+    ]);
+
+    $rows = [
+        importRow(2, ['installment_name' => 'تلفزيون', 'total_amount' => 6000, 'months' => 6, 'start_date' => '2026-01-01']),
+        importRow(3, ['installment_name' => 'ثلاجة', 'total_amount' => 4000, 'months' => 4, 'start_date' => '2026-02-01', 'paid_count' => 1]),
+    ];
+
+    $result = app(ImportService::class)->import($rows, $merchant, null, ImportService::TYPE_INSTALLMENTS, $customer->id);
+
+    expect(Customer::where('user_id', $merchant->id)->count())->toBe(1)
+        ->and($result['created_customers'])->toBe(0)
+        ->and($result['imported_count'])->toBe(2)
+        ->and($result['failed_count'])->toBe(0)
+        ->and(Installment::where('customer_id', $customer->id)->count())->toBe(2);
+});
+
+it('enforces installment limits for installments import', function () {
+    $merchant = merchantWithPlan(['installments' => ['from' => 0, 'to' => 1]]);
+    $customer = Customer::factory()->forMerchant($merchant)->create([
+        'phone' => '01000000210',
+        'phone_normalized' => PhoneHelper::normalize('01000000210'),
+    ]);
+
+    $rows = [
+        importRow(2, ['total_amount' => 3000, 'months' => 3, 'start_date' => '2026-01-01']),
+        importRow(3, ['total_amount' => 3000, 'months' => 3, 'start_date' => '2026-01-01']),
+    ];
+
+    $result = app(ImportService::class)->import($rows, $merchant, null, ImportService::TYPE_INSTALLMENTS, $customer->id);
+
+    expect(Installment::count())->toBe(1)
+        ->and($result['imported_count'])->toBe(1)
+        ->and($result['failed_count'])->toBe(1)
+        ->and($result['failed'][0]['error'])->toContain('حد الباقة');
+});
+
+it('downloads the installments template with its own filename', function () {
+    $this->get('/api/import/template?type=installments')
+        ->assertOk()
+        ->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        ->assertHeader('Content-Disposition', 'attachment; filename="installments_import_template.xlsx"');
+});
+
+it('previews then confirms an installments import end to end', function () {
+    Storage::fake('local');
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create([
+        'name' => 'عميل الاستيراد',
+        'phone' => '01000000220',
+        'phone_normalized' => PhoneHelper::normalize('01000000220'),
+    ]);
+
+    $binary = buildInstallmentsXlsx([
+        ['installment_name' => 'تلفزيون', 'total_amount' => 6000, 'months' => 6, 'start_date' => '2026-01-01'],
+        ['installment_name' => 'ثلاجة', 'total_amount' => 4000, 'months' => 4, 'start_date' => '2026-02-01'],
+    ]);
+
+    $preview = $this->postJson('/api/import/preview', [
+        'file' => fakeXlsxUpload($binary, 'installments.xlsx'),
+        'type' => 'installments',
+        'customer_id' => $customer->id,
+    ])->assertOk()->json('data');
+
+    expect($preview['summary']['installments'])->toBe(2)
+        ->and($preview['summary']['customer_name'])->toBe('عميل الاستيراد')
+        ->and($preview['summary']['new_customers'])->toBe(0);
+
+    $this->postJson('/api/import/confirm', ['batch_id' => $preview['batch_id']])
+        ->assertStatus(202);
+
+    $this->getJson("/api/import/status/{$preview['batch_id']}")
+        ->assertOk()
+        ->assertJsonPath('data.status', ImportBatch::STATUS_COMPLETED);
+
+    expect(Installment::where('customer_id', $customer->id)->count())->toBe(2);
+});
+
+it('rejects an installments import for another merchants customer', function () {
+    $other = merchantWithPlan();
+    $otherCustomer = Customer::factory()->forMerchant($other)->create([
+        'phone' => '01000000230',
+        'phone_normalized' => PhoneHelper::normalize('01000000230'),
+    ]);
+
+    Storage::fake('local');
+    actingAsMerchant();
+
+    $binary = buildInstallmentsXlsx([
+        ['installment_name' => 'تلفزيون', 'total_amount' => 6000, 'months' => 6, 'start_date' => '2026-01-01'],
+    ]);
+
+    $this->postJson('/api/import/preview', [
+        'file' => fakeXlsxUpload($binary, 'installments.xlsx'),
+        'type' => 'installments',
+        'customer_id' => $otherCustomer->id,
+    ])->assertStatus(404);
+});
+
+it('requires a customer_id for installments imports', function () {
+    Storage::fake('local');
+    actingAsMerchant();
+
+    $binary = buildInstallmentsXlsx([
+        ['installment_name' => 'تلفزيون', 'total_amount' => 6000, 'months' => 6, 'start_date' => '2026-01-01'],
+    ]);
+
+    $this->postJson('/api/import/preview', [
+        'file' => fakeXlsxUpload($binary, 'installments.xlsx'),
+        'type' => 'installments',
+    ])->assertStatus(422);
+});
+
+it('rejects a customers template uploaded to the installments flow', function () {
+    Storage::fake('local');
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create([
+        'phone' => '01000000240',
+        'phone_normalized' => PhoneHelper::normalize('01000000240'),
+    ]);
+
+    // A normal customers-template file (no installments type marker).
+    $binary = buildImportXlsx([
+        ['name' => 'أحمد', 'phone' => '01000000240', 'total_amount' => 6000, 'months' => 6, 'start_date' => '2026-01-01'],
+    ]);
+
+    $this->postJson('/api/import/preview', [
+        'file' => fakeXlsxUpload($binary, 'customers.xlsx'),
+        'type' => 'installments',
+        'customer_id' => $customer->id,
+    ])->assertStatus(422);
 });
