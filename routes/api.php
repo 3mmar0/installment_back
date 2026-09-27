@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ComplaintController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DeviceTokenController;
 use App\Http\Controllers\Api\ExportReportController;
+use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\InstallmentController;
 use App\Http\Controllers\Api\LegalController;
 use App\Http\Controllers\Api\NotificationController;
@@ -55,6 +56,9 @@ Route::prefix('client/auth')->controller(ClientAuthController::class)->group(fun
 
 // Public subscription plans
 Route::get('subscriptions-public', [SubscriptionController::class, 'publicIndex']);
+
+// Public import template download (empty file, carries no data)
+Route::get('import/template', [ImportController::class, 'template']);
 
 // Public trial settings & legal pages
 Route::get('settings/trial', [SettingsController::class, 'trialPublic']);
@@ -174,6 +178,13 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::delete('customer-delete/{id}', 'destroy');
             Route::get('customer-stats/{id}', 'stats');
             Route::post('customer-send-reminders/{id}', 'sendReminders');
+        });
+
+        // Bulk import (customers + installments from Excel)
+        Route::controller(ImportController::class)->group(function () {
+            Route::post('import/preview', 'preview');
+            Route::post('import/confirm', 'confirm');
+            Route::get('import/status/{id}', 'status');
         });
 
         // Installment routes

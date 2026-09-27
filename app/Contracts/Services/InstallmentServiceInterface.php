@@ -19,8 +19,10 @@ interface InstallmentServiceInterface
 
     /**
      * Create a new installment.
+     *
+     * @param  bool  $notify  When false, post-commit notifications/emails are skipped (e.g. bulk import).
      */
-    public function createInstallment(array $data, User $user): Installment;
+    public function createInstallment(array $data, User $user, bool $notify = true): Installment;
 
     /**
      * Find an installment by ID.

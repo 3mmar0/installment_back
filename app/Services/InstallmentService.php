@@ -139,7 +139,7 @@ class InstallmentService implements InstallmentServiceInterface
     /**
      * Create a new installment.
      */
-    public function createInstallment(array $data, User $user): Installment
+    public function createInstallment(array $data, User $user, bool $notify = true): Installment
     {
         if (! $user->isOwner() && ! LimitsHelper::canCreate($user->id, 'installments')) {
             abort(403, LimitsHelper::getLimitExceededMessage('installments'));
@@ -193,6 +193,13 @@ class InstallmentService implements InstallmentServiceInterface
 
             return $installment->refresh()->load(['customer', 'items']);
         });
+
+        // Bulk imports create many installments at once; a per-installment
+        // notification/email storm would spam the merchant and their customers,
+        // so the caller can opt out and send a single summary instead.
+        if (! $notify) {
+            return $installment;
+        }
 
         // Side effects AFTER commit — must never fail the create API response
         try {
