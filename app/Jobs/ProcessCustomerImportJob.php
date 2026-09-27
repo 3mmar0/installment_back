@@ -42,8 +42,17 @@ class ProcessCustomerImportJob implements ShouldQueue
             return;
         }
 
-        if (! $batch->file_path || ! Storage::disk('local')->exists($batch->file_path)) {
-            $this->markFailed($batch, 'تعذر العثور على الملف المرفوع.');
+        $type = $batch->type ?: 'customers';
+        $rows = $this->resolveRows($batch, $importService, $type);
+
+        if ($rows === false) {
+            $this->markFailed($batch, 'إصدار النموذج غير مدعوم. يرجى تنزيل أحدث نموذج.');
+
+            return;
+        }
+
+        if ($rows === null) {
+            $this->markFailed($batch, 'تعذر العثور على الملف المرفوع. يرجى رفع الملف مرة أخرى.');
 
             return;
         }
@@ -51,18 +60,8 @@ class ProcessCustomerImportJob implements ShouldQueue
         $batch->update(['status' => ImportBatch::STATUS_PROCESSING]);
 
         try {
-            $type = $batch->type ?: 'customers';
-            $path = Storage::disk('local')->path($batch->file_path);
-            $parsed = $importService->parse($path, $type);
-
-            if (! $parsed['version_ok']) {
-                $this->markFailed($batch, 'إصدار النموذج غير مدعوم. يرجى تنزيل أحدث نموذج.');
-
-                return;
-            }
-
             $result = $importService->import(
-                $parsed['rows'],
+                $rows,
                 $user,
                 function (int $processed, int $total) use ($batch) {
                     $batch->forceFill([
@@ -86,6 +85,7 @@ class ProcessCustomerImportJob implements ShouldQueue
                     'failed' => $result['failed'],
                     'warnings' => $result['warnings'],
                 ],
+                'payload' => null,
             ]);
 
             $this->notifySummary($notificationService, $user, $result, $batch->type ?: 'customers');
@@ -144,11 +144,33 @@ class ProcessCustomerImportJob implements ShouldQueue
         }
     }
 
+    /**
+     * Prefer rows saved during preview. Re-parse the uploaded file only when
+     * the worker can still see it (tests / same-process queue).
+     *
+     * @return array<int, array<string, mixed>>|false|null  false = bad template
+     */
+    private function resolveRows(ImportBatch $batch, ImportService $importService, string $type): array|false|null
+    {
+        if ($batch->hasStoredRows()) {
+            return $batch->payload;
+        }
+
+        if (! $batch->file_path || ! Storage::disk('local')->exists($batch->file_path)) {
+            return null;
+        }
+
+        $parsed = $importService->parse(Storage::disk('local')->path($batch->file_path), $type);
+
+        return $parsed['version_ok'] ? $parsed['rows'] : false;
+    }
+
     private function markFailed(ImportBatch $batch, string $message): void
     {
         $batch->update([
             'status' => ImportBatch::STATUS_FAILED,
             'error' => $message,
+            'payload' => null,
         ]);
     }
 

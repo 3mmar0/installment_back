@@ -94,6 +94,10 @@ class ImportController extends Controller
         $file = $request->file('file');
         $path = $file->store('imports', 'local');
 
+        if (! is_string($path) || $path === '') {
+            return $this->errorResponse('تعذر حفظ الملف المرفوع. حاول مرة أخرى.', 500);
+        }
+
         $parsed = $this->importService->parse(Storage::disk('local')->path($path), $type);
 
         if (! $parsed['version_ok']) {
@@ -114,6 +118,7 @@ class ImportController extends Controller
             'type' => $type,
             'customer_id' => $customerId,
             'file_path' => $path,
+            'payload' => $parsed['rows'],
             'original_name' => $file->getClientOriginalName(),
             'status' => ImportBatch::STATUS_PREVIEWED,
             'total_rows' => $prepared['summary']['total_rows'],
@@ -150,6 +155,14 @@ class ImportController extends Controller
 
         if ($batch->status !== ImportBatch::STATUS_PREVIEWED) {
             return $this->errorResponse('تم تأكيد هذه العملية بالفعل.', 409);
+        }
+
+        $fileStillThere = is_string($batch->file_path)
+            && $batch->file_path !== ''
+            && Storage::disk('local')->exists($batch->file_path);
+
+        if (! $batch->hasStoredRows() && ! $fileStillThere) {
+            return $this->errorResponse('تعذر العثور على الملف المرفوع. يرجى رفع الملف مرة أخرى.', 422);
         }
 
         $batch->update(['status' => ImportBatch::STATUS_QUEUED]);

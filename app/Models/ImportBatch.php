@@ -25,6 +25,7 @@ class ImportBatch extends Model
         'type',
         'customer_id',
         'file_path',
+        'payload',
         'original_name',
         'status',
         'total_rows',
@@ -38,6 +39,7 @@ class ImportBatch extends Model
     ];
 
     protected $casts = [
+        'payload' => 'array',
         'report' => 'array',
         'customer_id' => 'integer',
         'total_rows' => 'integer',
@@ -73,5 +75,14 @@ class ImportBatch extends Model
     public function isFinished(): bool
     {
         return in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_FAILED], true);
+    }
+
+    /**
+     * Preview already parsed the spreadsheet; the job can import from this even
+     * when the uploaded file is missing on the worker's disk.
+     */
+    public function hasStoredRows(): bool
+    {
+        return is_array($this->payload);
     }
 }

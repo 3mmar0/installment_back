@@ -310,6 +310,37 @@ it('processes a queued batch to completion with progress and a report', function
         ->and(Notification::where('type', 'import_completed')->count())->toBe(1);
 });
 
+it('completes a queued batch from stored payload when the uploaded file is gone', function () {
+    Storage::fake('local');
+    $merchant = merchantWithPlan();
+
+    $batch = ImportBatch::create([
+        'user_id' => $merchant->id,
+        'type' => 'customers',
+        'file_path' => 'imports/missing.xlsx',
+        'payload' => [
+            importRow(2, [
+                'name' => 'أحمد',
+                'phone' => '01000000090',
+                'total_amount' => 6000,
+                'months' => 6,
+                'start_date' => '2026-01-01',
+            ]),
+        ],
+        'status' => ImportBatch::STATUS_QUEUED,
+        'total_rows' => 1,
+    ]);
+
+    ProcessCustomerImportJob::dispatchSync($batch->id);
+
+    $batch->refresh();
+
+    expect($batch->status)->toBe(ImportBatch::STATUS_COMPLETED)
+        ->and($batch->imported_count)->toBe(1)
+        ->and($batch->payload)->toBeNull()
+        ->and(Customer::where('user_id', $merchant->id)->count())->toBe(1);
+});
+
 // ---------------------------------------------------------------------------
 // HTTP endpoints
 // ---------------------------------------------------------------------------
@@ -390,6 +421,51 @@ it('rejects confirming a batch twice', function () {
 
     $this->postJson('/api/import/confirm', ['batch_id' => $batchId])->assertStatus(202);
     $this->postJson('/api/import/confirm', ['batch_id' => $batchId])->assertStatus(409);
+});
+
+it('confirms an import after the uploaded file disappears', function () {
+    Storage::fake('local');
+    $merchant = actingAsMerchant();
+
+    $binary = buildImportXlsx([
+        ['name' => 'أحمد', 'phone' => '01000000130', 'total_amount' => 6000, 'months' => 6, 'start_date' => '2026-01-01'],
+    ]);
+
+    $preview = $this->postJson('/api/import/preview', ['file' => fakeXlsxUpload($binary)])
+        ->assertOk()
+        ->json('data');
+
+    $batch = ImportBatch::find($preview['batch_id']);
+    expect($batch)->not->toBeNull()
+        ->and($batch->payload)->not->toBeEmpty();
+
+    Storage::disk('local')->delete($batch->file_path);
+
+    $this->postJson('/api/import/confirm', ['batch_id' => $preview['batch_id']])
+        ->assertStatus(202);
+
+    $this->getJson("/api/import/status/{$preview['batch_id']}")
+        ->assertOk()
+        ->assertJsonPath('data.status', ImportBatch::STATUS_COMPLETED);
+
+    expect(Customer::where('user_id', $merchant->id)->count())->toBe(1);
+});
+
+it('rejects confirm when neither payload nor file remains', function () {
+    $merchant = actingAsMerchant();
+
+    $batch = ImportBatch::create([
+        'user_id' => $merchant->id,
+        'type' => 'customers',
+        'file_path' => 'imports/gone.xlsx',
+        'payload' => null,
+        'status' => ImportBatch::STATUS_PREVIEWED,
+        'total_rows' => 1,
+    ]);
+
+    $this->postJson('/api/import/confirm', ['batch_id' => $batch->id])
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'تعذر العثور على الملف المرفوع. يرجى رفع الملف مرة أخرى.');
 });
 
 // ---------------------------------------------------------------------------
