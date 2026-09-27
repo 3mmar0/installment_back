@@ -165,6 +165,13 @@ class CustomerController extends Controller
             $request->user()
         );
 
+        if ($result['inactive'] ?? false) {
+            return $this->successResponse(
+                $result,
+                'الحساب غير نشط بسبب عدم الاستخدام لأكثر من 5 أشهر. لن تُرسل تذكيرات أو إشعارات حتى تسجّل الدخول مرة أخرى.'
+            );
+        }
+
         if (($result['items_included'] ?? 0) === 0) {
             return $this->successResponse(
                 $result,

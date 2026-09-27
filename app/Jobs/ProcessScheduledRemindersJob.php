@@ -27,6 +27,7 @@ class ProcessScheduledRemindersJob implements ShouldQueue
 
         User::query()
             ->where('role', UserRole::User)
+            ->receivesOperationalComms()
             ->whereHas('installments', fn ($query) => $query->where('status', 'active'))
             ->chunkById(100, function ($users) use ($includeOverdue) {
                 foreach ($users as $user) {

@@ -31,7 +31,7 @@ class SendInstallmentRemindersJob implements ShouldQueue
     ): void {
         $user = User::find($this->userId);
 
-        if (!$user) {
+        if (! $user || ! $user->receivesOperationalComms()) {
             return;
         }
 

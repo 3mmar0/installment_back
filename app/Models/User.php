@@ -5,6 +5,8 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\RegistrationSource;
 use App\Enums\UserRole;
+use App\Support\Engagement;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -101,6 +103,32 @@ class User extends Authenticatable
     public function isRecentlyActive(int $days = 7): bool
     {
         return $this->last_active_at?->gte(now()->subDays($days)) ?? false;
+    }
+
+    /**
+     * Merchants unused for 5+ months do not get operational email or push.
+     * Owners and platform admins always receive comms. Login reactivates the account.
+     */
+    public function receivesOperationalComms(): bool
+    {
+        if ($this->isOwner() || $this->isPlatformAdmin()) {
+            return true;
+        }
+
+        return Engagement::isActive($this->last_active_at, $this->created_at);
+    }
+
+    public function scopeReceivesOperationalComms(Builder $query): Builder
+    {
+        $cutoff = Engagement::cutoff();
+
+        return $query->where(function (Builder $inner) use ($cutoff) {
+            $inner->where('last_active_at', '>=', $cutoff)
+                ->orWhere(function (Builder $neverSeen) use ($cutoff) {
+                    $neverSeen->whereNull('last_active_at')
+                        ->where('created_at', '>=', $cutoff);
+                });
+        });
     }
 
     public function isPlatformAdmin(): bool

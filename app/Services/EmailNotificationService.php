@@ -30,6 +30,21 @@ class EmailNotificationService
         return (bool) config('mail.notifications_enabled', false);
     }
 
+    /**
+     * @return array{due_reminders_sent: int, overdue_notices_sent: int, total_emails: int, items_included: int, disabled?: bool, inactive?: bool}
+     */
+    protected function inactiveMerchantResult(): array
+    {
+        return [
+            'due_reminders_sent' => 0,
+            'overdue_notices_sent' => 0,
+            'total_emails' => 0,
+            'items_included' => 0,
+            'disabled' => true,
+            'inactive' => true,
+        ];
+    }
+
     protected function isValidEmail(?string $email): bool
     {
         return is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL);
@@ -170,7 +185,7 @@ class EmailNotificationService
      */
     public function sendPaymentDueReminders(User $user): int
     {
-        if (! $this->isEnabled()) {
+        if (! $user->receivesOperationalComms() || ! $this->isEnabled()) {
             return 0;
         }
 
@@ -187,7 +202,7 @@ class EmailNotificationService
      */
     public function sendOverduePaymentNotices(User $user): int
     {
-        if (! $this->isEnabled()) {
+        if (! $user->receivesOperationalComms() || ! $this->isEnabled()) {
             return 0;
         }
 
@@ -210,6 +225,10 @@ class EmailNotificationService
         bool $includeDueSoon = true,
         bool $includeOverdue = true,
     ): array {
+        if (! $user->receivesOperationalComms()) {
+            return $this->inactiveMerchantResult();
+        }
+
         if (! $this->isEnabled()) {
             return [
                 'due_reminders_sent' => 0,
@@ -247,7 +266,19 @@ class EmailNotificationService
             ];
         }
 
-        $items->loadMissing(['installment.customer']);
+        $items->loadMissing(['installment.customer', 'installment.user']);
+        $items = $items->filter(
+            fn (InstallmentItem $item) => $item->installment?->user?->receivesOperationalComms() ?? false
+        );
+
+        if ($items->isEmpty()) {
+            return [
+                'due_reminders_sent' => 0,
+                'overdue_notices_sent' => 0,
+                'total_emails' => 0,
+                'items_included' => 0,
+            ];
+        }
 
         $overdue = $items->filter(
             fn (InstallmentItem $item) => $item->due_date < now()->startOfDay()
@@ -265,7 +296,7 @@ class EmailNotificationService
      */
     public function sendPaymentReceivedConfirmation(InstallmentItem $item, float $paidAmount, User $user): void
     {
-        if (! $this->isEnabled()) {
+        if (! $user->receivesOperationalComms() || ! $this->isEnabled()) {
             return;
         }
 
@@ -303,7 +334,7 @@ class EmailNotificationService
      */
     public function sendInstallmentCreatedNotification(Installment $installment, User $user): void
     {
-        if (! $this->isEnabled()) {
+        if (! $this->isEnabled() || ! $user->receivesOperationalComms()) {
             return;
         }
 
@@ -340,7 +371,7 @@ class EmailNotificationService
      */
     public function sendClientAppInviteIfNeeded(Installment $installment, User $vendor): void
     {
-        if (! $this->isEnabled()) {
+        if (! $vendor->receivesOperationalComms() || ! $this->isEnabled()) {
             return;
         }
 
@@ -399,6 +430,10 @@ class EmailNotificationService
      */
     public function sendAllPaymentReminders(User $user): array
     {
+        if (! $user->receivesOperationalComms()) {
+            return $this->inactiveMerchantResult();
+        }
+
         if (! $this->isEnabled()) {
             return [
                 'due_reminders_sent' => 0,
@@ -468,7 +503,7 @@ class EmailNotificationService
         bool $includeDueSoon = true,
         bool $includeOverdue = true,
     ): void {
-        if (! $this->isEnabled()) {
+        if (! $user->receivesOperationalComms() || ! $this->isEnabled()) {
             return;
         }
 
@@ -498,6 +533,10 @@ class EmailNotificationService
      */
     public function queueAllPaymentReminders(User $user): array
     {
+        if (! $user->receivesOperationalComms()) {
+            return array_merge($this->inactiveMerchantResult(), ['queued' => false]);
+        }
+
         if (! $this->isEnabled()) {
             return [
                 'due_reminders_sent' => 0,
@@ -530,6 +569,10 @@ class EmailNotificationService
      */
     public function queueCustomerPaymentReminders(Customer $customer, User $user): array
     {
+        if (! $user->receivesOperationalComms()) {
+            return array_merge($this->inactiveMerchantResult(), ['queued' => false]);
+        }
+
         if (! $this->isEnabled()) {
             return [
                 'due_reminders_sent' => 0,

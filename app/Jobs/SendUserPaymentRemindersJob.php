@@ -24,7 +24,7 @@ class SendUserPaymentRemindersJob implements ShouldQueue
     {
         $user = User::find($this->userId);
 
-        if (! $user) {
+        if (! $user || ! $user->receivesOperationalComms()) {
             return;
         }
 

@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Helpers\LimitsHelper;
 use App\Jobs\SendPushNotificationJob;
 use App\Models\ClientAccount;
+use App\Models\Installment;
 use App\Models\InstallmentItem;
 use App\Models\Notification;
 use App\Models\User;
@@ -27,6 +28,15 @@ class NotificationService
         array $data = [],
         bool $enforceLimits = true
     ): ?Notification {
+        if (! $user->receivesOperationalComms()) {
+            Log::info('Skipping notification for inactive merchant', [
+                'user_id' => $user->id,
+                'type' => $type,
+            ]);
+
+            return null;
+        }
+
         if ($enforceLimits && ! $user->isOwner() && ! LimitsHelper::canCreate($user->id, 'notifications')) {
             abort(403, LimitsHelper::getLimitExceededMessage('notifications'));
         }
@@ -74,7 +84,26 @@ class NotificationService
         string $title,
         string $message,
         array $data = []
-    ): Notification {
+    ): ?Notification {
+        if (! $client->receivesOperationalComms()) {
+            Log::info('Skipping notification for inactive client', [
+                'client_account_id' => $client->id,
+                'type' => $type,
+            ]);
+
+            return null;
+        }
+
+        if (! $this->clientVendorAllowsComms($client, $data)) {
+            Log::info('Skipping client notification because the vendor is inactive', [
+                'client_account_id' => $client->id,
+                'type' => $type,
+                'installment_id' => $data['installment_id'] ?? null,
+            ]);
+
+            return null;
+        }
+
         $notification = Notification::create([
             'user_id' => null,
             'client_account_id' => $client->id,
@@ -97,6 +126,29 @@ class NotificationService
         );
 
         return $notification;
+    }
+
+    /**
+     * Clients of a dormant vendor do not receive operational notifications.
+     */
+    private function clientVendorAllowsComms(ClientAccount $client, array $data): bool
+    {
+        $installmentId = $data['installment_id'] ?? null;
+        if (is_numeric($installmentId)) {
+            $vendor = Installment::query()->find((int) $installmentId)?->user;
+
+            return $vendor?->receivesOperationalComms() ?? false;
+        }
+
+        $vendors = User::query()
+            ->whereHas('customers', fn ($query) => $query->where('client_account_id', $client->id))
+            ->get();
+
+        if ($vendors->isEmpty()) {
+            return true;
+        }
+
+        return $vendors->contains(fn (User $vendor) => $vendor->receivesOperationalComms());
     }
 
     /**
@@ -407,7 +459,8 @@ class NotificationService
             ->where('status', '!=', 'paid')
             ->where('due_date', '<', now()->startOfDay())
             ->with(['installment.user', 'installment.customer'])
-            ->get();
+            ->get()
+            ->filter(fn (InstallmentItem $item) => $item->installment?->user?->receivesOperationalComms());
 
         if ($overdue->isEmpty()) {
             return 0;
@@ -436,7 +489,7 @@ class NotificationService
     /**
      * In-app reminder for a single unpaid installment item.
      */
-    public function notifyItemDueReminder(User $user, InstallmentItem $item): Notification
+    public function notifyItemDueReminder(User $user, InstallmentItem $item): ?Notification
     {
         $item->loadMissing(['installment.customer']);
         $customerName = $item->installment->customer->name ?? 'العميل';
@@ -509,15 +562,16 @@ class NotificationService
 
         $query->chunkById(100, function ($users) use ($title, $message, $data, $type, &$count) {
             foreach ($users as $user) {
-                $this->create(
+                if ($this->create(
                     $user,
                     $type,
                     $title,
                     $message,
                     $data,
                     enforceLimits: false
-                );
-                $count++;
+                )) {
+                    $count++;
+                }
             }
         });
 

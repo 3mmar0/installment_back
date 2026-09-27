@@ -693,6 +693,16 @@ class InstallmentService implements InstallmentServiceInterface
             abort(404, 'القسط غير موجود');
         }
 
+        if (! $user->receivesOperationalComms()) {
+            return [
+                'notifications_sent' => 0,
+                'emails_sent' => 0,
+                'items_reminded' => 0,
+                'queued' => false,
+                'inactive' => true,
+            ];
+        }
+
         $query = $installment->items()
             ->where('status', '!=', 'paid')
             ->whereNull('paid_at')

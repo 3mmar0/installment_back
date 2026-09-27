@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Engagement;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -58,6 +59,11 @@ class ClientAccount extends Authenticatable
         $this->last_active_at = $now;
 
         return true;
+    }
+
+    public function receivesOperationalComms(): bool
+    {
+        return Engagement::isActive($this->last_active_at, $this->created_at);
     }
 
     public function customers()
