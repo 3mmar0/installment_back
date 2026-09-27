@@ -28,6 +28,8 @@ interface AuthServiceInterface
 
     /**
      * Send a 6-digit password reset code to the user's email.
+     *
+     * @throws \Illuminate\Validation\ValidationException
      */
     public function sendPasswordResetLink(string $email): void;
 

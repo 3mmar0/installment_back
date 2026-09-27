@@ -49,11 +49,38 @@ it('rejects an invalid 6-digit reset code', function () {
     ])->assertStatus(422);
 });
 
-it('does not reveal whether an unknown email exists', function () {
+it('rejects forgot-password for an unknown email with a clear message', function () {
     Mail::fake();
 
     $this->postJson('/api/auth/forgot-password', ['email' => 'missing@example.com'])
-        ->assertOk();
+        ->assertStatus(422)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath(
+            'message',
+            'هذا البريد الإلكتروني غير مسجل. تأكد من كتابته كما سجّلت به الحساب.'
+        );
+
+    Mail::assertNothingSent();
+});
+
+it('tells client accounts to use client login instead of vendor reset', function () {
+    Mail::fake();
+
+    App\Models\ClientAccount::create([
+        'name' => 'Client',
+        'email' => 'client-reset@example.com',
+        'phone' => '01000000000',
+        'phone_normalized' => '1000000000',
+        'password' => 'Password123!',
+    ]);
+
+    $this->postJson('/api/auth/forgot-password', ['email' => 'client-reset@example.com'])
+        ->assertStatus(422)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath(
+            'message',
+            'هذا البريد مسجل كحساب عميل. استخدم تسجيل دخول العميل وليس استعادة كلمة مرور البائع.'
+        );
 
     Mail::assertNothingSent();
 });

@@ -8,6 +8,7 @@ use App\Enums\RegistrationSource;
 use App\Enums\UserRole;
 use App\Exceptions\MailDeliveryException;
 use App\Mail\PasswordResetMail;
+use App\Models\ClientAccount;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -105,10 +106,19 @@ class AuthService implements AuthServiceInterface
      */
     public function sendPasswordResetLink(string $email): void
     {
-        $user = User::where('email', $email)->first();
+        $normalized = strtolower(trim($email));
+        $user = User::whereRaw('LOWER(email) = ?', [$normalized])->first();
 
         if (! $user) {
-            return;
+            $isClient = ClientAccount::whereRaw('LOWER(email) = ?', [$normalized])->exists();
+
+            throw ValidationException::withMessages([
+                'email' => [
+                    $isClient
+                        ? 'هذا البريد مسجل كحساب عميل. استخدم تسجيل دخول العميل وليس استعادة كلمة مرور البائع.'
+                        : 'هذا البريد الإلكتروني غير مسجل. تأكد من كتابته كما سجّلت به الحساب.',
+                ],
+            ]);
         }
 
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
