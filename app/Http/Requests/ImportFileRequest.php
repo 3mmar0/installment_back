@@ -14,7 +14,7 @@ class ImportFileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => ['required', 'file', 'mimes:xlsx', 'max:5120'],
+            'file' => ['required', 'file', 'extensions:xlsx', 'max:5120'],
             'type' => ['nullable', 'in:customers,installments'],
             'customer_id' => [
                 'nullable',
