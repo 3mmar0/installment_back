@@ -409,6 +409,40 @@ it('keeps the built-in example row out of the parsed data', function () {
         ->and($parsed['rows'])->toBe([]);
 });
 
+it('ignores a leftover example row when saving, even if excel changed types', function () {
+    $merchant = merchantWithPlan();
+
+    $rows = [
+        importRow(2, [
+            'name' => 'أحمد علي',
+            'phone' => '1000000000',
+            'email' => 'ahmed@example.com',
+            'address' => 'القاهرة - مصر الجديدة',
+            'customer_notes' => 'صف مثال — احذفه أو استبدله ببياناتك',
+            'installment_name' => 'تلفزيون سامسونج',
+            'total_amount' => 12000.0,
+            'months' => 12,
+            'start_date' => '2026-01-01',
+            'paid_count' => 2,
+            'installment_notes' => 'ملاحظة توضيحية',
+        ]),
+        importRow(3, [
+            'name' => 'عميل حقيقي',
+            'phone' => '01099999999',
+            'total_amount' => 5000,
+            'months' => 5,
+            'start_date' => '2026-01-01',
+        ]),
+    ];
+
+    $result = app(ImportService::class)->import($rows, $merchant);
+
+    expect(Customer::where('user_id', $merchant->id)->count())->toBe(1)
+        ->and(Customer::where('user_id', $merchant->id)->value('name'))->toBe('عميل حقيقي')
+        ->and($result['imported_count'])->toBe(1)
+        ->and($result['failed_count'])->toBe(0);
+});
+
 it('imports real rows added below the example row', function () {
     $service = app(ImportService::class);
 

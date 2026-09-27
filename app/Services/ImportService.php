@@ -81,7 +81,7 @@ class ImportService
 
     /**
      * The single example row shown inside each template so the layout is clear.
-     * The parser skips any row that still matches this example exactly.
+     * Parse and save both ignore this leftover row, even if Excel changes types.
      *
      * @var array<string, mixed>
      */
@@ -289,6 +289,7 @@ class ImportService
      */
     private function prepareCustomers(array $rows, User $user): array
     {
+        $rows = $this->withoutExampleRows($rows, self::TYPE_CUSTOMERS);
         $errors = [];
         $warnings = [];
         $records = [];
@@ -517,6 +518,7 @@ class ImportService
      */
     private function prepareInstallments(array $rows, User $user, ?int $customerId): array
     {
+        $rows = $this->withoutExampleRows($rows, self::TYPE_INSTALLMENTS);
         $customer = $customerId === null
             ? null
             : Customer::query()->where('user_id', $user->id)->find($customerId);
@@ -1061,24 +1063,51 @@ class ImportService
     }
 
     /**
-     * Whether the parsed row still matches the built-in example row exactly.
+     * Drop leftover template example rows before preview or save.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function withoutExampleRows(array $rows, string $type): array
+    {
+        return array_values(array_filter(
+            $rows,
+            fn (array $row) => ! $this->isExampleRow($row, $type)
+        ));
+    }
+
+    /**
+     * Whether a row is the leftover template example (Excel may change types).
      *
      * @param  array<string, mixed>  $row
      */
     private function isExampleRow(array $row, string $type): bool
     {
-        $example = $type === self::TYPE_INSTALLMENTS ? self::EXAMPLE_INSTALLMENTS : self::EXAMPLE_CUSTOMERS;
+        if ($type === self::TYPE_INSTALLMENTS) {
+            $example = self::EXAMPLE_INSTALLMENTS;
+            $nameMatch = $this->compareText($row['installment_name'] ?? null)
+                === $this->compareText($example['installment_name']);
+            $amountMatch = $this->compareText($row['total_amount'] ?? null)
+                === $this->compareText($example['total_amount']);
+            $monthsMatch = $this->compareText($row['months'] ?? null)
+                === $this->compareText($example['months']);
+            $dateMatch = ($row['start_date'] ?? null) === $example['start_date']
+                || $this->compareText($row['start_date_raw'] ?? null) === $this->compareText($example['start_date']);
+            $notesMatch = $this->compareText($row['installment_notes'] ?? null)
+                === $this->compareText($example['installment_notes']);
 
-        foreach ($example as $key => $expected) {
-            if (! array_key_exists($key, $row)) {
-                return false;
-            }
-            if ($this->compareText($row[$key]) !== $this->compareText($expected)) {
-                return false;
-            }
+            return $nameMatch && $amountMatch && $monthsMatch && ($dateMatch || $notesMatch);
         }
 
-        return true;
+        $example = self::EXAMPLE_CUSTOMERS;
+        $nameMatch = $this->compareText($row['name'] ?? null) === $this->compareText($example['name']);
+        $emailMatch = $this->compareText($row['email'] ?? null) === $this->compareText($example['email']);
+        $notes = $this->compareText($row['customer_notes'] ?? null);
+        $notesMatch = $notes !== '' && str_contains($notes, 'صف مثال');
+        $phoneMatch = PhoneHelper::normalize((string) ($row['phone'] ?? ''))
+            === PhoneHelper::normalize((string) $example['phone']);
+
+        return $nameMatch && ($emailMatch || $notesMatch || $phoneMatch);
     }
 
     private function compareText(mixed $value): string
