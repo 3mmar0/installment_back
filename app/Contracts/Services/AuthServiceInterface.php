@@ -27,12 +27,12 @@ interface AuthServiceInterface
     public function refreshToken(User $user): string;
 
     /**
-     * Send password reset link to the user's email.
+     * Send a 6-digit password reset code to the user's email.
      */
     public function sendPasswordResetLink(string $email): void;
 
     /**
-     * Reset user password using token from email.
+     * Reset user password using the 6-digit code from email.
      *
      * @throws \Illuminate\Validation\ValidationException
      */

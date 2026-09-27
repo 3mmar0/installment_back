@@ -9,6 +9,7 @@ use App\Enums\UserRole;
 use App\Exceptions\MailDeliveryException;
 use App\Mail\PasswordResetMail;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -100,7 +101,7 @@ class AuthService implements AuthServiceInterface
     }
 
     /**
-     * Send password reset link to the user's email.
+     * Send a 6-digit password reset code to the user's email.
      */
     public function sendPasswordResetLink(string $email): void
     {
@@ -110,15 +111,19 @@ class AuthService implements AuthServiceInterface
             return;
         }
 
-        $token = Password::broker()->createToken($user);
-        $frontendUrl = rtrim((string) config('app.frontend_url'), '/');
-        $resetUrl = $frontendUrl.'/reset-password?'.http_build_query([
-            'token' => $token,
-            'email' => $email,
-        ]);
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $table = config('auth.passwords.users.table', 'password_reset_tokens');
+
+        DB::table($table)->updateOrInsert(
+            ['email' => $user->getEmailForPasswordReset()],
+            [
+                'token' => Hash::make($code),
+                'created_at' => now(),
+            ]
+        );
 
         try {
-            Mail::to($user->email)->send(new PasswordResetMail($user, $resetUrl, $token));
+            Mail::to($user->email)->send(new PasswordResetMail($user, $code));
         } catch (Throwable $e) {
             Log::error('Password reset email failed', [
                 'email' => $email,

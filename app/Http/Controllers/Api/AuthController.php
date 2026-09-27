@@ -154,7 +154,7 @@ class AuthController extends Controller
 
         return $this->successResponse(
             null,
-            'إذا كان البريد الإلكتروني مسجلاً، سيتم إرسال رابط إعادة تعيين كلمة المرور'
+            'إذا كان البريد الإلكتروني مسجلاً، سيتم إرسال رمز من 6 أرقام. تحقق أيضاً من مجلد الرسائل غير المرغوب فيها (Spam).'
         );
     }
 
@@ -165,7 +165,7 @@ class AuthController extends Controller
     {
         $data = $request->validate([
             'email' => ['required', 'email'],
-            'token' => ['required', 'string'],
+            'token' => ['required', 'digits:6'],
             'password' => ['required', 'confirmed', Password::defaults()],
             'password_confirmation' => ['required', 'string'],
         ]);

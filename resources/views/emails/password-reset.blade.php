@@ -8,30 +8,21 @@
     <title>إعادة تعيين كلمة المرور - {{ config('app.name') }}</title>
     @include('emails.partials.styles')
     <style>
-        .btn {
-            display: inline-block;
-            background: #1B4F9C;
-            color: #ffffff !important;
-            text-decoration: none;
-            padding: 14px 28px;
-            border-radius: 10px;
-            font-weight: 700;
-            margin: 16px 0;
-        }
-
-        .token-box {
+        .otp-box {
             background: #f8fafc;
-            border: 1px dashed #cbd5e0;
-            padding: 16px;
-            border-radius: 10px;
-            margin: 16px 0;
-            word-break: break-all;
+            border: 2px solid #1B4F9C;
+            padding: 20px 28px;
+            border-radius: 12px;
+            margin: 20px auto;
             font-family: monospace;
-            font-size: 13px;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 12px;
             color: #0f172a;
             direction: ltr;
-            text-align: left;
+            text-align: center;
             unicode-bidi: isolate;
+            max-width: 280px;
         }
 
         .footer {
@@ -52,15 +43,12 @@
             <p class="greeting">مرحباً {{ $user->name }}،</p>
             <p class="lead">
                 تلقينا طلباً لإعادة تعيين كلمة المرور لحسابك في {{ config('app.name') }}.
-                اضغط على الزر أدناه لإكمال العملية. الرابط صالح لمدة 60 دقيقة.
+                استخدم الرمز التالي في التطبيق أو الموقع. الرمز صالح لمدة 60 دقيقة.
             </p>
-            <p style="text-align: center;">
-                <a href="{{ $resetUrl }}" class="btn">إعادة تعيين كلمة المرور</a>
+            <p class="otp-box">{{ $code }}</p>
+            <p class="lead">
+                إذا لم تجد هذه الرسالة في صندوق الوارد، تحقق من مجلد الرسائل غير المرغوب فيها (Spam).
             </p>
-            <p class="lead">إذا لم يعمل الزر، انسخ الرابط التالي إلى المتصفح:</p>
-            <p class="token-box">{{ $resetUrl }}</p>
-            <p class="lead">لتطبيق الجوال: افتح شاشة «إعادة تعيين كلمة المرور» وأدخل البريد الإلكتروني والرمز التالي:</p>
-            <p class="token-box">{{ $token }}</p>
             <p class="lead" style="color: #94a3b8; font-size: 13px;">
                 إذا لم تطلب إعادة التعيين، يمكنك تجاهل هذه الرسالة.
             </p>
