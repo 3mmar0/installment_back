@@ -120,7 +120,7 @@ class NotificationService
             $this->platformAdminsQuery()
                 ->when($actor, fn ($query) => $query->whereKeyNot($actor->id))
                 ->each(function (User $admin) use ($type, $title, $message, $data, $actor) {
-                    Notification::create([
+                    $notification = Notification::create([
                         'user_id' => $admin->id,
                         'type' => $type,
                         'title' => $actor
@@ -134,6 +134,8 @@ class NotificationService
                             'actor_email' => $actor?->email,
                         ]),
                     ]);
+
+                    $this->queuePushNotification($notification);
                 });
         } catch (\Throwable $e) {
             // Monitoring must never prevent the customer-facing operation.
