@@ -37,29 +37,42 @@ class CustomerCreditDataCollector
         $records = [];
         foreach ($installments as $installment) {
             foreach ($installment->items as $item) {
+                if ($item->due_date === null) {
+                    continue;
+                }
+
                 $isPaid = $item->status === 'paid' || $item->paid_at !== null;
                 $closure = null;
                 if ($isPaid) {
                     if (isset($paidOnByItem[$item->id])) {
-                        $closure = CarbonImmutable::parse($paidOnByItem[$item->id])->startOfDay();
+                        $closure = $this->parseDateStartOfDay($paidOnByItem[$item->id]);
                     } elseif ($item->paid_at !== null) {
-                        $closure = CarbonImmutable::parse($item->paid_at)->startOfDay();
+                        $closure = $this->parseDateStartOfDay($item->paid_at);
                     }
                 }
 
+                $dueDate = $this->parseDateStartOfDay($item->due_date);
+                if ($dueDate === null) {
+                    continue;
+                }
+
                 $scored = $calculator->analyze([
-                    'due_date' => CarbonImmutable::parse($item->due_date)->startOfDay(),
+                    'due_date' => $dueDate,
                     'amount' => (float) $item->amount,
                     'is_paid' => $isPaid,
                     'closure_date' => $closure,
                 ], $today);
+
+                $installmentStart = $installment->start_date !== null
+                    ? $this->parseDateStartOfDay($installment->start_date)
+                    : $dueDate;
 
                 $records[] = new CreditItemRecord(
                     scored: $scored,
                     amount: (float) $item->amount,
                     isPaid: $isPaid,
                     installmentStatus: (string) $installment->status,
-                    installmentStart: CarbonImmutable::parse($installment->start_date)->startOfDay(),
+                    installmentStart: $installmentStart ?? $dueDate,
                 );
             }
         }
@@ -75,11 +88,11 @@ class CustomerCreditDataCollector
                 id: (int) $installment->id,
                 status: (string) $installment->status,
                 totalAmount: (float) $installment->total_amount,
-                startDate: $installment->start_date
-                    ? CarbonImmutable::parse($installment->start_date)->startOfDay()
+                startDate: $installment->start_date !== null
+                    ? $this->parseDateStartOfDay($installment->start_date)
                     : null,
-                createdAt: $installment->created_at
-                    ? CarbonImmutable::parse($installment->created_at)->startOfDay()
+                createdAt: $installment->created_at !== null
+                    ? $this->parseDateStartOfDay($installment->created_at)
                     : null,
                 totalItems: $totalItems,
                 paidItems: $paidItems,
@@ -89,8 +102,8 @@ class CustomerCreditDataCollector
         return new CustomerCreditData(
             customerId: (int) $customer->id,
             userId: $customer->user_id !== null ? (int) $customer->user_id : null,
-            customerCreatedAt: $customer->created_at
-                ? CarbonImmutable::parse($customer->created_at)->startOfDay()
+            customerCreatedAt: $customer->created_at !== null
+                ? $this->parseDateStartOfDay($customer->created_at)
                 : null,
             nationalId: $customer->national_id,
             phone: $customer->phone,
@@ -165,5 +178,18 @@ class CustomerCreditDataCollector
         }
 
         return false;
+    }
+
+    private function parseDateStartOfDay(mixed $value): ?CarbonImmutable
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse($value)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

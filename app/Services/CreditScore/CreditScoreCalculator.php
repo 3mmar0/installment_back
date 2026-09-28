@@ -168,7 +168,7 @@ class CreditScoreCalculator
             }
         }
 
-        return ['very_high', 'Very High Risk'];
+        return ['very_high', 'مخاطرة عالية جدًا'];
     }
 
     private function confidence(CustomerCreditData $data): string

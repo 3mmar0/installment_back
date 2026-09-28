@@ -8,6 +8,7 @@ use App\Http\Traits\ApiResponse;
 use App\Models\Customer;
 use App\Models\CustomerCreditScore;
 use App\Services\CreditScore\CreditScoreAnalyticsService;
+use App\Services\CreditScore\CreditScoreInfrastructure;
 use App\Services\CreditScore\CreditScoreService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,18 +27,31 @@ class CreditScoreController extends Controller
 
     public function profile(int $customerId, Request $request): JsonResponse
     {
+        if (! CreditScoreInfrastructure::schemaReady()) {
+            return $this->errorResponse(
+                CreditScoreInfrastructure::schemaErrorMessage(),
+                503
+            );
+        }
+
         $customer = $this->findAuthorizedCustomer($customerId, $request);
 
-        $snapshot = $customer->currentCreditScore;
-        if ($snapshot === null) {
-            $snapshot = $this->creditScoreService->recalculate($customer);
+        try {
+            $snapshot = $this->resolveCustomerSnapshot($customer);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->errorResponse(
+                CreditScoreInfrastructure::userFacingError($e, (bool) config('app.debug')),
+                CreditScoreInfrastructure::isSchemaException($e) ? 503 : 500
+            );
         }
 
         $snapshot->loadMissing('modelVersion');
 
         return $this->successResponse(
             new CustomerCreditScoreResource($snapshot),
-            'تم جلب Customer Credit Profile بنجاح'
+            'تم جلب ملف التقييم الائتماني للعميل بنجاح'
         );
     }
 
@@ -67,24 +81,47 @@ class CreditScoreController extends Controller
 
     public function recalculate(int $customerId, Request $request): JsonResponse
     {
+        if (! CreditScoreInfrastructure::schemaReady()) {
+            return $this->errorResponse(
+                CreditScoreInfrastructure::schemaErrorMessage(),
+                503
+            );
+        }
+
         $customer = $this->findAuthorizedCustomer($customerId, $request);
 
-        $snapshot = $this->creditScoreService->recalculate(
-            $customer,
-            $request->user(),
-            manual: true
-        );
+        try {
+            $snapshot = $this->creditScoreService->recalculate(
+                $customer,
+                $request->user(),
+                manual: true
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->errorResponse(
+                CreditScoreInfrastructure::userFacingError($e, (bool) config('app.debug')),
+                CreditScoreInfrastructure::isSchemaException($e) ? 503 : 500
+            );
+        }
 
         $snapshot->loadMissing('modelVersion');
 
         return $this->successResponse(
             new CustomerCreditScoreResource($snapshot),
-            'تم إعادة حساب Internal Credit Score بنجاح'
+            'تم إعادة حساب التقييم الائتماني الداخلي بنجاح'
         );
     }
 
     public function analyticsDashboard(Request $request): JsonResponse
     {
+        if (! CreditScoreInfrastructure::schemaReady()) {
+            return $this->errorResponse(
+                CreditScoreInfrastructure::schemaErrorMessage(),
+                503
+            );
+        }
+
         $data = $this->analyticsService->dashboard($request->user());
         $trendDays = min(max((int) $request->query('trend_days', 30), 7), 365);
         $data['score_trend'] = $this->analyticsService->scoreTrend($request->user(), $trendDays);
@@ -173,6 +210,33 @@ class CreditScoreController extends Controller
         $this->authorize('view', $customer);
 
         return $customer;
+    }
+
+    private function resolveCustomerSnapshot(Customer $customer): CustomerCreditScore
+    {
+        $snapshot = $customer->currentCreditScore;
+
+        if ($snapshot === null && $customer->current_credit_score_id !== null) {
+            $snapshot = CustomerCreditScore::query()->find($customer->current_credit_score_id);
+        }
+
+        if ($snapshot === null) {
+            $snapshot = CustomerCreditScore::query()
+                ->where('customer_id', $customer->id)
+                ->orderByDesc('calculated_at')
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        if ($snapshot !== null) {
+            if ($customer->current_credit_score_id !== $snapshot->id) {
+                $customer->forceFill(['current_credit_score_id' => $snapshot->id])->saveQuietly();
+            }
+
+            return $snapshot;
+        }
+
+        return $this->creditScoreService->recalculate($customer);
     }
 
     /**

@@ -123,6 +123,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 if (! $debug) {
                     Log::error('Unhandled API exception', [
                         'exception' => get_class($e),
+                        'message' => $e->getMessage(),
                         'file' => $e->getFile(),
                         'line' => $e->getLine(),
                     ]);
