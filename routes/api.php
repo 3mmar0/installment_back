@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\InstallmentController;
 use App\Http\Controllers\Api\LegalController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PaymentRequestController;
+use App\Http\Controllers\Api\ReportsHubController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\SystemSettingsController;
@@ -158,6 +159,11 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
         Route::post('export/excel', [ExportReportController::class, 'excel']);
         Route::post('export/csv', [ExportReportController::class, 'csv']);
 
+        Route::controller(ReportsHubController::class)->group(function () {
+            Route::get('reports/catalog', 'catalog');
+            Route::get('reports/overview', 'overview');
+        });
+
         // Notifications & Emails
         Route::controller(NotificationController::class)->group(function () {
             Route::get('notification-list', 'index');
@@ -215,6 +221,7 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
         Route::middleware('credit_score')->controller(CreditScoreController::class)->group(function () {
             Route::get('credit-score/analytics', 'analyticsDashboard');
             Route::get('credit-score/reports', 'reportList');
+            Route::get('credit-score/reports/export-csv', 'exportReportCsv');
             Route::get('credit-score/customer/{customerId}', 'profile');
             Route::get('credit-score/customer/{customerId}/history', 'history');
             Route::post('credit-score/customer/{customerId}/recalculate', 'recalculate');

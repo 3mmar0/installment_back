@@ -7,13 +7,15 @@ use App\Http\Resources\CustomerCreditScoreResource;
 use App\Http\Traits\ApiResponse;
 use App\Models\Customer;
 use App\Models\CustomerCreditScore;
+use App\Models\User;
 use App\Services\CreditScore\CreditScoreAnalyticsService;
+use App\Services\CreditScore\CreditScoreCustomerPdfBuilder;
 use App\Services\CreditScore\CreditScoreInfrastructure;
 use App\Services\CreditScore\CreditScoreService;
 use App\Services\CreditScore\InstallmentAffordabilityService;
+use App\Support\Pdf\RtlPdfDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Mpdf\Mpdf;
 use Mpdf\Output\Destination;
 
 class CreditScoreController extends Controller
@@ -173,20 +175,9 @@ class CreditScoreController extends Controller
         ]);
 
         $limit = (int) ($validated['limit'] ?? 100);
-        $query = $this->analyticsService->latestScoresQuery($request->user());
+        $query = $this->reportQuery($request->user(), $validated['report']);
 
-        match ($validated['report']) {
-            'high_risk' => $query->whereIn('customer_credit_scores.risk_level', ['high', 'very_high']),
-            'improving' => $query->where('customer_credit_scores.score_change', '>', 0),
-            'declining' => $query->where('customer_credit_scores.score_change', '<', 0),
-            'excellent_payment' => $query->where('customer_credit_scores.payment_history_score', '>=', 90),
-            'serious_delinquency' => $query->where('customer_credit_scores.current_max_dpd', '>=', 90),
-            'thin_file' => $query->where('customer_credit_scores.thin_file', true),
-            'overdue' => $query->where('customer_credit_scores.current_overdue_count', '>', 0),
-            default => null,
-        };
-
-        $rows = $query->with('customer:id,name,phone')
+        $rows = $query->with('customer:id,name,phone,monthly_salary')
             ->orderByDesc('customer_credit_scores.calculated_at')
             ->limit($limit)
             ->get();
@@ -196,13 +187,81 @@ class CreditScoreController extends Controller
             'items' => $rows->map(fn (CustomerCreditScore $row) => [
                 'customer_id' => $row->customer_id,
                 'customer_name' => $row->customer?->name,
+                'customer_phone' => $row->customer?->phone,
                 'score' => (int) $row->score,
                 'risk_level' => $row->risk_level,
+                'risk_label' => $this->riskLabelForLevel($row->risk_level),
                 'score_change' => (int) $row->score_change,
                 'current_overdue_amount' => (float) $row->current_overdue_amount,
+                'current_max_dpd' => (int) $row->current_max_dpd,
                 'calculated_at' => $row->calculated_at?->toISOString(),
             ]),
         ], 'تم جلب التقرير بنجاح');
+    }
+
+    public function exportReportCsv(Request $request): \Illuminate\Http\Response|JsonResponse
+    {
+        if (! CreditScoreInfrastructure::schemaReady()) {
+            return $this->errorResponse(
+                CreditScoreInfrastructure::schemaErrorMessage(),
+                503
+            );
+        }
+
+        $validated = $request->validate([
+            'report' => ['required', 'string', 'in:high_risk,improving,declining,excellent_payment,serious_delinquency,thin_file,overdue'],
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:500'],
+        ]);
+
+        $limit = (int) ($validated['limit'] ?? 200);
+        $query = $this->reportQuery($request->user(), $validated['report']);
+        $rows = $query->with('customer:id,name,phone')
+            ->orderByDesc('customer_credit_scores.calculated_at')
+            ->limit($limit)
+            ->get();
+
+        $handle = fopen('php://temp', 'r+');
+        if ($handle === false) {
+            return $this->errorResponse('تعذر إنشاء CSV', 500);
+        }
+
+        fwrite($handle, "\xEF\xBB\xBF");
+        fputcsv($handle, [
+            'customer_id',
+            'customer_name',
+            'phone',
+            'score',
+            'risk_level',
+            'score_change',
+            'overdue_amount',
+            'max_dpd',
+            'calculated_at',
+        ], ',', '"', '\\');
+
+        foreach ($rows as $row) {
+            fputcsv($handle, [
+                $row->customer_id,
+                $row->customer?->name,
+                $row->customer?->phone,
+                (int) $row->score,
+                $row->risk_level,
+                (int) $row->score_change,
+                (float) $row->current_overdue_amount,
+                (int) $row->current_max_dpd,
+                $row->calculated_at?->toISOString(),
+            ], ',', '"', '\\');
+        }
+
+        rewind($handle);
+        $csv = stream_get_contents($handle);
+        fclose($handle);
+
+        $filename = 'credit-report-'.$validated['report'].'-'.date('Y-m-d').'.csv';
+
+        return response($csv ?: '', 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 
     public function exportPdf(int $customerId, Request $request): JsonResponse|\Illuminate\Http\Response
@@ -220,14 +279,16 @@ class CreditScoreController extends Controller
         $snapshot->loadMissing('modelVersion');
 
         $resource = (new CustomerCreditScoreResource($snapshot))->resolve();
-        $html = $this->buildReportHtml($customer, $resource);
+        $eligibility = $this->affordability->assess($customer);
+        $html = CreditScoreCustomerPdfBuilder::build($customer, $resource, $eligibility);
 
         try {
-            $mpdf = new Mpdf([
-                'tempDir' => storage_path('app/mpdf'),
-                'mode' => 'utf-8',
-                'format' => 'A4',
-            ]);
+            $mpdf = RtlPdfDocument::createMpdf();
+            $mpdf->SetHTMLFooter(
+                '<div style="text-align:center;font-size:8pt;color:#64748b;border-top:1px solid #e2e8f0;padding-top:4px">'
+                .RtlPdfDocument::e(config('app.name', 'اقساطي'))
+                .' · Internal Credit Score · صفحة {PAGENO} من {nbpg}</div>'
+            );
             $mpdf->WriteHTML($html);
             $binary = $mpdf->Output('', Destination::STRING_RETURN);
         } catch (\Throwable $e) {
@@ -242,6 +303,35 @@ class CreditScoreController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
+    }
+
+    private function reportQuery(User $user, string $report)
+    {
+        $query = $this->analyticsService->latestScoresQuery($user);
+
+        match ($report) {
+            'high_risk' => $query->whereIn('customer_credit_scores.risk_level', ['high', 'very_high']),
+            'improving' => $query->where('customer_credit_scores.score_change', '>', 0),
+            'declining' => $query->where('customer_credit_scores.score_change', '<', 0),
+            'excellent_payment' => $query->where('customer_credit_scores.payment_history_score', '>=', 90),
+            'serious_delinquency' => $query->where('customer_credit_scores.current_max_dpd', '>=', 90),
+            'thin_file' => $query->where('customer_credit_scores.thin_file', true),
+            'overdue' => $query->where('customer_credit_scores.current_overdue_count', '>', 0),
+            default => null,
+        };
+
+        return $query;
+    }
+
+    private function riskLabelForLevel(?string $level): string
+    {
+        foreach ((array) config('credit_score.risk_bands', []) as $band) {
+            if ($level === ($band['level'] ?? null)) {
+                return (string) ($band['label'] ?? $level);
+            }
+        }
+
+        return (string) $level;
     }
 
     private function findAuthorizedCustomer(int $customerId, Request $request): Customer
@@ -303,67 +393,5 @@ class CreditScoreController extends Controller
             'installment_eligibility' => $eligibility,
             'disclaimer' => 'تقييم ائتماني داخلي — ليس I-Score رسميًا. لا يُعرض Score إلا بعد وجود أقساط مسجّلة.',
         ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $score
-     */
-    private function buildReportHtml(Customer $customer, array $score): string
-    {
-        $positives = implode('', array_map(
-            fn ($line) => '<li>'.e($line).'</li>',
-            $score['positive_factors'] ?? []
-        ));
-        $negatives = implode('', array_map(
-            fn ($line) => '<li>'.e($line).'</li>',
-            $score['negative_factors'] ?? []
-        ));
-
-        $components = $score['components'] ?? [];
-        $compRows = '';
-        foreach ($components as $key => $value) {
-            if ($value === null) {
-                continue;
-            }
-            $compRows .= '<tr><td>'.e($key).'</td><td>'.e((string) $value).'/100</td></tr>';
-        }
-
-        $name = e($customer->name);
-        $risk = e((string) ($score['risk_label'] ?? $score['risk_level']));
-        $confidence = e((string) $score['confidence_level']);
-        $calculated = e((string) ($score['calculated_at'] ?? ''));
-        $scoreVal = (int) $score['score'];
-        $scoreMax = (int) $score['score_max'];
-        $change = (int) $score['score_change'];
-
-        return <<<HTML
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head><meta charset="utf-8"><style>
-body{font-family:dejavusans,sans-serif;font-size:12px;color:#111}
-h1{font-size:18px;color:#1B4F9C}
-.box{border:1px solid #ddd;padding:12px;margin:12px 0;border-radius:6px}
-.disclaimer{background:#fff7ed;border-color:#fdba74;font-size:11px}
-table{width:100%;border-collapse:collapse} td,th{border:1px solid #ddd;padding:6px}
-</style></head>
-<body>
-<h1>Internal Credit Assessment</h1>
-<p class="disclaimer box"><strong>تنبيه:</strong> هذا تقييم ائتماني داخلي (Internal Credit Score) مبني على بيانات التقسيط داخل النظام فقط. ليس I-Score رسميًا ولا صادرًا عن الشركة المصرية للاستعلام الائتماني.</p>
-<div class="box">
-<p><strong>العميل:</strong> {$name}</p>
-<p><strong>Internal Credit Score:</strong> {$scoreVal}/{$scoreMax}</p>
-<p><strong>Internal Risk Level:</strong> {$risk}</p>
-<p><strong>Confidence:</strong> {$confidence}</p>
-<p><strong>Score change:</strong> {$change}</p>
-<p><strong>Last calculation:</strong> {$calculated}</p>
-</div>
-<h2>Score breakdown</h2>
-<table>{$compRows}</table>
-<h2>Positive factors</h2>
-<ul>{$positives}</ul>
-<h2>Negative factors</h2>
-<ul>{$negatives}</ul>
-</body></html>
-HTML;
     }
 }

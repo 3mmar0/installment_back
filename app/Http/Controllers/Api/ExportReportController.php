@@ -8,8 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Mpdf\Mpdf;
-use Mpdf\Output\Destination;
+use App\Support\Pdf\RtlPdfDocument;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -50,7 +49,10 @@ class ExportReportController extends Controller
         $html = $this->buildDashboardHtml($analytics);
 
         try {
-            $mpdf = $this->createMpdf();
+            $mpdf = RtlPdfDocument::createMpdf();
+            $mpdf->SetHTMLFooter(
+                '<div style="text-align:center;font-size:8pt;color:#64748b">صفحة {PAGENO} من {nbpg}</div>'
+            );
             $mpdf->WriteHTML($html);
             $binary = $mpdf->Output('', Destination::STRING_RETURN);
         } catch (\Throwable $e) {
@@ -212,28 +214,6 @@ class ExportReportController extends Controller
         ]);
     }
 
-    private function createMpdf(): Mpdf
-    {
-        $tmpDir = storage_path('app/mpdf');
-        if (! is_dir($tmpDir)) {
-            mkdir($tmpDir, 0755, true);
-        }
-
-        return new Mpdf([
-            'mode' => 'utf-8',
-            'format' => 'A4',
-            'margin_left' => 14,
-            'margin_right' => 14,
-            'margin_top' => 16,
-            'margin_bottom' => 16,
-            'tempDir' => $tmpDir,
-            'directionality' => 'rtl',
-            'autoArabic' => true,
-            'autoLangToFont' => true,
-            'autoScriptToLang' => true,
-        ]);
-    }
-
     private function guardReports(?User $user): ?JsonResponse
     {
         if ($user === null) {
@@ -342,6 +322,8 @@ class ExportReportController extends Controller
             .$this->buildPaymentsTableHtml('الدفعات المتأخرة', $analytics['overduePayments'] ?? [], ['customer_name', 'due_date', 'amount', 'days_overdue'], $e)
             .$this->buildPaymentsTableHtml('الدفعات الحديثة', $analytics['recentPayments'] ?? [], ['customer_name', 'paid_at', 'paid_amount', 'reference'], $e);
 
+        $styles = RtlPdfDocument::baseStyles();
+
         return <<<HTML
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -349,28 +331,21 @@ class ExportReportController extends Controller
 <meta charset="UTF-8">
 <title>تقرير لوحة التحكم</title>
 <style>
-  body { font-family: xbriyaz, dejavusans, sans-serif; direction: rtl; text-align: right; color: #1a1a2e; font-size: 11pt; }
-  h1 { font-size: 18pt; margin: 0 0 4px; color: #1565c0; text-align: center; }
-  .meta { text-align: center; color: #5c6b7a; font-size: 10pt; margin-bottom: 18px; }
-  table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-  th, td { border: 1px solid #cfd8dc; padding: 7px 10px; }
-  th { background: #e3f2fd; color: #0d47a1; font-weight: bold; }
-  tr:nth-child(even) td { background: #fafafa; }
-  .summary td.label { background: #f5f5f5; width: 42%; font-weight: bold; }
-  .summary td.value { text-align: left; direction: ltr; unicode-bidi: embed; }
-  h2.section { font-size: 13pt; color: #37474f; margin: 18px 0 8px; border-bottom: 2px solid #90caf9; padding-bottom: 4px; }
-  .payments td.amount { direction: ltr; text-align: left; unicode-bidi: embed; }
+{$styles}
 </style>
 </head>
 <body>
-  <h1>تقرير لوحة التحكم</h1>
-  <p class="meta">تاريخ التصدير: {$generatedAt}</p>
-  <h2 class="section">ملخص المؤشرات</h2>
-  <table class="summary">
+  <div class="doc-header">
+    <h1>تقرير لوحة التحكم المالي</h1>
+    <div class="meta">تاريخ التصدير: {$generatedAt} · نطاق: ملخص المحفظة والدفعات</div>
+  </div>
+  <h2 class="section-title">ملخص المؤشرات</h2>
+  <table class="data summary">
     <thead><tr><th>المؤشر</th><th>القيمة</th></tr></thead>
     <tbody>{$summaryRows}</tbody>
   </table>
   {$sections}
+  <p class="footer-note">تقرير داخلي من بيانات «اقساطي» — للاستخدام التشغيلي فقط.</p>
 </body>
 </html>
 HTML;
@@ -396,14 +371,14 @@ HTML;
             $body .= '<tr>';
             foreach ($columns as $c) {
                 $cell = $this->formatCellValue($c, $row[$c] ?? '');
-                $class = in_array($c, ['amount', 'paid_amount'], true) ? ' class="amount"' : '';
+                $class = in_array($c, ['amount', 'paid_amount'], true) ? ' class="ltr"' : '';
                 $body .= '<td'.$class.'>'.$e($cell).'</td>';
             }
             $body .= '</tr>';
         }
 
-        return '<h2 class="section">'.$e($title).'</h2>'
-            .'<table class="payments"><thead><tr>'.$headers.'</tr></thead><tbody>'.$body.'</tbody></table>';
+        return '<h2 class="section-title">'.$e($title).'</h2>'
+            .'<table class="data"><thead><tr>'.$headers.'</tr></thead><tbody>'.$body.'</tbody></table>';
     }
 
     private function formatCellValue(string $column, mixed $value): string

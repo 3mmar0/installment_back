@@ -71,8 +71,11 @@ This system calculates an **Internal Credit Score** on a **300–850** display s
 
 | Method | Path |
 |--------|------|
+| GET | `/api/reports/catalog` |
+| GET | `/api/reports/overview` |
 | GET | `/api/credit-score/analytics` |
 | GET | `/api/credit-score/reports?report=high_risk` |
+| GET | `/api/credit-score/reports/export-csv?report=` |
 | GET | `/api/credit-score/customer/{id}` |
 | GET | `/api/credit-score/customer/{id}/history` |
 | POST | `/api/credit-score/customer/{id}/recalculate` |
