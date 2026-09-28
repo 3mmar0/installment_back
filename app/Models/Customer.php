@@ -16,8 +16,12 @@ class Customer extends Model
         'email',
         'phone',
         'phone_normalized',
+        'national_id',
         'address',
         'notes',
+        'guarantor_name',
+        'guarantor_national_id',
+        'guarantor_phone',
     ];
 
     public function user()

@@ -4,11 +4,13 @@ namespace App\Services;
 
 use App\Contracts\Services\CustomerServiceInterface;
 use App\Helpers\LimitsHelper;
+use App\Helpers\NationalIdHelper;
 use App\Helpers\PhoneHelper;
 use App\Models\Customer;
 use App\Models\Installment;
 use App\Models\PaymentRequest;
 use App\Models\User;
+use App\Support\CustomerIdentity;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -64,6 +66,9 @@ class CustomerService implements CustomerServiceInterface
                     ->orWhere('customers.name', 'like', "%{$search}%")
                     ->orWhere('customers.email', 'like', "%{$search}%")
                     ->orWhere('customers.phone', 'like', "%{$search}%")
+                    ->orWhere('customers.national_id', 'like', "%{$search}%")
+                    ->orWhere('customers.guarantor_name', 'like', "%{$search}%")
+                    ->orWhere('customers.guarantor_phone', 'like', "%{$search}%")
                     ->orWhere('customers.address', 'like', "%{$search}%");
 
                 if ($user->canManageMerchantData()) {
@@ -104,7 +109,8 @@ class CustomerService implements CustomerServiceInterface
                 $builder
                     ->orWhere('customers.name', 'like', "%{$term}%")
                     ->orWhere('customers.email', 'like', "%{$term}%")
-                    ->orWhere('customers.phone', 'like', "%{$term}%");
+                    ->orWhere('customers.phone', 'like', "%{$term}%")
+                    ->orWhere('customers.national_id', 'like', "%{$term}%");
             });
         }
 
@@ -129,14 +135,23 @@ class CustomerService implements CustomerServiceInterface
                 abort(403, LimitsHelper::getLimitExceededMessage('customers'));
             }
 
+            $nationalId = NationalIdHelper::normalize($data['national_id'] ?? null);
+            $phone = $data['phone'] ?? null;
+
+            CustomerIdentity::assertAvailable($user->id, $nationalId, $phone);
+
             $customer = Customer::create([
                 'user_id' => $user->id,
                 'name' => $data['name'],
                 'email' => $data['email'] ?? null,
-                'phone' => $data['phone'] ?? null,
-                'phone_normalized' => PhoneHelper::normalize($data['phone'] ?? null),
+                'phone' => $phone,
+                'phone_normalized' => PhoneHelper::normalize($phone),
+                'national_id' => $nationalId,
                 'address' => $data['address'] ?? null,
                 'notes' => $data['notes'] ?? null,
+                'guarantor_name' => $data['guarantor_name'] ?? null,
+                'guarantor_national_id' => NationalIdHelper::normalize($data['guarantor_national_id'] ?? null),
+                'guarantor_phone' => $data['guarantor_phone'] ?? null,
             ]);
 
             if (! $user->isOwner()) {
@@ -156,9 +171,29 @@ class CustomerService implements CustomerServiceInterface
     {
         $customer = Customer::findOrFail($id);
 
+        if (array_key_exists('national_id', $data)) {
+            $data['national_id'] = NationalIdHelper::normalize($data['national_id']);
+        }
+        if (array_key_exists('guarantor_national_id', $data)) {
+            $data['guarantor_national_id'] = NationalIdHelper::normalize($data['guarantor_national_id']);
+        }
         if (array_key_exists('phone', $data)) {
             $data['phone_normalized'] = PhoneHelper::normalize($data['phone']);
         }
+
+        $nextNationalId = array_key_exists('national_id', $data)
+            ? $data['national_id']
+            : $customer->national_id;
+        $nextPhone = array_key_exists('phone', $data)
+            ? $data['phone']
+            : $customer->phone;
+
+        CustomerIdentity::assertAvailable(
+            (int) $customer->user_id,
+            $nextNationalId,
+            $nextPhone,
+            $customer->id
+        );
 
         $customer->update($data);
         $customer = $customer->fresh();

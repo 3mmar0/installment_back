@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Contracts\Services\CustomerServiceInterface;
 use App\Contracts\Services\InstallmentServiceInterface;
 use App\Helpers\LimitsHelper;
+use App\Helpers\NationalIdHelper;
 use App\Helpers\PhoneHelper;
 use App\Models\Customer;
 use App\Models\User;
@@ -24,7 +25,7 @@ use PhpOffice\PhpSpreadsheet\Style\Protection;
 class ImportService
 {
     /** Bump when the template layout changes; older files are rejected. */
-    public const TEMPLATE_VERSION = 1;
+    public const TEMPLATE_VERSION = 2;
 
     /** Import types. */
     public const TYPE_CUSTOMERS = 'customers';
@@ -32,10 +33,10 @@ class ImportService
     public const TYPE_INSTALLMENTS = 'installments';
 
     /** Hidden cell that carries the template version marker. */
-    private const VERSION_CELL = 'N1';
+    private const VERSION_CELL = 'Z1';
 
     /** Hidden cell that carries the template type marker. */
-    private const TYPE_CELL = 'M1';
+    private const TYPE_CELL = 'Y1';
 
     /** Data sheet title for the customers template. */
     private const DATA_SHEET_CUSTOMERS = 'البيانات';
@@ -47,16 +48,20 @@ class ImportService
     public const MAX_ROWS = 1000;
 
     /**
-     * Customers template columns (A..K). Index maps to the spreadsheet column letter.
+     * Customers template columns. Index maps to the spreadsheet column letter.
      *
      * @var array<int, array{key: string, label: string}>
      */
     private const COLUMNS_CUSTOMERS = [
         ['key' => 'name', 'label' => 'اسم العميل *'],
-        ['key' => 'phone', 'label' => 'رقم الهاتف *'],
+        ['key' => 'national_id', 'label' => 'الرقم القومي'],
+        ['key' => 'phone', 'label' => 'رقم الهاتف'],
         ['key' => 'email', 'label' => 'البريد الإلكتروني'],
         ['key' => 'address', 'label' => 'العنوان'],
         ['key' => 'customer_notes', 'label' => 'ملاحظات العميل'],
+        ['key' => 'guarantor_name', 'label' => 'اسم الضامن'],
+        ['key' => 'guarantor_national_id', 'label' => 'الرقم القومي للضامن'],
+        ['key' => 'guarantor_phone', 'label' => 'هاتف الضامن'],
         ['key' => 'installment_name', 'label' => 'اسم القسط / المنتج'],
         ['key' => 'total_amount', 'label' => 'إجمالي المبلغ'],
         ['key' => 'months', 'label' => 'عدد الشهور'],
@@ -87,10 +92,14 @@ class ImportService
      */
     private const EXAMPLE_CUSTOMERS = [
         'name' => 'أحمد علي',
+        'national_id' => '29001011234567',
         'phone' => '01000000000',
         'email' => 'ahmed@example.com',
         'address' => 'القاهرة - مصر الجديدة',
         'customer_notes' => 'صف مثال — احذفه أو استبدله ببياناتك',
+        'guarantor_name' => 'محمد ضامن',
+        'guarantor_national_id' => '28501011234567',
+        'guarantor_phone' => '01011111111',
         'installment_name' => 'تلفزيون سامسونج',
         'total_amount' => 12000,
         'months' => 12,
@@ -149,11 +158,13 @@ class ImportService
         $sheet->setRightToLeft(true);
         $sheet->freezePane('A2');
 
-        // Keep phone numbers as text so leading zeros survive.
-        $phoneLetter = $this->letterForKey($columns, 'phone');
-        if ($phoneLetter !== null) {
-            $sheet->getStyle($phoneLetter.'2:'.$phoneLetter.(self::MAX_ROWS + 1))
-                ->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        // Keep identity numbers as text so leading zeros survive.
+        foreach (['phone', 'national_id', 'guarantor_national_id', 'guarantor_phone'] as $textKey) {
+            $letter = $this->letterForKey($columns, $textKey);
+            if ($letter !== null) {
+                $sheet->getStyle($letter.'2:'.$letter.(self::MAX_ROWS + 1))
+                    ->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+            }
         }
 
         // Dates render in a readable, unambiguous format.
@@ -171,8 +182,8 @@ class ImportService
         // Hidden version + type markers.
         $sheet->setCellValueExplicit(self::VERSION_CELL, (string) self::TEMPLATE_VERSION, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
         $sheet->setCellValueExplicit(self::TYPE_CELL, $type, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-        $sheet->getColumnDimension('M')->setVisible(false);
-        $sheet->getColumnDimension('N')->setVisible(false);
+        $sheet->getColumnDimension('Y')->setVisible(false);
+        $sheet->getColumnDimension('Z')->setVisible(false);
 
         // Protect the header row while leaving data cells editable.
         $sheet->getStyle('A2:'.$lastColumn.(self::MAX_ROWS + 1))
@@ -303,15 +314,29 @@ class ImportService
             $records[] = $record;
         }
 
-        // --- Resolve existing customers for this merchant by normalized phone ---
+        // --- Resolve existing customers by national id first, then phone ---
+        $nationalIds = collect($records)
+            ->pluck('national_id_normalized')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
         $phones = collect($records)
-            ->filter(fn ($r) => $r['phone_normalized'] !== null)
             ->pluck('phone_normalized')
+            ->filter()
             ->unique()
             ->values()
             ->all();
 
-        $existing = $phones === []
+        $existingByNid = $nationalIds === []
+            ? collect()
+            : Customer::query()
+                ->where('user_id', $user->id)
+                ->whereIn('national_id', $nationalIds)
+                ->get()
+                ->keyBy('national_id');
+
+        $existingByPhone = $phones === []
             ? collect()
             : Customer::query()
                 ->where('user_id', $user->id)
@@ -322,15 +347,17 @@ class ImportService
         // --- Build groups (first-seen order) ---
         $groups = [];
         foreach ($records as &$record) {
-            if ($record['phone_normalized'] === null || ! $record['valid']) {
+            if ($record['identity_key'] === null || ! $record['valid']) {
                 continue;
             }
 
-            $phone = $record['phone_normalized'];
-            if (! isset($groups[$phone])) {
-                $existingCustomer = $existing->get($phone);
-                $groups[$phone] = [
-                    'phone' => $phone,
+            $key = $record['identity_key'];
+            if (! isset($groups[$key])) {
+                $existingCustomer = $record['national_id_normalized'] !== null
+                    ? $existingByNid->get($record['national_id_normalized'])
+                    : $existingByPhone->get($record['phone_normalized']);
+                $groups[$key] = [
+                    'identity_key' => $key,
                     'existing_id' => $existingCustomer?->id,
                     'existing_name' => $existingCustomer?->name,
                     'create' => $existingCustomer === null,
@@ -338,23 +365,26 @@ class ImportService
                         'name' => $record['customer']['name'],
                         'email' => $record['customer']['email'],
                         'phone' => $record['customer']['phone'],
+                        'national_id' => $record['customer']['national_id'],
                         'address' => $record['customer']['address'],
                         'notes' => $record['customer']['notes'],
+                        'guarantor_name' => $record['customer']['guarantor_name'],
+                        'guarantor_national_id' => $record['customer']['guarantor_national_id'],
+                        'guarantor_phone' => $record['customer']['guarantor_phone'],
                     ],
                     'first_line' => $record['line'],
                 ];
             }
 
-            // Name mismatch warnings.
-            $group = $groups[$phone];
+            $group = $groups[$key];
             $reference = $group['existing_id'] ? $group['existing_name'] : $group['customer_data']['name'];
             if ($reference !== null && $record['customer']['name'] !== null
                 && $this->normalizeName($record['customer']['name']) !== $this->normalizeName($reference)) {
                 $warnings[] = [
                     'line' => $record['line'],
                     'message' => $group['existing_id']
-                        ? 'الاسم مختلف عن العميل المسجّل بنفس الرقم؛ سيتم استخدام الاسم الحالي.'
-                        : 'الاسم مختلف عن أول صف لنفس الرقم؛ سيتم استخدام اسم أول صف.',
+                        ? 'الاسم مختلف عن العميل المسجّل بنفس المعرّف؛ سيتم استخدام الاسم الحالي.'
+                        : 'الاسم مختلف عن أول صف لنفس المعرّف؛ سيتم استخدام اسم أول صف.',
                 ];
             }
         }
@@ -387,11 +417,11 @@ class ImportService
 
         // Finalize each record against its group + installment quota.
         foreach ($records as &$record) {
-            if (! $record['valid'] || $record['phone_normalized'] === null) {
+            if (! $record['valid'] || $record['identity_key'] === null) {
                 continue;
             }
 
-            $group = $groups[$record['phone_normalized']] ?? null;
+            $group = $groups[$record['identity_key']] ?? null;
             if ($group === null || ! $group['allowed']) {
                 $record['valid'] = false;
                 $record['error'] = 'تجاوز حد الباقة لعدد العملاء المسموح به.';
@@ -451,7 +481,7 @@ class ImportService
         $failed = [];
         $createdCustomers = 0;
 
-        /** @var array<string, int> $resolved phone => customer id */
+        /** @var array<string, int> $resolved identity_key => customer id */
         $resolved = [];
 
         $tick = $this->tickFactory($processed, $total, $onRowProcessed);
@@ -464,22 +494,22 @@ class ImportService
                 continue;
             }
 
-            $phone = $record['phone_normalized'];
-            $group = $groups[$phone];
+            $key = $record['identity_key'];
+            $group = $groups[$key];
 
             try {
                 // Lazily resolve/create the customer the first time we touch its group.
-                if (! array_key_exists($phone, $resolved)) {
+                if (! array_key_exists($key, $resolved)) {
                     if ($group['existing_id']) {
-                        $resolved[$phone] = (int) $group['existing_id'];
+                        $resolved[$key] = (int) $group['existing_id'];
                     } else {
                         $customer = $this->customerService->createCustomer($group['customer_data'], $user);
-                        $resolved[$phone] = (int) $customer->id;
+                        $resolved[$key] = (int) $customer->id;
                         $createdCustomers++;
                     }
                 }
 
-                $customerId = $resolved[$phone];
+                $customerId = $resolved[$key];
 
                 if ($record['has_installment']) {
                     $this->importInstallmentRow($record, $customerId, $user);
@@ -701,16 +731,24 @@ class ImportService
             'name' => $row['name'],
             'email' => $row['email'],
             'phone' => $row['phone'],
+            'national_id' => $row['national_id'] ?? null,
             'address' => $row['address'],
             'customer_notes' => $row['customer_notes'],
+            'guarantor_name' => $row['guarantor_name'] ?? null,
+            'guarantor_national_id' => $row['guarantor_national_id'] ?? null,
+            'guarantor_phone' => $row['guarantor_phone'] ?? null,
         ];
 
         $rules = [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['required', 'string', 'max:50'],
+            'phone' => ['required_without:national_id', 'nullable', 'string', 'max:50'],
+            'national_id' => ['required_without:phone', 'nullable', 'string', 'max:20'],
             'address' => ['nullable', 'string', 'max:500'],
             'customer_notes' => ['nullable', 'string', 'max:2000'],
+            'guarantor_name' => ['nullable', 'string', 'max:255'],
+            'guarantor_national_id' => ['nullable', 'string', 'max:20'],
+            'guarantor_phone' => ['nullable', 'string', 'max:50'],
         ];
 
         if ($hasInstallment) {
@@ -729,7 +767,21 @@ class ImportService
             $rules['installment_notes'] = ['nullable', 'string', 'max:2000'];
         }
 
-        $validator = Validator::make($payload, $rules, [], $this->attributeNames());
+        $validator = Validator::make($payload, $rules, [
+            'phone.required_without' => 'أدخل الرقم القومي أو رقم الهاتف.',
+            'national_id.required_without' => 'أدخل الرقم القومي أو رقم الهاتف.',
+        ], $this->attributeNames());
+
+        $validator->after(function ($v) use ($payload) {
+            $nid = $payload['national_id'] ?? null;
+            if ($nid !== null && $nid !== '' && ! NationalIdHelper::isValid((string) $nid)) {
+                $v->errors()->add('national_id', 'الرقم القومي يجب أن يكون 14 رقماً.');
+            }
+            $guarantorNid = $payload['guarantor_national_id'] ?? null;
+            if ($guarantorNid !== null && $guarantorNid !== '' && ! NationalIdHelper::isValid((string) $guarantorNid)) {
+                $v->errors()->add('guarantor_national_id', 'الرقم القومي للضامن يجب أن يكون 14 رقماً.');
+            }
+        });
 
         // Surface the "date column had text we could not read" case clearly.
         if ($hasInstallment && $row['start_date'] === null && $row['start_date_raw'] !== null) {
@@ -738,13 +790,21 @@ class ImportService
             });
         }
 
+        $nationalId = NationalIdHelper::normalize($row['national_id'] ?? null);
+        $phoneNormalized = PhoneHelper::normalize($row['phone'] ?? null);
+        $identityKey = $nationalId !== null
+            ? 'nid:'.$nationalId
+            : ($phoneNormalized !== null ? 'phone:'.$phoneNormalized : null);
+
         $error = $validator->fails()
             ? implode('، ', $validator->errors()->all())
             : null;
 
         return [
             'line' => $row['line'],
-            'phone_normalized' => PhoneHelper::normalize($row['phone']),
+            'identity_key' => $identityKey,
+            'national_id_normalized' => $nationalId,
+            'phone_normalized' => $phoneNormalized,
             'valid' => $error === null,
             'error' => $error,
             'has_installment' => $hasInstallment,
@@ -752,8 +812,12 @@ class ImportService
                 'name' => $row['name'],
                 'email' => $row['email'],
                 'phone' => $row['phone'],
+                'national_id' => $row['national_id'] ?? null,
                 'address' => $row['address'],
                 'notes' => $row['customer_notes'],
+                'guarantor_name' => $row['guarantor_name'] ?? null,
+                'guarantor_national_id' => $row['guarantor_national_id'] ?? null,
+                'guarantor_phone' => $row['guarantor_phone'] ?? null,
             ],
             'installment' => $hasInstallment ? [
                 'name' => $row['installment_name'],
@@ -858,10 +922,14 @@ class ImportService
         return [
             'line' => $rowNumber,
             'name' => $this->str($raw['name']),
+            'national_id' => $this->str($raw['national_id'] ?? null),
             'phone' => $this->str($raw['phone']),
             'email' => $this->str($raw['email']),
             'address' => $this->str($raw['address']),
             'customer_notes' => $this->str($raw['customer_notes']),
+            'guarantor_name' => $this->str($raw['guarantor_name'] ?? null),
+            'guarantor_national_id' => $this->str($raw['guarantor_national_id'] ?? null),
+            'guarantor_phone' => $this->str($raw['guarantor_phone'] ?? null),
             'installment_name' => $this->str($raw['installment_name']),
             'total_amount' => $this->numeric($raw['total_amount']),
             'months' => $this->numeric($raw['months']),
@@ -948,7 +1016,7 @@ class ImportService
             $value = $example[$key];
 
             // Keep phone + date as text so the example reads exactly as stored.
-            if (in_array($key, ['phone', 'start_date'], true)) {
+            if (in_array($key, ['phone', 'national_id', 'guarantor_national_id', 'guarantor_phone', 'start_date'], true)) {
                 $sheet->setCellValueExplicit($letter.'2', (string) $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             } else {
                 $sheet->setCellValue($letter.'2', $value);
@@ -992,10 +1060,14 @@ class ImportService
             $lines = [
                 ['العمود', 'الوصف'],
                 ['اسم العميل *', 'إجباري. اسم العميل الكامل.'],
-                ['رقم الهاتف *', 'إجباري. يُستخدم لتجميع الأقساط تحت نفس العميل. اتركه كنص للحفاظ على الصفر في البداية.'],
+                ['الرقم القومي', 'اختياري. 14 رقماً. إن وُجد يُستخدم لمعرفة إن كان العميل مسجّلاً من قبل.'],
+                ['رقم الهاتف', 'مطلوب إذا لم يُدخل الرقم القومي. يُستخدم للتمييز عند غياب الرقم القومي.'],
                 ['البريد الإلكتروني', 'اختياري.'],
                 ['العنوان', 'اختياري.'],
                 ['ملاحظات العميل', 'اختياري.'],
+                ['اسم الضامن', 'اختياري.'],
+                ['الرقم القومي للضامن', 'اختياري. 14 رقماً.'],
+                ['هاتف الضامن', 'اختياري.'],
                 ['اسم القسط / المنتج', 'اختياري. اتركه فارغاً لتسجيل العميل فقط بدون قسط.'],
                 ['إجمالي المبلغ', 'إجباري عند وجود قسط. رقم أكبر من صفر.'],
                 ['عدد الشهور', 'إجباري عند وجود قسط. رقم صحيح بين 1 و 120.'],
@@ -1211,8 +1283,12 @@ class ImportService
             'name' => 'اسم العميل',
             'email' => 'البريد الإلكتروني',
             'phone' => 'رقم الهاتف',
+            'national_id' => 'الرقم القومي',
             'address' => 'العنوان',
             'customer_notes' => 'ملاحظات العميل',
+            'guarantor_name' => 'اسم الضامن',
+            'guarantor_national_id' => 'الرقم القومي للضامن',
+            'guarantor_phone' => 'هاتف الضامن',
             'installment_name' => 'اسم القسط',
             'total_amount' => 'إجمالي المبلغ',
             'months' => 'عدد الشهور',

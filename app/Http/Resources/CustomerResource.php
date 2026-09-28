@@ -19,8 +19,12 @@ class CustomerResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'phone' => $this->phone,
+            'national_id' => $this->national_id,
             'address' => $this->address,
             'notes' => $this->notes,
+            'guarantor_name' => $this->guarantor_name,
+            'guarantor_national_id' => $this->guarantor_national_id,
+            'guarantor_phone' => $this->guarantor_phone,
             'has_client_account' => $this->client_account_id !== null,
             'client_account' => $this->when(
                 $this->relationLoaded('clientAccount') && $this->clientAccount,

@@ -22,10 +22,14 @@ function importRow(int $line, array $overrides = []): array
     return array_merge([
         'line' => $line,
         'name' => null,
+        'national_id' => null,
         'phone' => null,
         'email' => null,
         'address' => null,
         'customer_notes' => null,
+        'guarantor_name' => null,
+        'guarantor_national_id' => null,
+        'guarantor_phone' => null,
         'installment_name' => null,
         'total_amount' => null,
         'months' => null,
@@ -48,11 +52,14 @@ function buildImportXlsx(array $rows, bool $withVersion = true): string
     $sheet->setTitle('البيانات');
 
     if ($withVersion) {
-        $sheet->setCellValue('N1', ImportService::TEMPLATE_VERSION);
+        $sheet->setCellValue('Z1', ImportService::TEMPLATE_VERSION);
     }
 
-    $columns = ['name', 'phone', 'email', 'address', 'customer_notes',
-        'installment_name', 'total_amount', 'months', 'start_date', 'paid_count', 'installment_notes'];
+    $columns = [
+        'name', 'national_id', 'phone', 'email', 'address', 'customer_notes',
+        'guarantor_name', 'guarantor_national_id', 'guarantor_phone',
+        'installment_name', 'total_amount', 'months', 'start_date', 'paid_count', 'installment_notes',
+    ];
 
     $rowNumber = 2;
     foreach ($rows as $row) {
@@ -60,7 +67,7 @@ function buildImportXlsx(array $rows, bool $withVersion = true): string
         foreach ($columns as $key) {
             $letter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
             if (array_key_exists($key, $row) && $row[$key] !== null) {
-                if (in_array($key, ['phone'], true)) {
+                if (in_array($key, ['phone', 'national_id', 'guarantor_national_id', 'guarantor_phone'], true)) {
                     $sheet->setCellValueExplicit($letter.$rowNumber, (string) $row[$key], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                 } else {
                     $sheet->setCellValue($letter.$rowNumber, $row[$key]);
@@ -92,10 +99,10 @@ function buildInstallmentsXlsx(array $rows, bool $withVersion = true, bool $with
     $sheet->setTitle('الأقساط');
 
     if ($withVersion) {
-        $sheet->setCellValue('N1', ImportService::TEMPLATE_VERSION);
+        $sheet->setCellValue('Z1', ImportService::TEMPLATE_VERSION);
     }
     if ($withType) {
-        $sheet->setCellValueExplicit('M1', 'installments', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        $sheet->setCellValueExplicit('Y1', 'installments', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
     }
 
     $columns = ['installment_name', 'total_amount', 'months', 'start_date', 'paid_count', 'installment_notes'];
@@ -681,4 +688,58 @@ it('rejects a customers template uploaded to the installments flow', function ()
         'type' => 'installments',
         'customer_id' => $customer->id,
     ])->assertStatus(422);
+});
+
+it('matches an existing customer by national id even when the phone differs', function () {
+    $merchant = merchantWithPlan();
+
+    $existing = Customer::factory()->forMerchant($merchant)->create([
+        'name' => 'الاسم الأصلي',
+        'phone' => '01000000300',
+        'phone_normalized' => PhoneHelper::normalize('01000000300'),
+        'national_id' => '29001011234567',
+    ]);
+
+    $rows = [
+        importRow(2, [
+            'name' => 'اسم مختلف',
+            'national_id' => '29001011234567',
+            'phone' => '01000000399',
+            'installment_name' => 'تلفزيون',
+            'total_amount' => 6000,
+            'months' => 6,
+            'start_date' => '2026-01-01',
+        ]),
+    ];
+
+    $result = app(ImportService::class)->import($rows, $merchant);
+
+    expect(Customer::where('user_id', $merchant->id)->count())->toBe(1)
+        ->and($existing->fresh()->phone)->toBe('01000000300')
+        ->and(Installment::where('customer_id', $existing->id)->count())->toBe(1)
+        ->and($result['created_customers'])->toBe(0)
+        ->and($result['matched_customers'])->toBe(1);
+});
+
+it('creates two customers with the same phone when national ids differ', function () {
+    $merchant = merchantWithPlan();
+
+    $rows = [
+        importRow(2, [
+            'name' => 'الأول',
+            'national_id' => '29001011234567',
+            'phone' => '01000000400',
+        ]),
+        importRow(3, [
+            'name' => 'الثاني',
+            'national_id' => '29101011234567',
+            'phone' => '01000000400',
+        ]),
+    ];
+
+    $result = app(ImportService::class)->import($rows, $merchant);
+
+    expect(Customer::where('user_id', $merchant->id)->count())->toBe(2)
+        ->and($result['created_customers'])->toBe(2)
+        ->and($result['failed_count'])->toBe(0);
 });
