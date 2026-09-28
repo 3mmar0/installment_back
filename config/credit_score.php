@@ -236,13 +236,13 @@ return [
     | Ordered high -> low. `min`/`max` are inclusive on the displayed score.
     */
     'risk_bands' => [
-        ['level' => 'excellent', 'label' => 'Excellent Internal Profile', 'min' => 800, 'max' => 850],
-        ['level' => 'very_good', 'label' => 'Very Good', 'min' => 750, 'max' => 799],
-        ['level' => 'good', 'label' => 'Good', 'min' => 700, 'max' => 749],
-        ['level' => 'fair', 'label' => 'Fair', 'min' => 650, 'max' => 699],
-        ['level' => 'moderate', 'label' => 'Moderate Risk', 'min' => 600, 'max' => 649],
-        ['level' => 'high', 'label' => 'High Risk', 'min' => 500, 'max' => 599],
-        ['level' => 'very_high', 'label' => 'Very High Risk', 'min' => 300, 'max' => 499],
+        ['level' => 'excellent', 'label' => 'ملف داخلي ممتاز', 'min' => 800, 'max' => 850],
+        ['level' => 'very_good', 'label' => 'جيد جدًا', 'min' => 750, 'max' => 799],
+        ['level' => 'good', 'label' => 'جيد', 'min' => 700, 'max' => 749],
+        ['level' => 'fair', 'label' => 'مقبول', 'min' => 650, 'max' => 699],
+        ['level' => 'moderate', 'label' => 'مخاطرة متوسطة', 'min' => 600, 'max' => 649],
+        ['level' => 'high', 'label' => 'مخاطرة عالية', 'min' => 500, 'max' => 599],
+        ['level' => 'very_high', 'label' => 'مخاطرة عالية جدًا', 'min' => 300, 'max' => 499],
     ],
 
     /*

@@ -23,30 +23,30 @@ class CreditScoreExplanationService
         $onTimeRatio = $payment['on_time_ratio'] ?? null;
         if ($onTimeRatio !== null && $onTimeRatio >= 0.9) {
             $pct = (int) round($onTimeRatio * 100);
-            $factors[] = "{$pct}% of installments paid on time.";
+            $factors[] = "{$pct}% من الأقساط سُددت في موعدها.";
         }
 
         if (($payment['current_overdue_count'] ?? 0) === 0 && ($data->dueCount() ?? 0) > 0) {
-            $factors[] = 'No current overdue installments.';
+            $factors[] = 'لا توجد أقساط متأخرة حاليًا.';
         }
 
         $consecutive = (int) ($payment['consecutive_on_time'] ?? 0);
         if ($consecutive >= 3) {
-            $factors[] = "{$consecutive} consecutive on-time payments.";
+            $factors[] = "{$consecutive} دفعة متتالية في الموعد.";
         }
 
         if ($result->completedContracts >= 1) {
             $factors[] = $result->completedContracts === 1
-                ? '1 successfully completed contract.'
-                : "{$result->completedContracts} successfully completed contracts.";
+                ? 'عقد واحد اكتمل بنجاح.'
+                : "{$result->completedContracts} عقود اكتملت بنجاح.";
         }
 
         if ($result->historyMonths >= 24 && $onTimeRatio !== null && $onTimeRatio >= 0.85) {
-            $factors[] = 'Long positive payment history.';
+            $factors[] = 'تاريخ سداد إيجابي طويل.';
         }
 
         if (($payment['late_90_plus'] ?? 0) === 0 && ($payment['paid_late'] ?? 0) > 0) {
-            $factors[] = 'No serious (90+ day) delinquencies on record.';
+            $factors[] = 'لا توجد تأخيرات خطيرة (+90 يوم) في السجل.';
         }
 
         return array_values(array_unique($factors));
@@ -63,32 +63,32 @@ class CreditScoreExplanationService
 
         $lateRecent = (int) ($payment['late_8_30'] ?? 0) + (int) ($payment['late_1_7'] ?? 0);
         if ($lateRecent >= 1 && ($payment['late_ratio'] ?? 0) > 0) {
-            $factors[] = 'Recent late payments on record.';
+            $factors[] = 'تأخيرات حديثة في السداد.';
         }
 
         if (($payment['current_overdue_count'] ?? 0) > 0) {
-            $factors[] = 'Current overdue balance exists.';
+            $factors[] = 'يوجد رصيد متأخر حاليًا.';
         }
 
         if ($result->activeContracts >= 4) {
-            $factors[] = 'High number of active installment plans.';
+            $factors[] = 'عدد كبير من خطط الأقساط النشطة.';
         }
 
         if (($activity['new_contracts_90d'] ?? 0) >= 3) {
-            $factors[] = 'Recent increase in financing activity.';
+            $factors[] = 'زيادة حديثة في نشاط التمويل.';
         }
 
         if ($result->thinFile) {
-            $factors[] = 'Limited credit history (thin file).';
+            $factors[] = 'تاريخ ائتماني محدود (ملف رقيق).';
         }
 
         if (($payment['late_90_plus'] ?? 0) >= 1) {
-            $factors[] = 'Serious delinquency (90+ days past due) on record.';
+            $factors[] = 'تأخير خطير (+90 يوم) مسجل.';
         }
 
         $other = $result->metrics['other'] ?? [];
         if (($other['duplicate_identity'] ?? false) === true) {
-            $factors[] = 'Possible duplicate identity indicators within merchant records.';
+            $factors[] = 'مؤشرات محتملة لتكرار الهوية ضمن سجلاتك.';
         }
 
         return array_values(array_unique($factors));
@@ -118,31 +118,31 @@ class CreditScoreExplanationService
         $prevOnTime = (float) ($prevPayment['on_time_ratio'] ?? 0);
         $currOnTime = (float) ($currPayment['on_time_ratio'] ?? 0);
         if ($currOnTime > $prevOnTime + 0.01) {
-            $reasons[] = ['type' => 'positive', 'message' => 'More installments paid on time.'];
+            $reasons[] = ['type' => 'positive', 'message' => 'زيادة نسبة السداد في الموعد.'];
         }
 
         $prevOverdue = (float) ($previous->current_overdue_amount ?? 0);
         if ($prevOverdue > 0 && $current->currentOverdueAmount <= 0) {
-            $reasons[] = ['type' => 'positive', 'message' => 'Overdue balance cleared.'];
+            $reasons[] = ['type' => 'positive', 'message' => 'تم تصفية الرصيد المتأخر.'];
         }
 
         if ($current->currentOverdueAmount > $prevOverdue + 0.01) {
-            $reasons[] = ['type' => 'negative', 'message' => 'Outstanding overdue amount increased.'];
+            $reasons[] = ['type' => 'negative', 'message' => 'ارتفع الرصيد المتأخر المستحق.'];
         }
 
         if ($current->currentMaxDpd > (int) $previous->current_max_dpd) {
             $reasons[] = [
                 'type' => 'negative',
-                'message' => "Current days past due increased to {$current->currentMaxDpd}.",
+                'message' => "زادت أيام التأخير الحالية إلى {$current->currentMaxDpd} يومًا.",
             ];
         }
 
         if ($current->activeContracts > (int) $previous->active_contracts) {
-            $reasons[] = ['type' => 'negative', 'message' => 'New financing plan added.'];
+            $reasons[] = ['type' => 'negative', 'message' => 'تمت إضافة خطة تقسيط جديدة.'];
         }
 
         if ($prevPayment !== [] && ($prevPayment['late_90_plus'] ?? 0) > ($currPayment['late_90_plus'] ?? 0)) {
-            $reasons[] = ['type' => 'positive', 'message' => 'Older delinquency records aged out of recent weighting.'];
+            $reasons[] = ['type' => 'positive', 'message' => 'تراجع وزن تأخيرات قديمة في الحساب.'];
         }
 
         return $reasons;

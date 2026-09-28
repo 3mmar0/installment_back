@@ -131,7 +131,7 @@ test('credit score profile api returns internal assessment disclaimer', function
             ],
         ]);
 
-    expect($response->json('data.disclaimer'))->toContain('Internal Credit Assessment');
+    expect($response->json('data.disclaimer'))->toContain('تقييم ائتماني داخلي');
 
     Carbon::setTestNow();
 });

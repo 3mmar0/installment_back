@@ -51,7 +51,7 @@ class CustomerCreditScoreResource extends JsonResource
             ]),
             'source' => $this->source,
             'calculated_at' => $this->calculated_at?->toISOString(),
-            'disclaimer' => 'Internal Credit Assessment — not an official I-Score or Egyptian Credit Bureau report.',
+            'disclaimer' => 'تقييم ائتماني داخلي — ليس I-Score رسميًا ولا تقريرًا من الشركة المصرية للاستعلام الائتماني.',
         ];
     }
 
