@@ -26,7 +26,8 @@ class NotificationService
         string $title,
         string $message,
         array $data = [],
-        bool $enforceLimits = true
+        bool $enforceLimits = true,
+        bool $mirrorToAdmins = true
     ): ?Notification {
         if (! $user->receivesOperationalComms()) {
             Log::info('Skipping notification for inactive merchant', [
@@ -64,13 +65,15 @@ class NotificationService
 
         $this->queuePushNotification($notification);
 
-        $this->notifyPlatformAdmins(
-            $type,
-            $title,
-            $message,
-            $data,
-            $user
-        );
+        if ($mirrorToAdmins) {
+            $this->notifyPlatformAdmins(
+                $type,
+                $title,
+                $message,
+                $data,
+                $user
+            );
+        }
 
         return $notification;
     }
@@ -164,7 +167,7 @@ class NotificationService
         array $data = [],
         ?User $actor = null
     ): void {
-        if (in_array($type, ['payment_due', 'payment_overdue'], true)) {
+        if (in_array($type, ['payment_due', 'payment_overdue', 'system_announcement', 'mobile_app_update'], true)) {
             return;
         }
 
@@ -568,12 +571,31 @@ class NotificationService
                     $title,
                     $message,
                     $data,
-                    enforceLimits: false
+                    enforceLimits: false,
+                    mirrorToAdmins: false
                 )) {
                     $count++;
                 }
             }
         });
+
+        if ($count > 0) {
+            $typeLabel = $type === 'mobile_app_update'
+                ? 'إشعار تحديث التطبيق'
+                : 'إعلان عام';
+
+            $this->createForPlatformAdmins(
+                $type,
+                $typeLabel,
+                "تم إرسال «{$title}» إلى {$count} مستخدم.\n{$message}",
+                array_merge($data, [
+                    'is_platform_admin_digest' => true,
+                    'is_broadcast_summary' => true,
+                    'recipient_count' => $count,
+                    'original_title' => $title,
+                ])
+            );
+        }
 
         return $count;
     }

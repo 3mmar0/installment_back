@@ -55,6 +55,28 @@ it('sends an announcement only to the selected users', function () {
         ->and(Notification::query()->where('user_id', $other->id)->count())->toBe(0);
 });
 
+it('gives platform admins one broadcast summary instead of a copy per recipient', function () {
+    $admin = actingAsPlatformAdmin();
+    $first = merchantWithPlan();
+    $second = merchantWithPlan();
+
+    $this->postJson('/api/admin/system/broadcast-notification', [
+        'title' => 'تحديث التطبيق',
+        'message' => 'نزل النسخة الجديدة',
+        'type' => 'mobile_app_update',
+    ])->assertOk();
+
+    $adminNotes = Notification::query()->where('user_id', $admin->id)->get();
+
+    expect(Notification::query()->where('user_id', $first->id)->count())->toBe(1)
+        ->and(Notification::query()->where('user_id', $second->id)->count())->toBe(1)
+        ->and($adminNotes)->toHaveCount(1)
+        ->and($adminNotes->first()->data['is_broadcast_summary'])->toBeTrue()
+        ->and($adminNotes->first()->data['recipient_count'])->toBe(2)
+        ->and($adminNotes->first()->message)->toContain('2')
+        ->and($adminNotes->first()->message)->toContain('نزل النسخة الجديدة');
+});
+
 it('rejects targeted announcements that include users who are not regular users', function () {
     actingAsPlatformAdmin();
 
