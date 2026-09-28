@@ -107,7 +107,7 @@ class CreditScoreService
                 'current_max_dpd' => $result->currentMaxDpd,
                 'active_contracts' => $result->activeContracts,
                 'completed_contracts' => $result->completedContracts,
-                'history_months' => $result->historyMonths,
+                'history_months' => max(0, $result->historyMonths),
                 'thin_file' => $result->thinFile,
                 'metrics' => $result->metrics,
                 'positive_factors' => $result->positiveFactors,

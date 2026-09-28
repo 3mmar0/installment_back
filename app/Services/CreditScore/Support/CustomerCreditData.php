@@ -70,6 +70,12 @@ final class CustomerCreditData
             return 0;
         }
 
-        return (int) floor($earliest->diffInDays($this->today) / 30.4375);
+        if ($this->today->lessThan($earliest)) {
+            return 0;
+        }
+
+        $days = (int) $earliest->diffInDays($this->today);
+
+        return (int) max(0, floor($days / 30.4375));
     }
 }

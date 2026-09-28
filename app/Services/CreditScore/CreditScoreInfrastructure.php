@@ -10,9 +10,24 @@ final class CreditScoreInfrastructure
 {
     public static function schemaReady(): bool
     {
-        return Schema::hasTable('credit_score_model_versions')
-            && Schema::hasTable('customer_credit_scores')
-            && Schema::hasColumn('customers', 'current_credit_score_id');
+        try {
+            if (! Schema::hasTable('credit_score_model_versions')
+                || ! Schema::hasTable('customer_credit_scores')) {
+                return false;
+            }
+
+            if (Schema::hasColumn('customers', 'current_credit_score_id')) {
+                return true;
+            }
+
+            return in_array(
+                'current_credit_score_id',
+                Schema::getColumnListing('customers'),
+                true
+            );
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public static function schemaErrorMessage(): string
