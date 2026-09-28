@@ -32,7 +32,14 @@ class CustomerController extends Controller
             'user_id' => ['sometimes', 'integer', 'min:1'],
             'has_installments' => ['sometimes', 'nullable', 'string', 'in:yes,no'],
             'has_client_account' => ['sometimes', 'nullable', 'string', 'in:yes,no'],
-            'sort' => ['sometimes', 'nullable', 'string', 'in:newest,oldest,name_asc,name_desc'],
+            'sort' => ['sometimes', 'nullable', 'string', 'in:newest,oldest,name_asc,name_desc,score_desc,score_asc,score_change_desc,score_change_asc'],
+            'score_from' => ['sometimes', 'nullable', 'integer', 'min:300', 'max:850'],
+            'score_to' => ['sometimes', 'nullable', 'integer', 'min:300', 'max:850'],
+            'risk_level' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'confidence_level' => ['sometimes', 'nullable', 'string', 'in:HIGH,MEDIUM,LOW'],
+            'score_trend' => ['sometimes', 'nullable', 'string', 'in:improving,declining'],
+            'current_overdue' => ['sometimes', 'nullable', 'string', 'in:yes,no'],
+            'thin_file' => ['sometimes', 'nullable', 'string', 'in:yes,no'],
         ]);
 
         $customers = $this->customerService->getCustomersForUser(

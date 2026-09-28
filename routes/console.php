@@ -10,6 +10,11 @@ Schedule::job(new ProcessScheduledRemindersJob())
     ->name('payment-reminders')
     ->withoutOverlapping();
 
+Schedule::job(new \App\Jobs\DailyCreditScoreRefreshJob())
+    ->dailyAt((string) config('credit_score.recalculation.daily_at', '08:30'))
+    ->name('credit-score-refresh')
+    ->withoutOverlapping();
+
 // Drop abandoned import previews (never confirmed) and their uploaded files.
 Schedule::call(function () {
     ImportBatch::query()

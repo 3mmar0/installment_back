@@ -26,7 +26,7 @@ class LimitsHelper
         'installments' => ['from' => 0, 'to' => 1000],
         'notifications' => ['from' => 0, 'to' => 1000],
         'reports' => true,
-        'features' => ['basic_reports' => true],
+        'features' => ['basic_reports' => true, 'internal_credit_score' => false],
     ];
 
     /**

@@ -36,7 +36,7 @@ class CustomerService implements CustomerServiceInterface
         $sort = (string) ($filters['sort'] ?? 'newest');
 
         $query = ($user->canManageMerchantData() ? Customer::query() : $user->customers())
-            ->with(['user', 'clientAccount:id,name,email,phone'])
+            ->with(['user', 'clientAccount:id,name,email,phone', 'currentCreditScore'])
             ->withCount('installments');
 
         if ($user->canManageMerchantData() && ! empty($filters['user_id'])) {
@@ -55,6 +55,8 @@ class CustomerService implements CustomerServiceInterface
         } elseif ($hasInstallments === 'no') {
             $query->doesntHave('installments');
         }
+
+        $this->applyCreditScoreFilters($query, $filters);
 
         if ($search !== '') {
             $query->where(function ($builder) use ($search, $user) {
@@ -86,6 +88,10 @@ class CustomerService implements CustomerServiceInterface
             'oldest' => $query->oldest('customers.id'),
             'name_asc' => $query->orderBy('customers.name'),
             'name_desc' => $query->orderByDesc('customers.name'),
+            'score_desc' => $this->orderByCreditScore($query, 'desc'),
+            'score_asc' => $this->orderByCreditScore($query, 'asc'),
+            'score_change_desc' => $this->orderByCreditScoreChange($query, 'desc'),
+            'score_change_asc' => $this->orderByCreditScoreChange($query, 'asc'),
             default => $query->latest('customers.id'),
         };
 
@@ -309,5 +315,80 @@ class CustomerService implements CustomerServiceInterface
             'personal' => $personal,
             'on_other_linked_customers' => $onOtherLinkedCustomers,
         ];
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<Customer>  $query
+     * @param  array<string, mixed>  $filters
+     */
+    private function applyCreditScoreFilters($query, array $filters): void
+    {
+        $needsJoin = false;
+        foreach (['score_from', 'score_to', 'risk_level', 'confidence_level', 'score_trend', 'current_overdue', 'thin_file'] as $key) {
+            if (! empty($filters[$key])) {
+                $needsJoin = true;
+                break;
+            }
+        }
+
+        if ($needsJoin) {
+            $query->leftJoin('customer_credit_scores as ccs', 'customers.current_credit_score_id', '=', 'ccs.id');
+        }
+
+        if (! empty($filters['score_from'])) {
+            $query->where('ccs.score', '>=', (int) $filters['score_from']);
+        }
+        if (! empty($filters['score_to'])) {
+            $query->where('ccs.score', '<=', (int) $filters['score_to']);
+        }
+        if (! empty($filters['risk_level'])) {
+            $query->where('ccs.risk_level', (string) $filters['risk_level']);
+        }
+        if (! empty($filters['confidence_level'])) {
+            $query->where('ccs.confidence_level', (string) $filters['confidence_level']);
+        }
+        if (($filters['score_trend'] ?? '') === 'improving') {
+            $query->where('ccs.score_change', '>', 0);
+        } elseif (($filters['score_trend'] ?? '') === 'declining') {
+            $query->where('ccs.score_change', '<', 0);
+        }
+        if (($filters['current_overdue'] ?? '') === 'yes') {
+            $query->where('ccs.current_overdue_count', '>', 0);
+        } elseif (($filters['current_overdue'] ?? '') === 'no') {
+            $query->where(function ($inner) {
+                $inner->whereNull('ccs.id')->orWhere('ccs.current_overdue_count', '<=', 0);
+            });
+        }
+        if (($filters['thin_file'] ?? '') === 'yes') {
+            $query->where('ccs.thin_file', true);
+        } elseif (($filters['thin_file'] ?? '') === 'no') {
+            $query->where(function ($inner) {
+                $inner->whereNull('ccs.id')->orWhere('ccs.thin_file', false);
+            });
+        }
+
+        if ($needsJoin) {
+            $query->select('customers.*');
+        }
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<Customer>  $query
+     */
+    private function orderByCreditScore($query, string $direction): void
+    {
+        $query->leftJoin('customer_credit_scores as ccs_sort', 'customers.current_credit_score_id', '=', 'ccs_sort.id')
+            ->select('customers.*')
+            ->orderBy('ccs_sort.score', $direction);
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<Customer>  $query
+     */
+    private function orderByCreditScoreChange($query, string $direction): void
+    {
+        $query->leftJoin('customer_credit_scores as ccs_chg', 'customers.current_credit_score_id', '=', 'ccs_chg.id')
+            ->select('customers.*')
+            ->orderBy('ccs_chg.score_change', $direction);
     }
 }

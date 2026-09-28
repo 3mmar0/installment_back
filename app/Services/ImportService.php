@@ -718,6 +718,9 @@ class ImportService
                 $installment->update(['status' => 'completed']);
             }
         });
+
+        app(\App\Services\CreditScore\CreditScoreRecalculationDispatcher::class)
+            ->dispatchForCustomerId($customerId);
     }
 
     /**

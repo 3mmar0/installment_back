@@ -8,6 +8,7 @@ use App\Models\InstallmentItem;
 use App\Models\PaymentRequest;
 use App\Models\PaymentRequestLog;
 use App\Models\User;
+use App\Services\CreditScore\CreditScoreRecalculationDispatcher;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -277,6 +278,13 @@ class PaymentRequestService
                     ]
                 );
             }
+
+            $installment = $item->installment;
+            if ($installment && $installment->items()->where('status', '!=', 'paid')->count() === 0) {
+                $installment->update(['status' => 'completed']);
+            }
+
+            app(CreditScoreRecalculationDispatcher::class)->dispatchForInstallment($installment);
 
             return $paymentRequest->fresh([
                 'installment',

@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
 use App\Models\User;
+use App\Services\CreditScore\CreditScoreRecalculationDispatcher;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
@@ -106,6 +107,7 @@ class InstallmentService implements InstallmentServiceInterface
     {
         $installment = Installment::findOrFail($id);
         $owner = $installment->user;
+        $customerId = $installment->customer_id;
 
         $deleted = DB::transaction(function () use ($installment) {
             return $installment->delete();
@@ -113,6 +115,10 @@ class InstallmentService implements InstallmentServiceInterface
 
         if ($deleted && $owner && ! $owner->isOwner()) {
             LimitsHelper::decrementUsage($installment->user_id, 'installments');
+        }
+
+        if ($deleted) {
+            app(CreditScoreRecalculationDispatcher::class)->dispatchForCustomerId($customerId);
         }
 
         return $deleted;
@@ -198,6 +204,8 @@ class InstallmentService implements InstallmentServiceInterface
         // notification/email storm would spam the merchant and their customers,
         // so the caller can opt out and send a single summary instead.
         if (! $notify) {
+            app(CreditScoreRecalculationDispatcher::class)->dispatchForCustomerId($installment->customer_id);
+
             return $installment;
         }
 
@@ -232,6 +240,8 @@ class InstallmentService implements InstallmentServiceInterface
                 'error' => $e->getMessage(),
             ]);
         }
+
+        app(CreditScoreRecalculationDispatcher::class)->dispatchForCustomerId($installment->customer_id);
 
         return $installment;
     }
@@ -297,6 +307,8 @@ class InstallmentService implements InstallmentServiceInterface
                 'error' => $e->getMessage(),
             ]);
         }
+
+        app(CreditScoreRecalculationDispatcher::class)->dispatchForInstallmentItem($item);
 
         return $item;
     }

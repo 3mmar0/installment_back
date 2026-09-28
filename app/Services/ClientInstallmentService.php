@@ -6,6 +6,7 @@ use App\Exceptions\PaymentException;
 use App\Models\ClientAccount;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
+use App\Services\CreditScore\CreditScoreRecalculationDispatcher;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -138,7 +139,7 @@ class ClientInstallmentService
 
         $paidAmount = round((float) ($data['paid_amount'] ?? $item->amount), 2);
 
-        return DB::transaction(function () use ($item, $data, $paidAmount, $installment) {
+        $updated = DB::transaction(function () use ($item, $data, $paidAmount, $installment) {
             $locked = InstallmentItem::whereKey($item->getKey())->lockForUpdate()->firstOrFail();
 
             if ($locked->status === 'paid') {
@@ -170,6 +171,10 @@ class ClientInstallmentService
 
             return $locked->refresh();
         });
+
+        app(CreditScoreRecalculationDispatcher::class)->dispatchForCustomerId($installment->customer_id);
+
+        return $updated;
     }
 
     public function customerIdsForClient(ClientAccount $client): Collection

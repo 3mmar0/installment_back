@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'track.activity' => \App\Http\Middleware\TrackUserActivity::class,
             'vendor' => \App\Http\Middleware\EnsureVendorAccount::class,
             'client' => \App\Http\Middleware\EnsureClientAccount::class,
+            'credit_score' => \App\Http\Middleware\EnsureInternalCreditScoreFeature::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

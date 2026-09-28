@@ -39,6 +39,10 @@ class CustomerResource extends JsonResource
             'user' => new UserResource($this->whenLoaded('user')),
             'installments_count' => $this->whenCounted('installments'),
             'installments' => InstallmentResource::collection($this->whenLoaded('installments')),
+            'credit_score' => $this->when(
+                $this->relationLoaded('currentCreditScore') && $this->currentCreditScore,
+                fn () => new CustomerCreditScoreSummaryResource($this->currentCreditScore)
+            ),
             'client_account_installments' => InstallmentResource::collection(
                 $this->whenLoaded('clientAccountInstallments')
             ),

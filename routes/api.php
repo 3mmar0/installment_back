@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Client\ClientNotificationController;
 use App\Http\Controllers\Api\Client\ClientPaymentRequestController;
 use App\Http\Controllers\Api\Client\ClientPortalController;
 use App\Http\Controllers\Api\ComplaintController;
+use App\Http\Controllers\Api\CreditScoreController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DeviceTokenController;
 use App\Http\Controllers\Api\ExportReportController;
@@ -209,6 +210,15 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::post('payment-request-approve/{id}', 'approve');
             Route::post('payment-request-reject/{id}', 'reject');
             Route::get('payment-request-attachment/{id}', 'attachment');
+        });
+
+        Route::middleware('credit_score')->controller(CreditScoreController::class)->group(function () {
+            Route::get('credit-score/analytics', 'analyticsDashboard');
+            Route::get('credit-score/reports', 'reportList');
+            Route::get('credit-score/customer/{customerId}', 'profile');
+            Route::get('credit-score/customer/{customerId}/history', 'history');
+            Route::post('credit-score/customer/{customerId}/recalculate', 'recalculate');
+            Route::match(['get', 'post'], 'credit-score/customer/{customerId}/export-pdf', 'exportPdf');
         });
     });
 

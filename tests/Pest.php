@@ -60,7 +60,7 @@ function merchantWithPlan(array $limits = []): App\Models\User
         'installments' => ['from' => 0, 'to' => 100],
         'notifications' => ['from' => 0, 'to' => 100],
         'reports' => true,
-        'features' => ['basic_reports' => true],
+        'features' => ['basic_reports' => true, 'internal_credit_score' => true],
         'status' => 'active',
     ], $limits));
 
