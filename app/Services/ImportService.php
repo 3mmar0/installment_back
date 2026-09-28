@@ -25,7 +25,7 @@ use PhpOffice\PhpSpreadsheet\Style\Protection;
 class ImportService
 {
     /** Bump when the template layout changes; older files are rejected. */
-    public const TEMPLATE_VERSION = 3;
+    public const TEMPLATE_VERSION = 4;
 
     /** Import types. */
     public const TYPE_CUSTOMERS = 'customers';
@@ -59,6 +59,7 @@ class ImportService
         ['key' => 'email', 'label' => 'البريد الإلكتروني'],
         ['key' => 'address', 'label' => 'العنوان'],
         ['key' => 'job', 'label' => 'الوظيفة'],
+        ['key' => 'monthly_salary', 'label' => 'المرتب الشهري (ج.م)'],
         ['key' => 'customer_notes', 'label' => 'ملاحظات العميل'],
         ['key' => 'guarantor_name', 'label' => 'اسم الضامن'],
         ['key' => 'guarantor_national_id', 'label' => 'الرقم القومي للضامن'],
@@ -98,6 +99,7 @@ class ImportService
         'email' => 'ahmed@example.com',
         'address' => 'القاهرة - مصر الجديدة',
         'job' => 'محاسب',
+        'monthly_salary' => 12000,
         'customer_notes' => 'صف مثال — احذفه أو استبدله ببياناتك',
         'guarantor_name' => 'محمد ضامن',
         'guarantor_national_id' => '28501011234567',
@@ -370,6 +372,7 @@ class ImportService
                         'national_id' => $record['customer']['national_id'],
                         'address' => $record['customer']['address'],
                         'job' => $record['customer']['job'],
+                        'monthly_salary' => $record['customer']['monthly_salary'],
                         'notes' => $record['customer']['notes'],
                         'guarantor_name' => $record['customer']['guarantor_name'],
                         'guarantor_national_id' => $record['customer']['guarantor_national_id'],
@@ -740,6 +743,7 @@ class ImportService
             'national_id' => $row['national_id'] ?? null,
             'address' => $row['address'],
             'job' => $row['job'] ?? null,
+            'monthly_salary' => $row['monthly_salary'],
             'customer_notes' => $row['customer_notes'],
             'guarantor_name' => $row['guarantor_name'] ?? null,
             'guarantor_national_id' => $row['guarantor_national_id'] ?? null,
@@ -753,6 +757,7 @@ class ImportService
             'national_id' => ['required_without:phone', 'nullable', 'string', 'max:20'],
             'address' => ['nullable', 'string', 'max:500'],
             'job' => ['nullable', 'string', 'max:255'],
+            'monthly_salary' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'customer_notes' => ['nullable', 'string', 'max:2000'],
             'guarantor_name' => ['nullable', 'string', 'max:255'],
             'guarantor_national_id' => ['nullable', 'string', 'max:20'],
@@ -823,6 +828,7 @@ class ImportService
                 'national_id' => $row['national_id'] ?? null,
                 'address' => $row['address'],
                 'job' => $row['job'] ?? null,
+                'monthly_salary' => $row['monthly_salary'] !== null ? (float) $row['monthly_salary'] : null,
                 'notes' => $row['customer_notes'],
                 'guarantor_name' => $row['guarantor_name'] ?? null,
                 'guarantor_national_id' => $row['guarantor_national_id'] ?? null,
@@ -936,6 +942,7 @@ class ImportService
             'email' => $this->str($raw['email']),
             'address' => $this->str($raw['address']),
             'job' => $this->str($raw['job'] ?? null),
+            'monthly_salary' => $this->numeric($raw['monthly_salary'] ?? null),
             'customer_notes' => $this->str($raw['customer_notes']),
             'guarantor_name' => $this->str($raw['guarantor_name'] ?? null),
             'guarantor_national_id' => $this->str($raw['guarantor_national_id'] ?? null),
@@ -958,6 +965,7 @@ class ImportService
         $rangeEnd = self::MAX_ROWS + 1;
 
         $amount = $this->letterForKey($columns, 'total_amount');
+        $salary = $this->letterForKey($columns, 'monthly_salary');
         $months = $this->letterForKey($columns, 'months');
         $paid = $this->letterForKey($columns, 'paid_count');
 
@@ -972,6 +980,21 @@ class ImportService
                 $v->setErrorTitle('قيمة غير صالحة');
                 $v->setError('أدخل مبلغاً أكبر من صفر.');
                 $v->setOperator(DataValidation::OPERATOR_GREATERTHAN);
+                $v->setFormula1('0');
+            }
+        }
+
+        if ($salary !== null) {
+            for ($row = 2; $row <= $rangeEnd; $row++) {
+                $v = $sheet->getCell($salary.$row)->getDataValidation();
+                $v->setType(DataValidation::TYPE_DECIMAL);
+                $v->setErrorStyle(DataValidation::STYLE_STOP);
+                $v->setAllowBlank(true);
+                $v->setShowInputMessage(true);
+                $v->setShowErrorMessage(true);
+                $v->setErrorTitle('مرتب غير صالح');
+                $v->setError('أدخل مرتباً شهرياً صفراً أو أكثر.');
+                $v->setOperator(DataValidation::OPERATOR_GREATERTHANOREQUAL);
                 $v->setFormula1('0');
             }
         }
@@ -1297,6 +1320,7 @@ class ImportService
             'national_id' => 'الرقم القومي',
             'address' => 'العنوان',
             'job' => 'الوظيفة',
+            'monthly_salary' => 'المرتب الشهري',
             'customer_notes' => 'ملاحظات العميل',
             'guarantor_name' => 'اسم الضامن',
             'guarantor_national_id' => 'الرقم القومي للضامن',

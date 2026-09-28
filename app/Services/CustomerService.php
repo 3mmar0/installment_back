@@ -156,6 +156,9 @@ class CustomerService implements CustomerServiceInterface
                 'national_id' => $nationalId,
                 'address' => $data['address'] ?? null,
                 'job' => $data['job'] ?? null,
+                'monthly_salary' => array_key_exists('monthly_salary', $data)
+                    ? $data['monthly_salary']
+                    : null,
                 'notes' => $data['notes'] ?? null,
                 'guarantor_name' => $data['guarantor_name'] ?? null,
                 'guarantor_national_id' => NationalIdHelper::normalize($data['guarantor_national_id'] ?? null),

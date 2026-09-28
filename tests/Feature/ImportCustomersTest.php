@@ -27,6 +27,7 @@ function importRow(int $line, array $overrides = []): array
         'email' => null,
         'address' => null,
         'job' => null,
+        'monthly_salary' => null,
         'customer_notes' => null,
         'guarantor_name' => null,
         'guarantor_national_id' => null,
@@ -57,7 +58,7 @@ function buildImportXlsx(array $rows, bool $withVersion = true): string
     }
 
     $columns = [
-        'name', 'national_id', 'phone', 'email', 'address', 'job', 'customer_notes',
+        'name', 'national_id', 'phone', 'email', 'address', 'job', 'monthly_salary', 'customer_notes',
         'guarantor_name', 'guarantor_national_id', 'guarantor_phone',
         'installment_name', 'total_amount', 'months', 'start_date', 'paid_count', 'installment_notes',
     ];
