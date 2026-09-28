@@ -50,3 +50,18 @@ it('still rejects an invalid email on update', function () {
         ->assertStatus(422)
         ->assertJsonValidationErrors('email');
 });
+
+it('accepts an empty monthly salary string on update', function () {
+    $merchant = actingAsMerchant();
+
+    $customer = Customer::factory()->forMerchant($merchant)->create([
+        'monthly_salary' => 12000,
+    ]);
+
+    $this->putJson("/api/customer-update/{$customer->id}", [
+        'name' => $customer->name,
+        'monthly_salary' => '',
+    ])->assertOk();
+
+    expect($customer->fresh()->monthly_salary)->toBeNull();
+});

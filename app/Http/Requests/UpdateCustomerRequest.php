@@ -20,6 +20,7 @@ class UpdateCustomerRequest extends FormRequest
             'national_id',
             'address',
             'job',
+            'monthly_salary',
             'notes',
             'guarantor_name',
             'guarantor_national_id',
