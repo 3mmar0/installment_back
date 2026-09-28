@@ -21,6 +21,7 @@ class Customer extends Model
         'national_id',
         'address',
         'job',
+        'monthly_salary',
         'notes',
         'guarantor_name',
         'guarantor_national_id',
@@ -31,6 +32,7 @@ class Customer extends Model
 
     protected $casts = [
         'credit_score_dirty_at' => 'datetime',
+        'monthly_salary' => 'decimal:2',
     ];
 
     public function user()

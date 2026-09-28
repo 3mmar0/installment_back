@@ -111,6 +111,9 @@ class CustomerCreditDataCollector
             guarantorPresent: $this->guarantorPresent($customer),
             hasClientAccount: $customer->client_account_id !== null,
             duplicateIdentity: $this->hasDuplicateIdentity($customer),
+            monthlySalary: $customer->monthly_salary !== null
+                ? (float) $customer->monthly_salary
+                : null,
             today: $today,
             records: $records,
             contracts: $contracts,

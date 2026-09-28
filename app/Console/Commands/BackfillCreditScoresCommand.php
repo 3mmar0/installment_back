@@ -21,7 +21,9 @@ class BackfillCreditScoresCommand extends Command
         $chunk = max(50, (int) $this->option('chunk'));
         $userId = $this->option('user');
 
-        $query = Customer::query()->whereNull('current_credit_score_id');
+        $query = Customer::query()
+            ->whereNull('current_credit_score_id')
+            ->whereHas('installments');
         if ($userId !== null) {
             $query->where('user_id', (int) $userId);
         }

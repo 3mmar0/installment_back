@@ -51,6 +51,7 @@ class UpdateCustomerRequest extends FormRequest
             'national_id' => array_merge(['sometimes'], $this->nationalIdRules()),
             'address' => ['sometimes', 'nullable', 'string', 'max:500'],
             'job' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'monthly_salary' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'notes' => ['sometimes', 'nullable', 'string'],
             'guarantor_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'guarantor_national_id' => array_merge(['sometimes'], $this->nationalIdRules()),

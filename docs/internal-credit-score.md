@@ -32,7 +32,13 @@ This system calculates an **Internal Credit Score** on a **300–850** display s
 
 - **Event-driven:** installment create/pay/delete, payment request approval, import, linked personal pay → `RecalculateCustomerCreditScoreJob`.
 - **Scheduled:** daily refresh at `credit_score.recalculation.daily_at` (default 08:30 UTC) for dirty customers and due-date crossings.
-- **Backfill:** `php artisan credit-score:backfill`
+- **Backfill:** `php artisan credit-score:backfill` (customers **with** installments only)
+
+## Installment eligibility & salary
+
+- Optional field `customers.monthly_salary` (EGP) on create/update customer APIs.
+- `GET /api/credit-score/customer/{id}` includes `installment_eligibility`: estimated monthly obligation, DTI vs `credit_score.affordability.max_dti_ratio` (default 40%), `can_accept_installment` (true/false/null), Arabic `reasons`. This is a **merchant decision aid**, not bureau data.
+- **No installments → no score:** recalculation clears `current_credit_score_id`; profile returns `score: null` and `score_applicable: false`. Historical snapshots may remain in `customer_credit_scores` but are not surfaced as the current score.
 
 ## Access control
 
@@ -51,9 +57,11 @@ This system calculates an **Internal Credit Score** on a **300–850** display s
 
 1. **ستة مكونات** (كل منها 0–100): سجل السداد (35%)، العبء المالي (25%)، تاريخ الائتمان (15%)، النشاط (10%)، انتظام السداد (10%)، مخاطر أخرى (5%).
 2. أي مكون غير متاح يُستبعد ويُعاد توزيع وزنه.
-3. **ملف رقيق:** عميل جديد تُمزج درجته مع خط أساس (~620) حتى يكتمل التاريخ.
-4. **العرض:** `300 + (المجموع المرجّح ÷ 100 × 550)` مع التقريب والحد الأقصى/الأدنى.
-5. **DPD:** السداد في الموعد = 0؛ التأخير بالأيام؛ استحقاق اليوم لا يُعد متأخرًا حتى نهاية اليوم.
+3. **بدون أقساط:** لا يُعرض Score ولا يُحسب snapshot جديد.
+4. **المرتب:** أدخله في بيانات العميل لتقدير «هل يمكن قبول قسط جديد» (نسبة الالتزام/المرتب).
+5. **ملف رقيق:** عميل له أقساط لكن تاريخ محدود تُمزج درجته مع خط أساس (~620) حتى يكتمل التاريخ.
+6. **العرض:** `300 + (المجموع المرجّح ÷ 100 × 550)` مع التقريب والحد الأقصى/الأدنى.
+7. **DPD:** السداد في الموعد = 0؛ التأخير بالأيام؛ استحقاق اليوم لا يُعد متأخرًا حتى نهاية اليوم.
 
 **أين أرى الشرح في الواجهة؟**  
 الويب: «تحليلات التقييم» و«ملف التقييم الائتماني للعميل» → قسم «كيف يُحسب…».  

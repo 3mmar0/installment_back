@@ -25,6 +25,7 @@ final class CustomerCreditData
         public readonly bool $guarantorPresent,
         public readonly bool $hasClientAccount,
         public readonly bool $duplicateIdentity,
+        public readonly ?float $monthlySalary,
         public readonly CarbonImmutable $today,
         public readonly array $records,
         public readonly array $contracts,

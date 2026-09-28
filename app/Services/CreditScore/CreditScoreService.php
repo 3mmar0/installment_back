@@ -2,6 +2,7 @@
 
 namespace App\Services\CreditScore;
 
+use App\Models\Installment;
 use App\Models\CreditScoreAuditLog;
 use App\Models\CreditScoreModelVersion;
 use App\Models\Customer;
@@ -60,7 +61,13 @@ class CreditScoreService
         ?User $actor = null,
         bool $manual = false,
         string $source = 'actual'
-    ): CustomerCreditScore {
+    ): ?CustomerCreditScore {
+        if (! Installment::query()->where('customer_id', $customer->id)->exists()) {
+            $this->clearCurrentScore($customer);
+
+            return null;
+        }
+
         $modelVersion = $this->ensureActiveModelVersion();
         $config = CreditScoreConfig::fromArray($modelVersion->configuration ?? (array) config('credit_score'));
 
@@ -146,8 +153,24 @@ class CreditScoreService
         return $snapshot->fresh(['modelVersion']);
     }
 
-    public function preview(Customer $customer): CreditScoreResult
+    public function clearCurrentScore(Customer $customer): void
     {
+        if ($customer->current_credit_score_id === null && $customer->credit_score_dirty_at === null) {
+            return;
+        }
+
+        $customer->forceFill([
+            'current_credit_score_id' => null,
+            'credit_score_dirty_at' => null,
+        ])->saveQuietly();
+    }
+
+    public function preview(Customer $customer): ?CreditScoreResult
+    {
+        if (! Installment::query()->where('customer_id', $customer->id)->exists()) {
+            return null;
+        }
+
         $modelVersion = $this->ensureActiveModelVersion();
         $config = CreditScoreConfig::fromArray($modelVersion->configuration ?? (array) config('credit_score'));
         $data = $this->collector->collect($customer, $config);

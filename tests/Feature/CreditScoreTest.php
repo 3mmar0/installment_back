@@ -23,20 +23,36 @@ function createMerchantInstallment(Customer $customer, array $overrides = []): I
     ], $overrides), $user, notify: false);
 }
 
-test('new customer without history receives neutral baseline score near 620', function () {
+test('customer without installments has no recalculated score snapshot', function () {
     Carbon::setTestNow('2026-09-28 12:00:00');
 
     $user = merchantWithPlan();
     $customer = Customer::factory()->forMerchant($user)->create();
 
-    $config = CreditScoreConfig::fromLiveConfig();
-    $data = (new CustomerCreditDataCollector)->collect($customer, $config);
-    $result = (new CreditScoreCalculator($config))->calculate($data);
+    $service = app(\App\Services\CreditScore\CreditScoreService::class);
+    $snapshot = $service->recalculate($customer);
 
-    expect($result->score)->toBeGreaterThanOrEqual(600)
-        ->and($result->score)->toBeLessThanOrEqual(650)
-        ->and($result->confidenceLevel)->toBe('LOW')
-        ->and($result->thinFile)->toBeTrue();
+    expect($snapshot)->toBeNull()
+        ->and($customer->fresh()->current_credit_score_id)->toBeNull();
+
+    Carbon::setTestNow();
+});
+
+test('profile api returns installment eligibility and null score without installments', function () {
+    Carbon::setTestNow('2026-09-28 12:00:00');
+
+    $user = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($user)->create([
+        'monthly_salary' => 15000,
+    ]);
+
+    $response = $this->getJson("/api/credit-score/customer/{$customer->id}");
+
+    $response->assertOk()
+        ->assertJsonPath('data.score', null)
+        ->assertJsonPath('data.score_applicable', false)
+        ->assertJsonPath('data.installment_eligibility.can_accept_installment', true)
+        ->assertJsonPath('data.installment_eligibility.monthly_salary', 15000);
 
     Carbon::setTestNow();
 });
@@ -128,6 +144,7 @@ test('credit score profile api returns internal assessment disclaimer', function
                 'risk_level',
                 'confidence_level',
                 'disclaimer',
+                'installment_eligibility',
             ],
         ]);
 

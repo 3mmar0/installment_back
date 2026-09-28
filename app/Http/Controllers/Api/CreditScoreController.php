@@ -10,6 +10,7 @@ use App\Models\CustomerCreditScore;
 use App\Services\CreditScore\CreditScoreAnalyticsService;
 use App\Services\CreditScore\CreditScoreInfrastructure;
 use App\Services\CreditScore\CreditScoreService;
+use App\Services\CreditScore\InstallmentAffordabilityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Mpdf\Mpdf;
@@ -22,6 +23,7 @@ class CreditScoreController extends Controller
     public function __construct(
         private readonly CreditScoreService $creditScoreService,
         private readonly CreditScoreAnalyticsService $analyticsService,
+        private readonly InstallmentAffordabilityService $affordability,
     ) {
     }
 
@@ -35,6 +37,16 @@ class CreditScoreController extends Controller
         }
 
         $customer = $this->findAuthorizedCustomer($customerId, $request);
+        $eligibility = $this->affordability->assess($customer);
+
+        if (! $eligibility['has_installment_history']) {
+            $this->creditScoreService->clearCurrentScore($customer);
+
+            return $this->successResponse(
+                $this->profilePayloadWithoutScore($eligibility),
+                'لا يوجد تقييم ائتماني بدون سجل أقساط — تم جلب تقدير القسط فقط'
+            );
+        }
 
         try {
             $snapshot = $this->resolveCustomerSnapshot($customer);
@@ -47,10 +59,21 @@ class CreditScoreController extends Controller
             );
         }
 
+        if ($snapshot === null) {
+            return $this->successResponse(
+                $this->profilePayloadWithoutScore($eligibility),
+                'تعذر حساب التقييم — تم جلب تقدير القسط'
+            );
+        }
+
         $snapshot->loadMissing('modelVersion');
 
+        $payload = (new CustomerCreditScoreResource($snapshot))->resolve();
+        $payload['score_applicable'] = true;
+        $payload['installment_eligibility'] = $eligibility;
+
         return $this->successResponse(
-            new CustomerCreditScoreResource($snapshot),
+            $payload,
             'تم جلب ملف التقييم الائتماني للعميل بنجاح'
         );
     }
@@ -105,10 +128,23 @@ class CreditScoreController extends Controller
             );
         }
 
+        $eligibility = $this->affordability->assess($customer);
+
+        if ($snapshot === null) {
+            return $this->successResponse(
+                $this->profilePayloadWithoutScore($eligibility),
+                'لا يوجد تقييم بدون أقساط — تم تحديث تقدير القسط'
+            );
+        }
+
         $snapshot->loadMissing('modelVersion');
 
+        $payload = (new CustomerCreditScoreResource($snapshot))->resolve();
+        $payload['score_applicable'] = true;
+        $payload['installment_eligibility'] = $eligibility;
+
         return $this->successResponse(
-            new CustomerCreditScoreResource($snapshot),
+            $payload,
             'تم إعادة حساب التقييم الائتماني الداخلي بنجاح'
         );
     }
@@ -172,7 +208,15 @@ class CreditScoreController extends Controller
     public function exportPdf(int $customerId, Request $request): JsonResponse|\Illuminate\Http\Response
     {
         $customer = $this->findAuthorizedCustomer($customerId, $request);
+
+        if (! $customer->installments()->exists()) {
+            return $this->errorResponse('لا يمكن إنشاء تقرير بدون سجل أقساط للعميل', 422);
+        }
+
         $snapshot = $customer->currentCreditScore ?? $this->creditScoreService->recalculate($customer);
+        if ($snapshot === null) {
+            return $this->errorResponse('لا يوجد تقييم محسوب لهذا العميل', 422);
+        }
         $snapshot->loadMissing('modelVersion');
 
         $resource = (new CustomerCreditScoreResource($snapshot))->resolve();
@@ -212,8 +256,14 @@ class CreditScoreController extends Controller
         return $customer;
     }
 
-    private function resolveCustomerSnapshot(Customer $customer): CustomerCreditScore
+    private function resolveCustomerSnapshot(Customer $customer): ?CustomerCreditScore
     {
+        if (! $customer->installments()->exists()) {
+            $this->creditScoreService->clearCurrentScore($customer);
+
+            return null;
+        }
+
         $snapshot = $customer->currentCreditScore;
 
         if ($snapshot === null && $customer->current_credit_score_id !== null) {
@@ -237,6 +287,22 @@ class CreditScoreController extends Controller
         }
 
         return $this->creditScoreService->recalculate($customer);
+    }
+
+    /**
+     * @param  array<string, mixed>  $eligibility
+     * @return array<string, mixed>
+     */
+    private function profilePayloadWithoutScore(array $eligibility): array
+    {
+        return [
+            'score' => null,
+            'score_applicable' => false,
+            'score_max' => (int) config('credit_score.display.max', 850),
+            'score_min' => (int) config('credit_score.display.min', 300),
+            'installment_eligibility' => $eligibility,
+            'disclaimer' => 'تقييم ائتماني داخلي — ليس I-Score رسميًا. لا يُعرض Score إلا بعد وجود أقساط مسجّلة.',
+        ];
     }
 
     /**

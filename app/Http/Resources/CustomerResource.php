@@ -22,6 +22,7 @@ class CustomerResource extends JsonResource
             'national_id' => $this->national_id,
             'address' => $this->address,
             'job' => $this->job,
+            'monthly_salary' => $this->monthly_salary !== null ? (float) $this->monthly_salary : null,
             'notes' => $this->notes,
             'guarantor_name' => $this->guarantor_name,
             'guarantor_national_id' => $this->guarantor_national_id,
@@ -40,7 +41,9 @@ class CustomerResource extends JsonResource
             'installments_count' => $this->whenCounted('installments'),
             'installments' => InstallmentResource::collection($this->whenLoaded('installments')),
             'credit_score' => $this->when(
-                $this->relationLoaded('currentCreditScore') && $this->currentCreditScore,
+                $this->scoreApplicableForDisplay()
+                    && $this->relationLoaded('currentCreditScore')
+                    && $this->currentCreditScore,
                 fn () => new CustomerCreditScoreSummaryResource($this->currentCreditScore)
             ),
             'client_account_installments' => InstallmentResource::collection(
@@ -49,5 +52,18 @@ class CustomerResource extends JsonResource
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];
+    }
+
+    private function scoreApplicableForDisplay(): bool
+    {
+        if ($this->installments_count !== null) {
+            return (int) $this->installments_count > 0;
+        }
+
+        if ($this->relationLoaded('installments')) {
+            return $this->installments->isNotEmpty();
+        }
+
+        return true;
     }
 }

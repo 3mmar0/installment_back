@@ -71,11 +71,19 @@ class FinancialBurdenAnalyzer
             $excessContracts * $this->config->float('financial_burden.active_contract_penalty', 4.0)
         );
 
+        $monthlyIncome = $data->monthlySalary;
+        $monthlyObligation = $this->estimatedMonthlyObligation($data, $outstanding, $overdue);
+        $dtiPenalty = $this->dtiPenalty($monthlyIncome, $monthlyObligation);
+
         $score = Math::clamp(
-            $this->config->float('financial_burden.start', 100.0) - $overduePenalty - $contractPenalty,
+            $this->config->float('financial_burden.start', 100.0) - $overduePenalty - $contractPenalty - $dtiPenalty,
             $this->config->float('financial_burden.min', 0.0),
             $this->config->float('financial_burden.max', 100.0)
         );
+
+        $dti = ($monthlyIncome !== null && $monthlyIncome > 0)
+            ? round($monthlyObligation / $monthlyIncome, 4)
+            : null;
 
         $metrics = [
             'current_outstanding' => round($outstanding, 2),
@@ -83,14 +91,61 @@ class FinancialBurdenAnalyzer
             'upcoming_amount' => round($upcomingCents / 100, 2),
             'overdue_ratio' => round($overdueRatio, 4),
             'active_contracts' => $activeContracts,
-            // Not available in this system; never assumed.
-            'dti' => null,
+            'dti' => $dti,
+            'estimated_monthly_obligation' => round($monthlyObligation, 2),
             'utilization' => 'not_available',
-            'monthly_income' => null,
+            'monthly_income' => $monthlyIncome !== null ? round($monthlyIncome, 2) : null,
             'credit_limit' => null,
         ];
 
         return ComponentResult::score($score, $metrics);
+    }
+
+    private function estimatedMonthlyObligation(CustomerCreditData $data, float $outstanding, float $overdue): float
+    {
+        if ($outstanding <= 0) {
+            return 0.0;
+        }
+
+        $horizon = $data->today->addDays(30);
+        $dueSoon = 0.0;
+        $unpaidCount = 0;
+
+        foreach ($data->records as $record) {
+            if ($record->isPaid || ! $this->isActivePlan($record)) {
+                continue;
+            }
+            $unpaidCount++;
+            if ($record->scored->isOverdueNow) {
+                continue;
+            }
+            $due = $record->scored->dueDate ?? null;
+            if ($due !== null && $due->lessThanOrEqualTo($horizon)) {
+                $dueSoon += $record->amount;
+            }
+        }
+
+        $monthly = $overdue + $dueSoon;
+        if ($monthly > 0) {
+            return $monthly;
+        }
+
+        return $unpaidCount > 0 ? $outstanding / $unpaidCount : $outstanding;
+    }
+
+    private function dtiPenalty(?float $monthlyIncome, float $monthlyObligation): float
+    {
+        if ($monthlyIncome === null || $monthlyIncome <= 0 || $monthlyObligation <= 0) {
+            return 0.0;
+        }
+
+        $dti = $monthlyObligation / $monthlyIncome;
+        $max = (float) config('credit_score.affordability.max_dti_ratio', 0.40);
+        if ($dti <= $max) {
+            return 0.0;
+        }
+
+        return min(12.0, ($dti - $max) * 40.0);
     }
 
     private function isActivePlan(CreditItemRecord $record): bool

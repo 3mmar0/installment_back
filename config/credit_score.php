@@ -141,6 +141,16 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Installment affordability (merchant decision aid — not I-Score)
+    |--------------------------------------------------------------------------
+    */
+    'affordability' => [
+        'max_dti_ratio' => 0.40,
+        'block_when_overdue' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Credit History component (15%)
     |--------------------------------------------------------------------------
     | score = base + (100 - base) * saturate(history_months / full_months).
