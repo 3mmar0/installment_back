@@ -18,11 +18,13 @@ it('stores optional national id and guarantor fields', function () {
         'name' => 'أحمد علي',
         'phone' => '01011111111',
         'national_id' => '29001011234567',
+        'job' => 'محاسب',
         'guarantor_name' => 'محمد ضامن',
         'guarantor_national_id' => '28501011234567',
         'guarantor_phone' => '01022222222',
     ])->assertCreated()
         ->assertJsonPath('data.national_id', '29001011234567')
+        ->assertJsonPath('data.job', 'محاسب')
         ->assertJsonPath('data.guarantor_name', 'محمد ضامن')
         ->assertJsonPath('data.guarantor_national_id', '28501011234567')
         ->assertJsonPath('data.guarantor_phone', '01022222222');

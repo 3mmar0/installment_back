@@ -18,6 +18,7 @@ class Customer extends Model
         'phone_normalized',
         'national_id',
         'address',
+        'job',
         'notes',
         'guarantor_name',
         'guarantor_national_id',

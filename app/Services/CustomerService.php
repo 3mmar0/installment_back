@@ -69,7 +69,8 @@ class CustomerService implements CustomerServiceInterface
                     ->orWhere('customers.national_id', 'like', "%{$search}%")
                     ->orWhere('customers.guarantor_name', 'like', "%{$search}%")
                     ->orWhere('customers.guarantor_phone', 'like', "%{$search}%")
-                    ->orWhere('customers.address', 'like', "%{$search}%");
+                    ->orWhere('customers.address', 'like', "%{$search}%")
+                    ->orWhere('customers.job', 'like', "%{$search}%");
 
                 if ($user->canManageMerchantData()) {
                     $builder->orWhereHas('user', function ($userQuery) use ($search) {
@@ -148,6 +149,7 @@ class CustomerService implements CustomerServiceInterface
                 'phone_normalized' => PhoneHelper::normalize($phone),
                 'national_id' => $nationalId,
                 'address' => $data['address'] ?? null,
+                'job' => $data['job'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'guarantor_name' => $data['guarantor_name'] ?? null,
                 'guarantor_national_id' => NationalIdHelper::normalize($data['guarantor_national_id'] ?? null),

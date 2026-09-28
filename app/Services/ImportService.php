@@ -25,7 +25,7 @@ use PhpOffice\PhpSpreadsheet\Style\Protection;
 class ImportService
 {
     /** Bump when the template layout changes; older files are rejected. */
-    public const TEMPLATE_VERSION = 2;
+    public const TEMPLATE_VERSION = 3;
 
     /** Import types. */
     public const TYPE_CUSTOMERS = 'customers';
@@ -58,6 +58,7 @@ class ImportService
         ['key' => 'phone', 'label' => 'رقم الهاتف'],
         ['key' => 'email', 'label' => 'البريد الإلكتروني'],
         ['key' => 'address', 'label' => 'العنوان'],
+        ['key' => 'job', 'label' => 'الوظيفة'],
         ['key' => 'customer_notes', 'label' => 'ملاحظات العميل'],
         ['key' => 'guarantor_name', 'label' => 'اسم الضامن'],
         ['key' => 'guarantor_national_id', 'label' => 'الرقم القومي للضامن'],
@@ -96,6 +97,7 @@ class ImportService
         'phone' => '01000000000',
         'email' => 'ahmed@example.com',
         'address' => 'القاهرة - مصر الجديدة',
+        'job' => 'محاسب',
         'customer_notes' => 'صف مثال — احذفه أو استبدله ببياناتك',
         'guarantor_name' => 'محمد ضامن',
         'guarantor_national_id' => '28501011234567',
@@ -367,6 +369,7 @@ class ImportService
                         'phone' => $record['customer']['phone'],
                         'national_id' => $record['customer']['national_id'],
                         'address' => $record['customer']['address'],
+                        'job' => $record['customer']['job'],
                         'notes' => $record['customer']['notes'],
                         'guarantor_name' => $record['customer']['guarantor_name'],
                         'guarantor_national_id' => $record['customer']['guarantor_national_id'],
@@ -733,6 +736,7 @@ class ImportService
             'phone' => $row['phone'],
             'national_id' => $row['national_id'] ?? null,
             'address' => $row['address'],
+            'job' => $row['job'] ?? null,
             'customer_notes' => $row['customer_notes'],
             'guarantor_name' => $row['guarantor_name'] ?? null,
             'guarantor_national_id' => $row['guarantor_national_id'] ?? null,
@@ -745,6 +749,7 @@ class ImportService
             'phone' => ['required_without:national_id', 'nullable', 'string', 'max:50'],
             'national_id' => ['required_without:phone', 'nullable', 'string', 'max:20'],
             'address' => ['nullable', 'string', 'max:500'],
+            'job' => ['nullable', 'string', 'max:255'],
             'customer_notes' => ['nullable', 'string', 'max:2000'],
             'guarantor_name' => ['nullable', 'string', 'max:255'],
             'guarantor_national_id' => ['nullable', 'string', 'max:20'],
@@ -814,6 +819,7 @@ class ImportService
                 'phone' => $row['phone'],
                 'national_id' => $row['national_id'] ?? null,
                 'address' => $row['address'],
+                'job' => $row['job'] ?? null,
                 'notes' => $row['customer_notes'],
                 'guarantor_name' => $row['guarantor_name'] ?? null,
                 'guarantor_national_id' => $row['guarantor_national_id'] ?? null,
@@ -926,6 +932,7 @@ class ImportService
             'phone' => $this->str($raw['phone']),
             'email' => $this->str($raw['email']),
             'address' => $this->str($raw['address']),
+            'job' => $this->str($raw['job'] ?? null),
             'customer_notes' => $this->str($raw['customer_notes']),
             'guarantor_name' => $this->str($raw['guarantor_name'] ?? null),
             'guarantor_national_id' => $this->str($raw['guarantor_national_id'] ?? null),
@@ -1064,6 +1071,7 @@ class ImportService
                 ['رقم الهاتف', 'مطلوب إذا لم يُدخل الرقم القومي. يُستخدم للتمييز عند غياب الرقم القومي.'],
                 ['البريد الإلكتروني', 'اختياري.'],
                 ['العنوان', 'اختياري.'],
+                ['الوظيفة', 'اختياري.'],
                 ['ملاحظات العميل', 'اختياري.'],
                 ['اسم الضامن', 'اختياري.'],
                 ['الرقم القومي للضامن', 'اختياري. 14 رقماً.'],
@@ -1285,6 +1293,7 @@ class ImportService
             'phone' => 'رقم الهاتف',
             'national_id' => 'الرقم القومي',
             'address' => 'العنوان',
+            'job' => 'الوظيفة',
             'customer_notes' => 'ملاحظات العميل',
             'guarantor_name' => 'اسم الضامن',
             'guarantor_national_id' => 'الرقم القومي للضامن',
