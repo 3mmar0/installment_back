@@ -180,6 +180,7 @@ class CreditScoreController extends Controller
             'score_to' => ['sometimes', 'nullable', 'integer', 'min:300', 'max:850'],
             'score_trend' => ['sometimes', 'nullable', 'string', 'in:improving,declining'],
             'current_overdue' => ['sometimes', 'nullable', 'string', 'in:yes,no'],
+            'sort' => ['sometimes', 'nullable', 'string', 'in:score_desc,score_asc,newest'],
         ]);
 
         $perPage = (int) ($validated['per_page'] ?? $validated['limit'] ?? 25);
@@ -215,8 +216,13 @@ class CreditScoreController extends Controller
             $query->where('customer_credit_scores.current_overdue_count', 0);
         }
 
-        $rows = $query->with('customer:id,name,phone,monthly_salary')
-            ->orderByDesc('customer_credit_scores.calculated_at')
+        $sort = $validated['sort'] ?? 'score_desc';
+        $rows = $query->with(['customer' => fn ($customerQuery) => $customerQuery
+            ->select(['id', 'name', 'phone', 'monthly_salary'])
+            ->withCount('installments')])
+            ->when($sort === 'score_desc', fn ($builder) => $builder->orderByDesc('customer_credit_scores.score'))
+            ->when($sort === 'score_asc', fn ($builder) => $builder->orderBy('customer_credit_scores.score'))
+            ->when($sort === 'newest', fn ($builder) => $builder->orderByDesc('customer_credit_scores.calculated_at'))
             ->paginate($perPage);
 
         return $this->successResponse([
@@ -225,6 +231,7 @@ class CreditScoreController extends Controller
                 'customer_id' => $row->customer_id,
                 'customer_name' => $row->customer?->name,
                 'customer_phone' => $row->customer?->phone,
+                'installments_count' => (int) ($row->customer?->installments_count ?? 0),
                 'score' => (int) $row->score,
                 'risk_level' => $row->risk_level,
                 'risk_label' => $this->riskLabelForLevel($row->risk_level),
