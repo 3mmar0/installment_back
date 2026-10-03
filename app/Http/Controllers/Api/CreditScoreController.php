@@ -170,7 +170,7 @@ class CreditScoreController extends Controller
     public function reportList(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'report' => ['required', 'string', 'in:high_risk,improving,declining,excellent_payment,serious_delinquency,thin_file,overdue'],
+            'report' => ['required', 'string', 'in:all,high_risk,improving,declining,excellent_payment,serious_delinquency,thin_file,overdue'],
             'limit' => ['sometimes', 'integer', 'min:1', 'max:500'],
         ]);
 
@@ -209,7 +209,7 @@ class CreditScoreController extends Controller
         }
 
         $validated = $request->validate([
-            'report' => ['required', 'string', 'in:high_risk,improving,declining,excellent_payment,serious_delinquency,thin_file,overdue'],
+            'report' => ['required', 'string', 'in:all,high_risk,improving,declining,excellent_payment,serious_delinquency,thin_file,overdue'],
             'limit' => ['sometimes', 'integer', 'min:1', 'max:500'],
         ]);
 
@@ -310,6 +310,7 @@ class CreditScoreController extends Controller
         $query = $this->analyticsService->latestScoresQuery($user);
 
         match ($report) {
+            'all' => null,
             'high_risk' => $query->whereIn('customer_credit_scores.risk_level', ['high', 'very_high']),
             'improving' => $query->where('customer_credit_scores.score_change', '>', 0),
             'declining' => $query->where('customer_credit_scores.score_change', '<', 0),
