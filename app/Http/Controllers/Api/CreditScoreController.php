@@ -172,19 +172,56 @@ class CreditScoreController extends Controller
         $validated = $request->validate([
             'report' => ['required', 'string', 'in:all,high_risk,improving,declining,excellent_payment,serious_delinquency,thin_file,overdue'],
             'limit' => ['sometimes', 'integer', 'min:1', 'max:500'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:10', 'max:100'],
+            'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'risk_level' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'score_from' => ['sometimes', 'nullable', 'integer', 'min:300', 'max:850'],
+            'score_to' => ['sometimes', 'nullable', 'integer', 'min:300', 'max:850'],
+            'score_trend' => ['sometimes', 'nullable', 'string', 'in:improving,declining'],
+            'current_overdue' => ['sometimes', 'nullable', 'string', 'in:yes,no'],
         ]);
 
-        $limit = (int) ($validated['limit'] ?? 100);
+        $perPage = (int) ($validated['per_page'] ?? $validated['limit'] ?? 25);
         $query = $this->reportQuery($request->user(), $validated['report']);
+
+        if (! empty($validated['search'])) {
+            $search = trim((string) $validated['search']);
+            $query->where(function ($builder) use ($search) {
+                $builder->where('customers.name', 'like', "%{$search}%")
+                    ->orWhere('customers.phone', 'like', "%{$search}%")
+                    ->orWhere('customers.id', 'like', "%{$search}%");
+            });
+        }
+        if (! empty($validated['risk_level'])) {
+            $query->where('customer_credit_scores.risk_level', $validated['risk_level']);
+        }
+        if (isset($validated['score_from'])) {
+            $query->where('customer_credit_scores.score', '>=', $validated['score_from']);
+        }
+        if (isset($validated['score_to'])) {
+            $query->where('customer_credit_scores.score', '<=', $validated['score_to']);
+        }
+        if (($validated['score_trend'] ?? null) === 'improving') {
+            $query->where('customer_credit_scores.score_change', '>', 0);
+        }
+        if (($validated['score_trend'] ?? null) === 'declining') {
+            $query->where('customer_credit_scores.score_change', '<', 0);
+        }
+        if (($validated['current_overdue'] ?? null) === 'yes') {
+            $query->where('customer_credit_scores.current_overdue_count', '>', 0);
+        }
+        if (($validated['current_overdue'] ?? null) === 'no') {
+            $query->where('customer_credit_scores.current_overdue_count', 0);
+        }
 
         $rows = $query->with('customer:id,name,phone,monthly_salary')
             ->orderByDesc('customer_credit_scores.calculated_at')
-            ->limit($limit)
-            ->get();
+            ->paginate($perPage);
 
         return $this->successResponse([
             'report' => $validated['report'],
-            'items' => $rows->map(fn (CustomerCreditScore $row) => [
+            'items' => collect($rows->items())->map(fn (CustomerCreditScore $row) => [
                 'customer_id' => $row->customer_id,
                 'customer_name' => $row->customer?->name,
                 'customer_phone' => $row->customer?->phone,
@@ -196,6 +233,14 @@ class CreditScoreController extends Controller
                 'current_max_dpd' => (int) $row->current_max_dpd,
                 'calculated_at' => $row->calculated_at?->toISOString(),
             ]),
+            'pagination' => [
+                'current_page' => $rows->currentPage(),
+                'last_page' => $rows->lastPage(),
+                'per_page' => $rows->perPage(),
+                'total' => $rows->total(),
+                'from' => $rows->firstItem(),
+                'to' => $rows->lastItem(),
+            ],
         ], 'تم جلب التقرير بنجاح');
     }
 
