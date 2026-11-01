@@ -11,21 +11,21 @@ class ReportCatalog
             'category' => 'collections',
             'title' => 'أقساط متأخرة',
             'description' => 'عناصر أقساط تجاوزت تاريخ الاستحقاق',
-            'exports' => ['pdf', 'excel', 'csv'],
+            'exports' => ['csv'],
         ],
         'aging' => [
             'key' => 'aging',
             'category' => 'collections',
             'title' => 'أعمار المتأخرات',
             'description' => 'تجميع المتأخرات حسب فترات التأخير',
-            'exports' => ['pdf', 'excel', 'csv'],
+            'exports' => ['csv'],
         ],
         'due_soon' => [
             'key' => 'due_soon',
             'category' => 'collections',
             'title' => 'مستحق قريباً',
             'description' => 'أقساط تستحق خلال الفترة المحددة',
-            'exports' => ['pdf', 'excel', 'csv'],
+            'exports' => ['csv'],
         ],
     ];
 

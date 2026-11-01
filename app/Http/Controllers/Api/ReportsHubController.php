@@ -126,6 +126,63 @@ class ReportsHubController extends Controller
         return $this->successResponse($data, 'تم جلب التقرير');
     }
 
+    public function export(Request $request, string $reportKey): JsonResponse|\Illuminate\Http\Response
+    {
+        if (! ReportCatalog::has($reportKey)) {
+            return $this->notFoundResponse('التقرير غير موجود');
+        }
+
+        $user = $request->user();
+        if (! $this->canAccessFinancialReports($user)) {
+            return $this->forbiddenResponse('التقارير المالية غير مفعّلة في خطتك');
+        }
+
+        $validated = $request->validate([
+            'format' => ['required', 'string', 'in:csv,excel,pdf'],
+            'days' => ['sometimes', 'integer', 'min:1', 'max:90'],
+        ]);
+
+        if ($validated['format'] !== 'csv') {
+            return $this->errorResponse('صيغة التصدير غير متاحة لهذا التقرير بعد', 422);
+        }
+
+        $payload = $this->reportQueryService->run($user, $reportKey, [
+            'page' => 1,
+            'per_page' => 100,
+            'days' => $validated['days'] ?? 14,
+        ]);
+
+        $handle = fopen('php://temp', 'r+');
+        if ($handle === false) {
+            return $this->errorResponse('تعذر إنشاء ملف التصدير', 500);
+        }
+
+        fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+        fputcsv($handle, array_map(fn (array $column) => $column['label'], $payload['columns']), ',', '"', '\\');
+        foreach ($payload['rows'] as $row) {
+            $line = [];
+            foreach ($payload['columns'] as $column) {
+                $line[] = $row[$column['key']] ?? '';
+            }
+            fputcsv($handle, $line, ',', '"', '\\');
+        }
+
+        rewind($handle);
+        $csv = stream_get_contents($handle);
+        fclose($handle);
+
+        if ($csv === false) {
+            return $this->errorResponse('تعذر إنشاء ملف التصدير', 500);
+        }
+
+        $filename = "report-{$reportKey}-".date('Y-m-d-His').'.csv';
+
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
+    }
+
     private function canAccessFinancialReports(?User $user): bool
     {
         if ($user === null) {

@@ -117,3 +117,23 @@ it('returns due_soon rows within days filter', function () {
         ->toContain(80.0)
         ->not->toContain(90.0);
 });
+
+it('exports overdue report as csv when reports enabled', function () {
+    $user = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($user)->create(['name' => 'عميل CSV']);
+    $installment = Installment::factory()->forCustomer($customer)->create([
+        'user_id' => $user->id,
+        'status' => 'active',
+    ]);
+    InstallmentItem::factory()->forInstallment($installment)->overdue()->create([
+        'amount' => 120,
+        'due_date' => now()->subDays(4)->toDateString(),
+    ]);
+
+    $response = $this->postJson('/api/reports/overdue/export', ['format' => 'csv'])
+        ->assertOk();
+
+    expect(strtolower((string) $response->headers->get('content-type')))
+        ->toContain('text/csv');
+    expect($response->getContent())->toContain('عميل CSV');
+});
