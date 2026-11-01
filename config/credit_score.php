@@ -215,6 +215,8 @@ return [
         'missing_phone_penalty' => 10.0,
         'missing_guarantor_penalty' => 5.0,
         'duplicate_identity_penalty' => 25.0,
+        'distant_governorate_penalty' => 20.0,
+        'adjacent_governorate_penalty' => 8.0,
         'min' => 0.0,
         'max' => 100.0,
     ],

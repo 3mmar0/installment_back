@@ -155,6 +155,7 @@ class CustomerService implements CustomerServiceInterface
                 'phone_normalized' => PhoneHelper::normalize($phone),
                 'national_id' => $nationalId,
                 'address' => $data['address'] ?? null,
+                'governorate' => \App\Helpers\GovernorateHelper::normalize($data['governorate'] ?? null),
                 'job' => $data['job'] ?? null,
                 'monthly_salary' => array_key_exists('monthly_salary', $data)
                     ? $data['monthly_salary']
@@ -190,6 +191,9 @@ class CustomerService implements CustomerServiceInterface
         }
         if (array_key_exists('phone', $data)) {
             $data['phone_normalized'] = PhoneHelper::normalize($data['phone']);
+        }
+        if (array_key_exists('governorate', $data)) {
+            $data['governorate'] = \App\Helpers\GovernorateHelper::normalize($data['governorate']);
         }
 
         $nextNationalId = array_key_exists('national_id', $data)

@@ -24,6 +24,7 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'phone' => $this->phone,
             'country' => $this->country ?? 'EG',
+            'governorate' => $this->governorate,
             'currency' => $this->currency ?? 'EGP',
             'role' => $this->role,
             'registration_source' => $this->registration_source?->value ?? 'web',

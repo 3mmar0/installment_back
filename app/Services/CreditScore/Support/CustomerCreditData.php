@@ -29,6 +29,8 @@ final class CustomerCreditData
         public readonly CarbonImmutable $today,
         public readonly array $records,
         public readonly array $contracts,
+        public readonly ?string $customerGovernorate = null,
+        public readonly ?string $vendorGovernorate = null,
     ) {
     }
 

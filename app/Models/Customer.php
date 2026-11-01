@@ -20,6 +20,7 @@ class Customer extends Model
         'phone_normalized',
         'national_id',
         'address',
+        'governorate',
         'job',
         'monthly_salary',
         'notes',

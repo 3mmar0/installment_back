@@ -49,6 +49,13 @@ class CreditScoreExplanationService
             $factors[] = 'لا توجد تأخيرات خطيرة (+90 يوم) في السجل.';
         }
 
+        $locationBand = $result->metrics['other']['location_band'] ?? null;
+        if ($locationBand === 'same') {
+            $factors[] = 'العميل في نفس محافظة البائع.';
+        } elseif ($locationBand === 'nearby') {
+            $factors[] = 'العميل في محافظة قريبة من مقر البائع.';
+        }
+
         return array_values(array_unique($factors));
     }
 
@@ -89,6 +96,13 @@ class CreditScoreExplanationService
         $other = $result->metrics['other'] ?? [];
         if (($other['duplicate_identity'] ?? false) === true) {
             $factors[] = 'مؤشرات محتملة لتكرار الهوية ضمن سجلاتك.';
+        }
+
+        $locationBand = $other['location_band'] ?? null;
+        if ($locationBand === 'distant') {
+            $factors[] = 'العميل بعيد جداً عن محافظة البائع — مخاطر تحصيل ومتابعة أعلى.';
+        } elseif ($locationBand === 'adjacent') {
+            $factors[] = 'العميل في محافظة مجاورة — راقب المتابعة والتحصيل.';
         }
 
         return array_values(array_unique($factors));

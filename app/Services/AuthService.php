@@ -68,6 +68,7 @@ class AuthService implements AuthServiceInterface
             'email' => $data['email'],
             'phone' => $data['phone'] ?? null,
             'country' => $country,
+            'governorate' => \App\Helpers\GovernorateHelper::normalize($data['governorate'] ?? null),
             'currency' => LocaleHelper::currencyForCountry($country),
             'password' => Hash::make($data['password']),
             'role' => $data['role'] ?? UserRole::User,

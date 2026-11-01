@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Helpers\GovernorateHelper;
 use App\Helpers\NationalIdHelper;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -19,6 +20,7 @@ class StoreCustomerRequest extends FormRequest
             'phone',
             'national_id',
             'address',
+            'governorate',
             'job',
             'monthly_salary',
             'notes',
@@ -47,6 +49,7 @@ class StoreCustomerRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'national_id' => $this->nationalIdRules(),
             'address' => ['nullable', 'string', 'max:500'],
+            'governorate' => GovernorateHelper::rule(),
             'job' => ['nullable', 'string', 'max:255'],
             'monthly_salary' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'notes' => ['nullable', 'string'],

@@ -117,6 +117,8 @@ class CustomerCreditDataCollector
             today: $today,
             records: $records,
             contracts: $contracts,
+            customerGovernorate: $customer->governorate,
+            vendorGovernorate: $this->vendorGovernorate($customer),
         );
     }
 
@@ -181,6 +183,13 @@ class CustomerCreditDataCollector
         }
 
         return false;
+    }
+
+    private function vendorGovernorate(Customer $customer): ?string
+    {
+        $customer->loadMissing('user');
+
+        return $customer->user?->governorate;
     }
 
     private function parseDateStartOfDay(mixed $value): ?CarbonImmutable

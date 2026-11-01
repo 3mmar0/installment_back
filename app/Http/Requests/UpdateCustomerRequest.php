@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Helpers\GovernorateHelper;
 use App\Helpers\NationalIdHelper;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -19,6 +20,7 @@ class UpdateCustomerRequest extends FormRequest
             'phone',
             'national_id',
             'address',
+            'governorate',
             'job',
             'monthly_salary',
             'notes',
@@ -51,6 +53,7 @@ class UpdateCustomerRequest extends FormRequest
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'national_id' => array_merge(['sometimes'], $this->nationalIdRules()),
             'address' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'governorate' => array_merge(['sometimes'], GovernorateHelper::rule()),
             'job' => ['sometimes', 'nullable', 'string', 'max:255'],
             'monthly_salary' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'notes' => ['sometimes', 'nullable', 'string'],

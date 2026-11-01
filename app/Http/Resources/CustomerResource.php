@@ -21,6 +21,7 @@ class CustomerResource extends JsonResource
             'phone' => $this->phone,
             'national_id' => $this->national_id,
             'address' => $this->address,
+            'governorate' => $this->governorate,
             'job' => $this->job,
             'monthly_salary' => $this->monthly_salary !== null ? (float) $this->monthly_salary : null,
             'notes' => $this->notes,

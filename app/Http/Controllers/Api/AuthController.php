@@ -54,11 +54,16 @@ class AuthController extends Controller
      */
     public function register(Request $request): JsonResponse
     {
+        if ($request->exists('governorate') && trim((string) $request->input('governorate')) === '') {
+            $request->merge(['governorate' => null]);
+        }
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:30'],
             'country' => ['required', 'string', 'size:2', 'in:'.implode(',', LocaleHelper::countryCodes())],
+            'governorate' => \App\Helpers\GovernorateHelper::rule(),
             'password' => ['required', 'confirmed', Password::defaults()],
             'registration_source' => ['nullable', 'in:web,mobile,admin'],
         ]);
@@ -113,15 +118,24 @@ class AuthController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        if ($request->exists('governorate') && trim((string) $request->input('governorate')) === '') {
+            $request->merge(['governorate' => null]);
+        }
+
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
             'country' => ['sometimes', 'required', 'string', 'size:2', 'in:'.implode(',', LocaleHelper::countryCodes())],
+            'governorate' => \App\Helpers\GovernorateHelper::rule(),
             'currency' => ['sometimes', 'required', 'string', 'size:3', 'in:'.implode(',', array_values(LocaleHelper::CURRENCIES_BY_COUNTRY))],
         ]);
 
         if (isset($data['country']) && ! isset($data['currency'])) {
             $data['currency'] = LocaleHelper::currencyForCountry($data['country']);
+        }
+
+        if (array_key_exists('governorate', $data)) {
+            $data['governorate'] = \App\Helpers\GovernorateHelper::normalize($data['governorate']);
         }
 
         $user->fill($data);

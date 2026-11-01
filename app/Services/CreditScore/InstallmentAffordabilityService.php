@@ -2,6 +2,7 @@
 
 namespace App\Services\CreditScore;
 
+use App\Helpers\GovernorateHelper;
 use App\Models\Customer;
 use App\Models\Installment;
 use Carbon\CarbonImmutable;
@@ -41,6 +42,7 @@ class InstallmentAffordabilityService
 
         $reasons = [];
         $canAccept = null;
+        $location = $this->locationAssessment($customer);
 
         if (! $hasInstallments) {
             $reasons[] = 'لا توجد أقساط مسجلة — لا يُعرض تقييم ائتماني.';
@@ -71,6 +73,10 @@ class InstallmentAffordabilityService
             }
         }
 
+        foreach ($location['reasons'] as $reason) {
+            $reasons[] = $reason;
+        }
+
         return [
             'has_installment_history' => $hasInstallments,
             'score_applicable' => $hasInstallments,
@@ -80,18 +86,74 @@ class InstallmentAffordabilityService
             'dti_ratio' => $dti,
             'max_dti_ratio' => $maxDti,
             'can_accept_installment' => $canAccept,
-            'summary' => $this->summaryLabel($canAccept, $hasInstallments),
+            'summary' => $this->summaryLabel($canAccept, $hasInstallments, $location['band']),
+            'reasons' => $reasons,
+            'location_risk' => $location['band'],
+            'customer_governorate' => $location['customer_governorate'],
+            'vendor_governorate' => $location['vendor_governorate'],
+            'customer_governorate_label' => $location['customer_governorate_label'],
+            'vendor_governorate_label' => $location['vendor_governorate_label'],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     band: string,
+     *     customer_governorate: ?string,
+     *     vendor_governorate: ?string,
+     *     customer_governorate_label: ?string,
+     *     vendor_governorate_label: ?string,
+     *     reasons: list<string>
+     * }
+     */
+    private function locationAssessment(Customer $customer): array
+    {
+        $customer->loadMissing('user');
+        $customerGov = GovernorateHelper::normalize($customer->governorate);
+        $vendorGov = GovernorateHelper::normalize($customer->user?->governorate);
+        $band = GovernorateHelper::distanceBand($vendorGov, $customerGov);
+
+        $reasons = [];
+        if ($band === GovernorateHelper::DISTANT) {
+            $reasons[] = sprintf(
+                'العميل في %s وأنت في %s — بعيد جداً، يرتفع خطر التحصيل والمتابعة.',
+                GovernorateHelper::label($customerGov) ?? 'محافظة بعيدة',
+                GovernorateHelper::label($vendorGov) ?? 'محافظتك'
+            );
+        } elseif ($band === GovernorateHelper::ADJACENT) {
+            $reasons[] = 'العميل في محافظة مجاورة — راقب المتابعة والتحصيل.';
+        } elseif ($band === GovernorateHelper::NEARBY) {
+            $reasons[] = 'العميل في منطقة قريبة من محافظتك.';
+        } elseif ($band === GovernorateHelper::SAME) {
+            $reasons[] = 'العميل في نفس محافظتك — مخاطر جغرافية منخفضة.';
+        } elseif ($vendorGov === null) {
+            $reasons[] = 'حدّد محافظتك من الملف الشخصي لتقدير مخاطر البعد الجغرافي.';
+        } elseif ($customerGov === null) {
+            $reasons[] = 'حدّد محافظة العميل لتقدير مخاطر البعد الجغرافي.';
+        }
+
+        return [
+            'band' => $band,
+            'customer_governorate' => $customerGov,
+            'vendor_governorate' => $vendorGov,
+            'customer_governorate_label' => GovernorateHelper::label($customerGov),
+            'vendor_governorate_label' => GovernorateHelper::label($vendorGov),
             'reasons' => $reasons,
         ];
     }
 
-    private function summaryLabel(?bool $canAccept, bool $hasInstallments): string
+    private function summaryLabel(?bool $canAccept, bool $hasInstallments, string $locationBand = GovernorateHelper::UNKNOWN): string
     {
         if (! $hasInstallments) {
-            return 'بدون أقساط — لا score';
+            return $locationBand === GovernorateHelper::DISTANT
+                ? 'بدون أقساط — العميل بعيد جغرافياً'
+                : 'بدون أقساط — لا score';
         }
         if ($canAccept === null) {
             return 'أدخل المرتب للتقدير';
+        }
+        if ($canAccept && $locationBand === GovernorateHelper::DISTANT) {
+            return 'يمكن قبول قسط مع مخاطر جغرافية مرتفعة';
         }
         if ($canAccept) {
             return 'يمكن قبول قسط (تقدير داخلي)';
