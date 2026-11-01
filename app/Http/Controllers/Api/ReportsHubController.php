@@ -9,6 +9,8 @@ use App\Http\Traits\ApiResponse;
 use App\Models\User;
 use App\Services\CreditScore\CreditScoreAnalyticsService;
 use App\Services\CreditScore\CreditScoreInfrastructure;
+use App\Services\Reports\ReportCatalog;
+use App\Services\Reports\ReportQueryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -58,6 +60,7 @@ class ReportsHubController extends Controller
     public function __construct(
         private readonly InstallmentServiceInterface $installmentService,
         private readonly CreditScoreAnalyticsService $creditAnalytics,
+        private readonly ReportQueryService $reportQueryService,
     ) {
     }
 
@@ -75,6 +78,7 @@ class ReportsHubController extends Controller
                 ['format' => 'excel', 'label' => 'Excel — ملخص + جداول'],
                 ['format' => 'csv', 'label' => 'CSV — ملخص + جداول'],
             ] : [],
+            'categories' => $financial ? ReportCatalog::definitions() : [],
             'credit_report_types' => $credit ? array_values(self::CREDIT_REPORT_TYPES) : [],
         ], 'تم جلب فهرس التقارير');
     }
@@ -98,6 +102,28 @@ class ReportsHubController extends Controller
         }
 
         return $this->successResponse($payload, 'تم جلب ملخص التقارير');
+    }
+
+    public function show(Request $request, string $reportKey): JsonResponse
+    {
+        if (! ReportCatalog::has($reportKey)) {
+            return $this->notFoundResponse('التقرير غير موجود');
+        }
+
+        $user = $request->user();
+        if (! $this->canAccessFinancialReports($user)) {
+            return $this->forbiddenResponse('التقارير المالية غير مفعّلة في خطتك');
+        }
+
+        $validated = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'days' => ['sometimes', 'integer', 'min:1', 'max:90'],
+        ]);
+
+        $data = $this->reportQueryService->run($user, $reportKey, $validated);
+
+        return $this->successResponse($data, 'تم جلب التقرير');
     }
 
     private function canAccessFinancialReports(?User $user): bool

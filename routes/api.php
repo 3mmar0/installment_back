@@ -162,6 +162,7 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
         Route::controller(ReportsHubController::class)->group(function () {
             Route::get('reports/catalog', 'catalog');
             Route::get('reports/overview', 'overview');
+            Route::get('reports/{reportKey}', 'show');
         });
 
         // Notifications & Emails
