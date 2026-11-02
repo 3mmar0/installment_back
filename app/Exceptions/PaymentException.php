@@ -26,7 +26,7 @@ class PaymentException extends Exception
     public static function amountMismatch(float $expected): self
     {
         return new self(
-            'قيمة الدفعة يجب أن تساوي قيمة القسط المستحقة (' . number_format($expected, 2) . ' ج.م).',
+            'قيمة الدفعة لا يمكن أن تزيد عن قيمة القسط المستحقة (' . number_format($expected, 2) . ' ج.م).',
             ErrorCodes::PaymentAmountMismatch,
         );
     }

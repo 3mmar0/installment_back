@@ -209,6 +209,7 @@ class CustomerController extends Controller
                 'name' => $customer->name,
                 'email' => $customer->email,
                 'phone' => $customer->phone,
+                'governorate' => $customer->governorate,
                 'label' => $label,
             ];
         });

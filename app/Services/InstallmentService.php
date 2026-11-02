@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Contracts\Services\InstallmentServiceInterface;
-use App\Exceptions\PaymentException;
 use App\Helpers\InstallmentDateHelper;
 use App\Helpers\LimitsHelper;
 use App\Jobs\SendInstallmentRemindersJob;
@@ -193,6 +192,35 @@ class InstallmentService implements InstallmentServiceInterface
                 ]);
             }
 
+            $prepaidMonths = array_values(array_unique(array_map(
+                'intval',
+                $data['prepaid_months'] ?? []
+            )));
+            if ($prepaidMonths !== []) {
+                $items = $installment->items()
+                    ->orderBy('due_date')
+                    ->orderBy('id')
+                    ->get()
+                    ->values();
+
+                foreach ($prepaidMonths as $monthNumber) {
+                    $item = $items[$monthNumber - 1] ?? null;
+                    if (! $item || $item->status === 'paid') {
+                        continue;
+                    }
+
+                    $item->markPaid(
+                        (float) $item->amount,
+                        sprintf('PREPAY-%d-%d', $installment->id, $monthNumber),
+                        'سداد عند إنشاء القسط'
+                    );
+                }
+
+                if ($installment->items()->where('status', '!=', 'paid')->count() === 0) {
+                    $installment->update(['status' => 'completed']);
+                }
+            }
+
             if (! $merchant->isOwner()) {
                 LimitsHelper::incrementUsage($merchantId, 'installments');
             }
@@ -258,32 +286,12 @@ class InstallmentService implements InstallmentServiceInterface
             // cannot both pass the already-paid guard below.
             $locked = InstallmentItem::whereKey($item->getKey())->lockForUpdate()->firstOrFail();
 
-            if ($locked->status === 'paid') {
-                throw PaymentException::alreadyPaid();
-            }
-
-            $scheduled = round((float) $locked->amount, 2);
-
-            // There is no partial-payment model yet: markPaid() settles the item
-            // outright, so anything other than the exact amount corrupts the balance.
-            if (abs($paidAmount - $scheduled) > 0.001) {
-                throw PaymentException::amountMismatch($scheduled);
-            }
-
-            $locked->markPaid(
+            return app(InstallmentPaymentApplier::class)->apply(
+                $locked,
                 $paidAmount,
                 $this->resolvePaymentReference($locked, $data['reference'] ?? null),
                 isset($data['note']) ? trim((string) $data['note']) : null
             );
-
-            $installment = $locked->installment;
-            $allPaid = $installment->items()->where('status', '!=', 'paid')->count() === 0;
-
-            if ($allPaid) {
-                $installment->update(['status' => 'completed']);
-            }
-
-            return $locked->refresh();
         });
 
         // Side effects run only once the payment is durably committed, so a

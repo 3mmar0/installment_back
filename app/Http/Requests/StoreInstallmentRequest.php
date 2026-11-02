@@ -33,7 +33,25 @@ class StoreInstallmentRequest extends FormRequest
             'products.*.qty' => ['required', 'integer', 'min:1'],
             'products.*.price' => ['required', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
+            'prepaid_months' => ['nullable', 'array'],
+            'prepaid_months.*' => ['integer', 'distinct', 'min:1', 'max:120'],
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $months = (int) $this->input('months');
+            foreach ((array) $this->input('prepaid_months', []) as $month) {
+                if ((int) $month > $months) {
+                    $validator->errors()->add(
+                        'prepaid_months',
+                        'لا يمكن سداد شهر خارج عدد أشهر القسط.'
+                    );
+                    break;
+                }
+            }
+        });
     }
 
     /**

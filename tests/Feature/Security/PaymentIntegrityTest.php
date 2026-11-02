@@ -15,15 +15,27 @@ function payableItem(App\Models\User $merchant, float $amount = 1000.00): Instal
         ->create(['amount' => $amount]);
 }
 
-it('rejects a payment below the scheduled amount', function () {
+it('accepts a payment below the scheduled amount and carries the remainder', function () {
     $merchant = actingAsMerchant();
-    $item = payableItem($merchant, 1000.00);
+    $customer = Customer::factory()->forMerchant($merchant)->create();
+    $installment = Installment::factory()->forCustomer($customer)->create(['months' => 2]);
+    $first = InstallmentItem::factory()->forInstallment($installment)->create([
+        'amount' => 1000.00,
+        'due_date' => now()->toDateString(),
+    ]);
+    $second = InstallmentItem::factory()->forInstallment($installment)->create([
+        'amount' => 1000.00,
+        'due_date' => now()->addMonth()->toDateString(),
+    ]);
 
-    $this->postJson("/api/installment-item-pay/{$item->id}", ['paid_amount' => 1])
-        ->assertStatus(422)
-        ->assertJsonPath('error_code', 'INST_011');
+    $this->postJson("/api/installment-item-pay/{$first->id}", ['paid_amount' => 300])
+        ->assertOk();
 
-    expect($item->fresh()->status)->toBe('pending');
+    expect($first->fresh()->status)->toBe('paid')
+        ->and((float) $first->fresh()->amount)->toBe(300.00)
+        ->and((float) $first->fresh()->paid_amount)->toBe(300.00)
+        ->and((float) $second->fresh()->amount)->toBe(1700.00)
+        ->and($second->fresh()->status)->toBe('pending');
 });
 
 it('rejects a payment above the scheduled amount', function () {
@@ -81,7 +93,7 @@ it('creates no notification when a payment is rejected', function () {
 
     Notification::query()->delete();
 
-    $this->postJson("/api/installment-item-pay/{$item->id}", ['paid_amount' => 1])
+    $this->postJson("/api/installment-item-pay/{$item->id}", ['paid_amount' => 5000])
         ->assertStatus(422);
 
     expect(Notification::count())->toBe(0);

@@ -104,7 +104,7 @@ class CustomerService implements CustomerServiceInterface
     public function getCustomersForSelect(User $user, ?string $search = null): Collection
     {
         $query = ($user->canManageMerchantData() ? Customer::query() : $user->customers())
-            ->select(['customers.id', 'customers.name', 'customers.email', 'customers.phone']);
+            ->select(['customers.id', 'customers.name', 'customers.email', 'customers.phone', 'customers.governorate']);
 
         $term = trim((string) $search);
         if ($term !== '') {

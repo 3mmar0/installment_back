@@ -19,8 +19,8 @@ use Carbon\CarbonImmutable;
  *  - Unpaid and due today/future   -> DPD 0 (due today is NOT overdue, exactly
  *                                     matching InstallmentDateHelper).
  *
- * There is no partial-payment model in this system, so an item is either fully
- * settled or fully outstanding; we never invent a synthetic on-time payment.
+ * A short payment closes the current month and carries the remainder forward,
+ * so an item is still fully settled or fully outstanding.
  */
 class DelinquencyCalculator
 {

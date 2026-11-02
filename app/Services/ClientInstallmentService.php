@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Exceptions\PaymentException;
 use App\Models\ClientAccount;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
@@ -139,37 +138,20 @@ class ClientInstallmentService
 
         $paidAmount = round((float) ($data['paid_amount'] ?? $item->amount), 2);
 
-        $updated = DB::transaction(function () use ($item, $data, $paidAmount, $installment) {
+        $updated = DB::transaction(function () use ($item, $data, $paidAmount) {
             $locked = InstallmentItem::whereKey($item->getKey())->lockForUpdate()->firstOrFail();
-
-            if ($locked->status === 'paid') {
-                throw PaymentException::alreadyPaid();
-            }
-
-            $scheduled = round((float) $locked->amount, 2);
-
-            if (abs($paidAmount - $scheduled) > 0.001) {
-                throw PaymentException::amountMismatch($scheduled);
-            }
 
             $reference = isset($data['reference']) ? trim((string) $data['reference']) : '';
             if ($reference === '') {
                 $reference = sprintf('PAY-%d-%s', $locked->getKey(), now()->format('YmdHis'));
             }
 
-            $locked->markPaid(
+            return app(InstallmentPaymentApplier::class)->apply(
+                $locked,
                 $paidAmount,
                 $reference,
                 isset($data['note']) ? trim((string) $data['note']) : null
             );
-
-            $allPaid = $installment->items()->where('status', '!=', 'paid')->count() === 0;
-
-            if ($allPaid) {
-                $installment->update(['status' => 'completed']);
-            }
-
-            return $locked->refresh();
         });
 
         app(CreditScoreRecalculationDispatcher::class)->dispatchForCustomerId($installment->customer_id);
