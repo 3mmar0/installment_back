@@ -42,15 +42,23 @@ class GeminiClient
             ];
         }
 
-        $response = Http::timeout((int) config('assistant.gemini.timeout', 30))
+        $request = Http::timeout((int) config('assistant.gemini.timeout', 30))
             ->acceptJson()
-            ->asJson()
-            ->post($url.'?key='.urlencode($apiKey), $payload);
+            ->asJson();
+
+        // Local Windows PHP installs often lack a CA bundle; keep verify on in production.
+        if (app()->environment('local') && PHP_OS_FAMILY === 'Windows') {
+            $request = $request->withoutVerifying();
+        }
+
+        $response = $request->post($url.'?key='.urlencode($apiKey), $payload);
 
         if (! $response->successful()) {
-            throw new RuntimeException(
-                'Gemini request failed: '.$response->status().' '.$response->body()
-            );
+            $message = data_get($response->json(), 'error.message')
+                ?: data_get($response->json(), 'error.status')
+                ?: 'HTTP '.$response->status();
+
+            throw new RuntimeException('Gemini request failed: '.$message);
         }
 
         /** @var array<string, mixed> $json */
