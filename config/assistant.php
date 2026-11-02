@@ -6,6 +6,17 @@ return [
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
+        /**
+         * Comma-separated fallbacks used on rate-limit / quota / unavailable.
+         * Defaults cover current Flash / Flash-Lite text models (not Live/TTS).
+         */
+        'fallback_models' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env(
+                'GEMINI_FALLBACK_MODELS',
+                'gemini-3.1-flash-lite,gemini-3.6-flash,gemini-3.8-flash,gemini-2.5-flash-lite,gemini-2.5-flash,gemini-flash-latest'
+            ))
+        ))),
         'base_url' => env(
             'GEMINI_BASE_URL',
             'https://generativelanguage.googleapis.com/v1beta'
