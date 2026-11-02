@@ -134,9 +134,10 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
     // Support / complaints (no active subscription required)
     Route::controller(ComplaintController::class)->group(function () {
         Route::get('complaint-list', 'index');
-        Route::post('complaint-create', 'store');
+        Route::post('complaint-create', 'store')->middleware('throttle:20,1');
         Route::get('complaint-show/{id}', 'show');
-        Route::post('complaint-reply/{id}', 'reply');
+        Route::post('complaint-reply/{id}', 'reply')->middleware('throttle:60,1');
+        Route::post('complaint-message/{id}', 'message')->middleware('throttle:60,1');
     });
 
     Route::middleware('platform_admin')->controller(SystemSettingsController::class)->group(function () {

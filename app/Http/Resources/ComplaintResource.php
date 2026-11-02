@@ -22,6 +22,13 @@ class ComplaintResource extends JsonResource
             'replied_at' => $this->replied_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
+            'messages' => ComplaintMessageResource::collection(
+                $this->whenLoaded('messages')
+            ),
+            'messages_count' => $this->when(
+                isset($this->messages_count),
+                fn () => (int) $this->messages_count
+            ),
             'user' => $this->whenLoaded('user', fn () => [
                 'id' => $this->user->id,
                 'name' => $this->user->name,
