@@ -290,7 +290,8 @@ class InstallmentService implements InstallmentServiceInterface
                 $locked,
                 $paidAmount,
                 $this->resolvePaymentReference($locked, $data['reference'] ?? null),
-                isset($data['note']) ? trim((string) $data['note']) : null
+                isset($data['note']) ? trim((string) $data['note']) : null,
+                filter_var($data['carry_remainder'] ?? false, FILTER_VALIDATE_BOOLEAN)
             );
         });
 
@@ -655,26 +656,25 @@ class InstallmentService implements InstallmentServiceInterface
 
         $totalItems = $items->count();
         $paidItems = $items->where('status', 'paid')->count();
-        $pendingItems = $items->where('status', 'pending')->count();
+        $pendingItems = $items->where('status', '!=', 'paid')->count();
 
         $totalAmount = $installment->total_amount;
-        $paidAmount = $items->where('status', 'paid')->sum('paid_amount') ?? 0;
+        $paidAmount = $items->sum(fn ($item) => (float) ($item->paid_amount ?? 0));
         $remainingAmount = $totalAmount - $paidAmount;
         $completionPercentage = $totalAmount > 0 ? ($paidAmount / $totalAmount) * 100 : 0;
 
         // Calculate payment progress
-        $nextPayment = $items->where('status', 'pending')->sortBy('due_date')->first();
-        $lastPayment = $items->where('status', 'paid')->sortByDesc('paid_at')->first();
+        $unpaid = $items->where('status', '!=', 'paid');
+        $nextPayment = $unpaid->sortBy('due_date')->first();
+        $lastPayment = $items->whereNotNull('paid_amount')->sortByDesc('updated_at')->first();
 
         // Get overdue count
-        $overdueCount = $items
-            ->where('status', 'pending')
+        $overdueCount = $unpaid
             ->where('due_date', '<', now()->startOfDay())
             ->count();
 
         // Get due soon count (within 7 days)
-        $dueSoonCount = $items
-            ->where('status', 'pending')
+        $dueSoonCount = $unpaid
             ->whereBetween('due_date', [now()->startOfDay(), now()->addDays(7)->endOfDay()])
             ->count();
 

@@ -11,14 +11,14 @@ class InstallmentPaymentApplier
 {
     /**
      * Apply a payment to a locked installment item.
-     * A short payment closes this month and moves the remainder to the next month
-     * (or creates a new month when this is the last item).
+     * Partial payments stay on the same month unless $carryRemainder is true.
      */
     public function apply(
         InstallmentItem $locked,
         float $paidAmount,
         ?string $reference,
-        ?string $note
+        ?string $note,
+        bool $carryRemainder = false
     ): InstallmentItem {
         if ($locked->status === 'paid') {
             throw PaymentException::alreadyPaid();
@@ -26,32 +26,56 @@ class InstallmentPaymentApplier
 
         $paidAmount = round($paidAmount, 2);
         $scheduled = round((float) $locked->amount, 2);
+        $alreadyPaid = round((float) ($locked->paid_amount ?? 0), 2);
+        $remaining = round($scheduled - $alreadyPaid, 2);
 
-        if ($paidAmount > $scheduled + 0.001) {
-            throw PaymentException::amountMismatch($scheduled);
+        if ($paidAmount > $remaining + 0.001) {
+            throw PaymentException::amountMismatch($remaining);
         }
 
-        $remainder = round($scheduled - $paidAmount, 2);
-        $paymentNote = $this->mergeNote($note, null);
+        $newPaid = round($alreadyPaid + $paidAmount, 2);
+        $leftover = round($scheduled - $newPaid, 2);
+        $paymentNote = $this->mergeNote(
+            $locked->note,
+            $this->mergeNote(
+                $note,
+                $paidAmount > 0.001
+                    ? sprintf('دفعة %s ج.م.', number_format($paidAmount, 2))
+                    : null
+            )
+        );
 
-        if ($remainder > 0.001) {
-            $this->carryRemainder($locked, $remainder);
-            $carryNote = sprintf(
-                'تم سداد %s ج.م وترحيل %s ج.م للشهر التالي.',
-                number_format($paidAmount, 2),
-                number_format($remainder, 2)
+        if ($carryRemainder && $leftover > 0.001) {
+            $this->carryRemainder($locked, $leftover);
+            $paymentNote = $this->mergeNote(
+                $paymentNote,
+                sprintf('تم ترحيل %s ج.م للشهر التالي.', number_format($leftover, 2))
             );
-            $paymentNote = $this->mergeNote($note, $carryNote);
-        }
 
-        $locked->update([
-            'amount' => $paidAmount,
-            'paid_at' => now(),
-            'paid_amount' => $paidAmount,
-            'status' => 'paid',
-            'reference' => $reference,
-            'note' => $paymentNote,
-        ]);
+            $locked->update([
+                'amount' => $newPaid,
+                'paid_at' => now(),
+                'paid_amount' => $newPaid,
+                'status' => 'paid',
+                'reference' => $reference,
+                'note' => $paymentNote,
+            ]);
+        } elseif ($leftover <= 0.001) {
+            $locked->update([
+                'paid_at' => now(),
+                'paid_amount' => $newPaid,
+                'status' => 'paid',
+                'reference' => $reference,
+                'note' => $paymentNote,
+            ]);
+        } else {
+            $locked->update([
+                'paid_amount' => $newPaid,
+                'status' => 'partial',
+                'reference' => $reference,
+                'note' => $paymentNote,
+            ]);
+        }
 
         $installment = $locked->installment;
         if ($installment && $installment->items()->where('status', '!=', 'paid')->count() === 0) {

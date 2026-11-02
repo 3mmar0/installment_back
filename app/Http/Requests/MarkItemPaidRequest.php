@@ -19,6 +19,7 @@ class MarkItemPaidRequest extends FormRequest
     {
         return [
             'paid_amount' => ['required', 'numeric', 'min:0.01', 'max:99999999.99'],
+            'carry_remainder' => ['sometimes', 'boolean'],
             'note' => ['nullable', 'string', 'max:2000'],
             'reference' => ['nullable', 'string', 'max:255'],
         ];

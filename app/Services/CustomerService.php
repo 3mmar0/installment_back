@@ -274,7 +274,7 @@ class CustomerService implements CustomerServiceInterface
             'paid_amount' => $installments->with('items')
                 ->get()
                 ->sum(function ($installment) {
-                    return $installment->items->where('status', 'paid')->sum('paid_amount');
+                    return $installment->items->sum(fn ($item) => (float) ($item->paid_amount ?? 0));
                 }),
         ];
 

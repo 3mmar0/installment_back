@@ -4,7 +4,7 @@ use App\Models\Customer;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
 
-it('creates a new month when a partial payment has no later item', function () {
+it('creates a new month only when the remainder is carried and there is no later item', function () {
     $merchant = actingAsMerchant();
     $customer = Customer::factory()->forMerchant($merchant)->create();
     $installment = Installment::factory()->forCustomer($customer)->create(['months' => 1]);
@@ -13,8 +13,10 @@ it('creates a new month when a partial payment has no later item', function () {
         'due_date' => now()->toDateString(),
     ]);
 
-    $this->postJson("/api/installment-item-pay/{$item->id}", ['paid_amount' => 400])
-        ->assertOk();
+    $this->postJson("/api/installment-item-pay/{$item->id}", [
+        'paid_amount' => 400,
+        'carry_remainder' => true,
+    ])->assertOk();
 
     $installment = $item->installment->fresh(['items']);
     $items = $installment->items->sortBy('due_date')->values();
@@ -25,6 +27,23 @@ it('creates a new month when a partial payment has no later item', function () {
         ->and($items[1]->status)->toBe('pending')
         ->and((float) $items[1]->amount)->toBe(600.00)
         ->and($installment->months)->toBe(2);
+});
+
+it('finishes a month after several partial payments', function () {
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create();
+    $installment = Installment::factory()->forCustomer($customer)->create(['months' => 1]);
+    $item = InstallmentItem::factory()->forInstallment($installment)->create([
+        'amount' => 1000.00,
+        'due_date' => now()->toDateString(),
+    ]);
+
+    $this->postJson("/api/installment-item-pay/{$item->id}", ['paid_amount' => 400])->assertOk();
+    $this->postJson("/api/installment-item-pay/{$item->id}", ['paid_amount' => 600])->assertOk();
+
+    expect($item->fresh()->status)->toBe('paid')
+        ->and((float) $item->fresh()->paid_amount)->toBe(1000.00)
+        ->and($item->installment->items)->toHaveCount(1);
 });
 
 it('marks selected months as paid when creating an installment', function () {

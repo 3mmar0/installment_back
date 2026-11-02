@@ -15,7 +15,7 @@ function payableItem(App\Models\User $merchant, float $amount = 1000.00): Instal
         ->create(['amount' => $amount]);
 }
 
-it('accepts a payment below the scheduled amount and carries the remainder', function () {
+it('keeps a short payment on the same month so more can be added later', function () {
     $merchant = actingAsMerchant();
     $customer = Customer::factory()->forMerchant($merchant)->create();
     $installment = Installment::factory()->forCustomer($customer)->create(['months' => 2]);
@@ -30,6 +30,36 @@ it('accepts a payment below the scheduled amount and carries the remainder', fun
 
     $this->postJson("/api/installment-item-pay/{$first->id}", ['paid_amount' => 300])
         ->assertOk();
+
+    expect($first->fresh()->status)->toBe('partial')
+        ->and((float) $first->fresh()->amount)->toBe(1000.00)
+        ->and((float) $first->fresh()->paid_amount)->toBe(300.00)
+        ->and((float) $second->fresh()->amount)->toBe(1000.00);
+
+    $this->postJson("/api/installment-item-pay/{$first->id}", ['paid_amount' => 200])
+        ->assertOk();
+
+    expect($first->fresh()->status)->toBe('partial')
+        ->and((float) $first->fresh()->paid_amount)->toBe(500.00);
+});
+
+it('carries the remainder only when asked', function () {
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create();
+    $installment = Installment::factory()->forCustomer($customer)->create(['months' => 2]);
+    $first = InstallmentItem::factory()->forInstallment($installment)->create([
+        'amount' => 1000.00,
+        'due_date' => now()->toDateString(),
+    ]);
+    $second = InstallmentItem::factory()->forInstallment($installment)->create([
+        'amount' => 1000.00,
+        'due_date' => now()->addMonth()->toDateString(),
+    ]);
+
+    $this->postJson("/api/installment-item-pay/{$first->id}", [
+        'paid_amount' => 300,
+        'carry_remainder' => true,
+    ])->assertOk();
 
     expect($first->fresh()->status)->toBe('paid')
         ->and((float) $first->fresh()->amount)->toBe(300.00)

@@ -150,7 +150,8 @@ class ClientInstallmentService
                 $locked,
                 $paidAmount,
                 $reference,
-                isset($data['note']) ? trim((string) $data['note']) : null
+                isset($data['note']) ? trim((string) $data['note']) : null,
+                filter_var($data['carry_remainder'] ?? false, FILTER_VALIDATE_BOOLEAN)
             );
         });
 

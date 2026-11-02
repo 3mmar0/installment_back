@@ -25,6 +25,7 @@ class InstallmentItemResource extends JsonResource
             'due_date' => $dueDate,
             'amount' => (float) $this->amount,
             'paid_amount' => $this->paid_amount ? (float) $this->paid_amount : null,
+            'remaining_amount' => round((float) $this->amount - (float) ($this->paid_amount ?? 0), 2),
             'status' => $this->status,
             'paid_at' => $this->paid_at?->toISOString(),
             'reference' => $this->reference,

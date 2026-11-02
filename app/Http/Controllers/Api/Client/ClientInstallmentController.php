@@ -67,6 +67,7 @@ class ClientInstallmentController extends Controller
     {
         $data = $request->validate([
             'paid_amount' => ['nullable', 'numeric', 'min:0.01'],
+            'carry_remainder' => ['sometimes', 'boolean'],
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
