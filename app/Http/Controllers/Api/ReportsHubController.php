@@ -9,6 +9,7 @@ use App\Http\Traits\ApiResponse;
 use App\Models\User;
 use App\Services\CreditScore\CreditScoreAnalyticsService;
 use App\Services\CreditScore\CreditScoreInfrastructure;
+use App\Services\Reports\PlatformReportQueryService;
 use App\Services\Reports\ReportCatalog;
 use App\Services\Reports\ReportQueryService;
 use Illuminate\Http\JsonResponse;
@@ -61,6 +62,7 @@ class ReportsHubController extends Controller
         private readonly InstallmentServiceInterface $installmentService,
         private readonly CreditScoreAnalyticsService $creditAnalytics,
         private readonly ReportQueryService $reportQueryService,
+        private readonly PlatformReportQueryService $platformReportQueryService,
     ) {
     }
 
@@ -69,16 +71,29 @@ class ReportsHubController extends Controller
         $user = $request->user();
         $financial = $this->canAccessFinancialReports($user);
         $credit = $this->canAccessCreditReports($user);
+        $platform = $this->canAccessPlatformReports($user);
+
+        $categories = [];
+        if ($platform || $financial) {
+            $categories = ReportCatalog::definitions($platform);
+            if (! $financial) {
+                $categories = array_values(array_filter(
+                    $categories,
+                    fn (array $category) => $category['key'] === 'platform'
+                ));
+            }
+        }
 
         return $this->successResponse([
             'financial_enabled' => $financial,
             'credit_enabled' => $credit,
+            'platform_enabled' => $platform,
             'financial_exports' => $financial ? [
                 ['format' => 'pdf', 'label' => 'PDF — ملخص لوحة التحكم'],
                 ['format' => 'excel', 'label' => 'Excel — ملخص + جداول'],
                 ['format' => 'csv', 'label' => 'CSV — ملخص + جداول'],
             ] : [],
-            'categories' => $financial ? ReportCatalog::definitions() : [],
+            'categories' => $categories,
             'credit_report_types' => $credit ? array_values(self::CREDIT_REPORT_TYPES) : [],
         ], 'تم جلب فهرس التقارير');
     }
@@ -89,16 +104,31 @@ class ReportsHubController extends Controller
         $payload = [
             'financial' => null,
             'credit' => null,
+            'platform' => null,
         ];
 
         if ($this->canAccessFinancialReports($user)) {
-            $payload['financial'] = $this->installmentService->getDashboardAnalytics($user);
+            try {
+                $payload['financial'] = $this->installmentService->getDashboardAnalytics($user);
+            } catch (\Throwable $e) {
+                report($e);
+                $payload['financial'] = null;
+            }
         }
 
         if ($this->canAccessCreditReports($user) && CreditScoreInfrastructure::schemaReady()) {
-            $credit = $this->creditAnalytics->dashboard($user);
-            $credit['score_trend'] = $this->creditAnalytics->scoreTrend($user, 30);
-            $payload['credit'] = $credit;
+            try {
+                $credit = $this->creditAnalytics->dashboard($user);
+                $credit['score_trend'] = $this->creditAnalytics->scoreTrend($user, 30);
+                $payload['credit'] = $credit;
+            } catch (\Throwable $e) {
+                report($e);
+                $payload['credit'] = null;
+            }
+        }
+
+        if ($this->canAccessPlatformReports($user)) {
+            $payload['platform'] = $this->platformReportQueryService->run('platform_overview')['summary'];
         }
 
         return $this->successResponse($payload, 'تم جلب ملخص التقارير');
@@ -111,7 +141,13 @@ class ReportsHubController extends Controller
         }
 
         $user = $request->user();
-        if (! $this->canAccessFinancialReports($user)) {
+        $isPlatform = ReportCatalog::isPlatform($reportKey);
+
+        if ($isPlatform) {
+            if (! $this->canAccessPlatformReports($user)) {
+                return $this->forbiddenResponse('تقارير المنصة متاحة لمدير المنصة فقط');
+            }
+        } elseif (! $this->canAccessFinancialReports($user)) {
             return $this->forbiddenResponse('التقارير المالية غير مفعّلة في خطتك');
         }
 
@@ -119,9 +155,13 @@ class ReportsHubController extends Controller
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'days' => ['sometimes', 'integer', 'min:1', 'max:90'],
+            'search' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'min_usage' => ['sometimes', 'integer', 'min:0', 'max:1000000'],
         ]);
 
-        $data = $this->reportQueryService->run($user, $reportKey, $validated);
+        $data = $isPlatform
+            ? $this->platformReportQueryService->run($reportKey, $validated)
+            : $this->reportQueryService->run($user, $reportKey, $validated);
 
         return $this->successResponse($data, 'تم جلب التقرير');
     }
@@ -133,24 +173,38 @@ class ReportsHubController extends Controller
         }
 
         $user = $request->user();
-        if (! $this->canAccessFinancialReports($user)) {
+        $isPlatform = ReportCatalog::isPlatform($reportKey);
+
+        if ($isPlatform) {
+            if (! $this->canAccessPlatformReports($user)) {
+                return $this->forbiddenResponse('تقارير المنصة متاحة لمدير المنصة فقط');
+            }
+        } elseif (! $this->canAccessFinancialReports($user)) {
             return $this->forbiddenResponse('التقارير المالية غير مفعّلة في خطتك');
         }
 
         $validated = $request->validate([
             'format' => ['required', 'string', 'in:csv,excel,pdf'],
             'days' => ['sometimes', 'integer', 'min:1', 'max:90'],
+            'search' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'min_usage' => ['sometimes', 'integer', 'min:0', 'max:1000000'],
         ]);
 
         if ($validated['format'] !== 'csv') {
             return $this->errorResponse('صيغة التصدير غير متاحة لهذا التقرير بعد', 422);
         }
 
-        $payload = $this->reportQueryService->run($user, $reportKey, [
+        $filters = [
             'page' => 1,
             'per_page' => 100,
             'days' => $validated['days'] ?? 14,
-        ]);
+            'search' => $validated['search'] ?? null,
+            'min_usage' => $validated['min_usage'] ?? 0,
+        ];
+
+        $payload = $isPlatform
+            ? $this->platformReportQueryService->run($reportKey, $filters)
+            : $this->reportQueryService->run($user, $reportKey, $filters);
 
         $handle = fopen('php://temp', 'r+');
         if ($handle === false) {
@@ -162,7 +216,11 @@ class ReportsHubController extends Controller
         foreach ($payload['rows'] as $row) {
             $line = [];
             foreach ($payload['columns'] as $column) {
-                $line[] = $row[$column['key']] ?? '';
+                $value = $row[$column['key']] ?? '';
+                if (is_bool($value)) {
+                    $value = $value ? 'نعم' : 'لا';
+                }
+                $line[] = $value;
             }
             fputcsv($handle, $line, ',', '"', '\\');
         }
@@ -188,7 +246,7 @@ class ReportsHubController extends Controller
         if ($user === null) {
             return false;
         }
-        if ($user->isOwner()) {
+        if ($user->isOwner() || $user->isPlatformAdmin()) {
             return true;
         }
         $limit = LimitsHelper::getUserLimits($user->id);
@@ -201,7 +259,7 @@ class ReportsHubController extends Controller
         if ($user === null) {
             return false;
         }
-        if ($user->isOwner()) {
+        if ($user->isOwner() || $user->isPlatformAdmin()) {
             return true;
         }
         $limit = LimitsHelper::getUserLimits($user->id);
@@ -210,5 +268,10 @@ class ReportsHubController extends Controller
         }
 
         return $limit->canAccessFeature('internal_credit_score');
+    }
+
+    private function canAccessPlatformReports(?User $user): bool
+    {
+        return $user !== null && $user->isPlatformAdmin();
     }
 }
