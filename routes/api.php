@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AssistantController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Client\ClientAuthController;
 use App\Http\Controllers\Api\Client\ClientInstallmentController;
@@ -175,6 +176,13 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::post('notification-generate', 'generate');
             Route::post('notification-send-emails', 'sendReminderEmails');
             Route::delete('notification-delete/{id}', 'destroy');
+        });
+
+        // AI assistant (vendor)
+        Route::controller(AssistantController::class)->group(function () {
+            Route::get('assistant/status', 'status');
+            Route::post('assistant/message', 'message')->middleware('throttle:30,1');
+            Route::post('assistant/confirm', 'confirm')->middleware('throttle:30,1');
         });
 
         // Customer routes
