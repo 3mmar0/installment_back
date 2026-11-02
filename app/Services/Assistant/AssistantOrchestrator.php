@@ -3,7 +3,9 @@
 namespace App\Services\Assistant;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 class AssistantOrchestrator
 {
@@ -26,6 +28,10 @@ class AssistantOrchestrator
     public function handleMessage(User $user, string $message, ?string $sessionId = null): array
     {
         if (! config('assistant.enabled', true)) {
+            $this->logFail('assistant_disabled', $user, $sessionId, [
+                'message_preview' => mb_substr($message, 0, 120),
+            ]);
+
             return $this->response(
                 'المساعد الذكي متوقف حالياً.',
                 $sessionId ?: '',
@@ -36,6 +42,8 @@ class AssistantOrchestrator
         }
 
         if (! config('assistant.gemini.api_key')) {
+            $this->logFail('gemini_api_key_missing', $user, $sessionId);
+
             return $this->response(
                 'المساعد غير مُعد بعد. أضف مفتاح Gemini من لوحة السيرفر.',
                 $sessionId ?: '',
@@ -46,6 +54,10 @@ class AssistantOrchestrator
         }
 
         if (! $this->sessions->consumeDailyMessage($user->id)) {
+            $this->logFail('daily_limit_reached', $user, $sessionId, [
+                'daily_limit' => (int) config('assistant.daily_message_limit', 30),
+            ]);
+
             return $this->response(
                 'وصلت للحد اليومي لرسائل المساعد. جرّب بكرة.',
                 $sessionId ?: '',
@@ -75,6 +87,10 @@ class AssistantOrchestrator
 
                 $candidate = $raw['candidates'][0]['content'] ?? null;
                 if (! is_array($candidate)) {
+                    $this->logFail('empty_gemini_candidate', $user, $sessionId, [
+                        'loop' => $i,
+                        'message_preview' => mb_substr($message, 0, 120),
+                    ]);
                     $reply = 'ما قدرتش أفهم الطلب. حاول بصيغة أوضح.';
                     break;
                 }
@@ -115,6 +131,13 @@ class AssistantOrchestrator
                     $args = is_array($call['args'] ?? null) ? $call['args'] : [];
                     $toolResult = $this->tools->run($name, $args, $user);
 
+                    if (! ($toolResult['ok'] ?? false)) {
+                        $this->logFail('tool_run_failed', $user, $sessionId, [
+                            'tool' => $name,
+                            'error' => $toolResult['error'] ?? 'unknown',
+                        ]);
+                    }
+
                     if (! empty($toolResult['pending_action'])) {
                         $pendingAction = $toolResult['pending_action'];
                     }
@@ -153,8 +176,13 @@ class AssistantOrchestrator
                     break;
                 }
             }
-        } catch (RuntimeException $e) {
+        } catch (Throwable $e) {
             $reply = 'حصل خطأ في المساعد. حاول تاني بعد شوية.';
+            $this->logFail('assistant_exception', $user, $sessionId, [
+                'exception' => $e::class,
+                'error' => $e->getMessage(),
+                'message_preview' => mb_substr($message, 0, 120),
+            ]);
             report($e);
         }
 
@@ -190,6 +218,10 @@ class AssistantOrchestrator
     {
         $pending = $this->pendingActions->get($user->id, $pendingActionId);
         if (! $pending) {
+            $this->logFail('pending_action_expired', $user, null, [
+                'pending_action_id' => $pendingActionId,
+            ]);
+
             return [
                 'reply' => 'انتهت صلاحية الطلب. ابعت الرسالة تاني.',
                 'session_id' => null,
@@ -203,6 +235,12 @@ class AssistantOrchestrator
         $this->pendingActions->forget($user->id, $pendingActionId);
 
         if (! $confirmed) {
+            Log::channel('assistant')->info('assistant_action_cancelled', [
+                'user_id' => $user->id,
+                'pending_action_id' => $pendingActionId,
+                'type' => $pending['type'] ?? null,
+            ]);
+
             return [
                 'reply' => 'تم إلغاء العملية.',
                 'session_id' => null,
@@ -215,6 +253,12 @@ class AssistantOrchestrator
 
         $executed = $this->tools->confirm($pending, $user);
         if (! ($executed['ok'] ?? false)) {
+            $this->logFail('confirm_execution_failed', $user, null, [
+                'pending_action_id' => $pendingActionId,
+                'type' => $pending['type'] ?? null,
+                'error' => $executed['error'] ?? 'unknown',
+            ]);
+
             return [
                 'reply' => (string) ($executed['error'] ?? 'فشل التنفيذ.'),
                 'session_id' => null,
@@ -313,5 +357,20 @@ PROMPT;
             'navigation' => $navigation,
             'remaining_today' => $remaining,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function logFail(string $reason, User $user, ?string $sessionId, array $context = []): void
+    {
+        $payload = array_merge([
+            'reason' => $reason,
+            'user_id' => $user->id,
+            'session_id' => $sessionId,
+        ], $context);
+
+        Log::channel('assistant')->error('assistant_fail: '.$reason, $payload);
+        Log::error('[assistant] '.$reason, $payload);
     }
 }

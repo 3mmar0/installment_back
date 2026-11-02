@@ -10,6 +10,7 @@ use App\Models\InstallmentItem;
 use App\Models\User;
 use App\Services\CustomerService;
 use App\Services\InstallmentService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -170,11 +171,26 @@ class AssistantToolRunner
                 default => ['ok' => false, 'error' => 'نوع الإجراء غير معروف.'],
             };
         } catch (ValidationException $e) {
+            $error = collect($e->errors())->flatten()->first() ?: 'بيانات غير صالحة.';
+            Log::channel('assistant')->warning('assistant_confirm_validation_failed', [
+                'user_id' => $user->id,
+                'type' => $type,
+                'error' => $error,
+            ]);
+
             return [
                 'ok' => false,
-                'error' => collect($e->errors())->flatten()->first() ?: 'بيانات غير صالحة.',
+                'error' => $error,
             ];
         } catch (\Throwable $e) {
+            Log::channel('assistant')->error('assistant_confirm_exception', [
+                'user_id' => $user->id,
+                'type' => $type,
+                'exception' => $e::class,
+                'error' => $e->getMessage(),
+            ]);
+            report($e);
+
             return ['ok' => false, 'error' => $e->getMessage() ?: 'فشل تنفيذ الإجراء.'];
         }
     }
