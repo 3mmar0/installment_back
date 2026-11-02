@@ -21,3 +21,11 @@ test('far upper egypt from cairo is distant', function () {
 test('missing governorate is unknown', function () {
     expect(GovernorateHelper::distanceBand('cairo', null))->toBe(GovernorateHelper::UNKNOWN);
 });
+
+test('normalize accepts arabic and english labels', function () {
+    expect(GovernorateHelper::normalize('القاهرة'))->toBe('cairo')
+        ->and(GovernorateHelper::normalize('Cairo'))->toBe('cairo')
+        ->and(GovernorateHelper::normalize('محافظة الجيزة'))->toBe('giza')
+        ->and(GovernorateHelper::normalize('اسكندرية'))->toBe('alexandria')
+        ->and(GovernorateHelper::normalize('not-a-gov'))->toBeNull();
+});

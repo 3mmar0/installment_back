@@ -10,9 +10,9 @@ use App\Models\InstallmentItem;
 use App\Models\User;
 use App\Services\CustomerService;
 use App\Services\InstallmentService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AssistantToolRunner
@@ -44,6 +44,23 @@ class AssistantToolRunner
                 ],
             ],
             [
+                'name' => 'list_customers',
+                'description' => 'List recent vendor customers, optionally filtered by search text. Use when the user asks to show customers.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'query' => [
+                            'type' => 'string',
+                            'description' => 'Optional search text',
+                        ],
+                        'limit' => [
+                            'type' => 'integer',
+                            'description' => 'Max rows to return (default 15, max 30)',
+                        ],
+                    ],
+                ],
+            ],
+            [
                 'name' => 'get_customer',
                 'description' => 'Get one customer by id and prepare navigation to customer details.',
                 'parameters' => [
@@ -52,6 +69,17 @@ class AssistantToolRunner
                         'customer_id' => ['type' => 'integer'],
                     ],
                     'required' => ['customer_id'],
+                ],
+            ],
+            [
+                'name' => 'summarize_customer_installments',
+                'description' => 'Summarize installments for a customer: totals, paid, remaining, overdue, and short item list.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'customer_id' => ['type' => 'integer'],
+                        'customer_query' => ['type' => 'string'],
+                    ],
                 ],
             ],
             [
@@ -78,25 +106,44 @@ class AssistantToolRunner
                 ],
             ],
             [
+                'name' => 'open_screen',
+                'description' => 'Open a screen in the app (customers list, installment list, dashboard, detail pages, etc.).',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'screen' => [
+                            'type' => 'string',
+                            'description' => 'One of: customers, customer_detail, installments, installment_detail, dashboard, overdue, due_soon, reports, notifications',
+                        ],
+                        'id' => [
+                            'type' => 'integer',
+                            'description' => 'Required for customer_detail and installment_detail',
+                        ],
+                    ],
+                    'required' => ['screen'],
+                ],
+            ],
+            [
                 'name' => 'propose_create_customer',
-                'description' => 'Propose creating a customer. Does not save until the user confirms.',
+                'description' => 'Propose creating a customer only. Does not save until the user confirms.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
                         'name' => ['type' => 'string'],
                         'phone' => ['type' => 'string'],
                         'national_id' => ['type' => 'string'],
-                        'governorate' => ['type' => 'string'],
+                        'governorate' => ['type' => 'string', 'description' => 'Arabic or English governorate name, or code like cairo'],
                         'email' => ['type' => 'string'],
                         'address' => ['type' => 'string'],
                         'notes' => ['type' => 'string'],
+                        'job' => ['type' => 'string'],
                     ],
                     'required' => ['name'],
                 ],
             ],
             [
                 'name' => 'propose_create_installment',
-                'description' => 'Propose creating an installment plan. Does not save until the user confirms.',
+                'description' => 'Propose creating an installment plan for an existing customer. Supports prepaid_months. Does not save until confirm.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -107,8 +154,41 @@ class AssistantToolRunner
                         'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD; default today if omitted'],
                         'name' => ['type' => 'string'],
                         'notes' => ['type' => 'string'],
+                        'prepaid_months' => [
+                            'type' => 'array',
+                            'items' => ['type' => 'integer'],
+                            'description' => '1-based month numbers already paid, e.g. [1,2]',
+                        ],
                     ],
                     'required' => ['total_amount', 'months'],
+                ],
+            ],
+            [
+                'name' => 'propose_create_customer_with_installment',
+                'description' => 'Propose creating a NEW customer and an installment in one confirmation. Use when the user asks to add a customer and set up installments together (including prepaid months and past start date).',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'name' => ['type' => 'string'],
+                        'phone' => ['type' => 'string'],
+                        'national_id' => ['type' => 'string'],
+                        'governorate' => ['type' => 'string'],
+                        'email' => ['type' => 'string'],
+                        'address' => ['type' => 'string'],
+                        'notes' => ['type' => 'string'],
+                        'job' => ['type' => 'string'],
+                        'total_amount' => ['type' => 'number'],
+                        'months' => ['type' => 'integer'],
+                        'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
+                        'installment_name' => ['type' => 'string'],
+                        'installment_notes' => ['type' => 'string'],
+                        'prepaid_months' => [
+                            'type' => 'array',
+                            'items' => ['type' => 'integer'],
+                            'description' => '1-based month numbers already paid, e.g. [1,2]',
+                        ],
+                    ],
+                    'required' => ['name', 'total_amount', 'months'],
                 ],
             ],
             [
@@ -140,11 +220,15 @@ class AssistantToolRunner
     {
         return match ($name) {
             'search_customers' => $this->searchCustomers($args, $user),
+            'list_customers' => $this->listCustomers($args, $user),
             'get_customer' => $this->getCustomer($args, $user),
+            'summarize_customer_installments' => $this->summarizeCustomerInstallments($args, $user),
             'get_installment' => $this->getInstallment($args, $user),
             'find_open_installment_item' => $this->findOpenItem($args, $user),
+            'open_screen' => $this->openScreen($args, $user),
             'propose_create_customer' => $this->proposeCreateCustomer($args, $user),
             'propose_create_installment' => $this->proposeCreateInstallment($args, $user),
+            'propose_create_customer_with_installment' => $this->proposeCreateCustomerWithInstallment($args, $user),
             'propose_pay_installment_item' => $this->proposePay($args, $user),
             default => ['ok' => false, 'error' => "Unknown tool: {$name}"],
         };
@@ -167,6 +251,7 @@ class AssistantToolRunner
             return match ($type) {
                 'create_customer' => $this->executeCreateCustomer($payload, $user),
                 'create_installment' => $this->executeCreateInstallment($payload, $user),
+                'create_customer_with_installment' => $this->executeCreateCustomerWithInstallment($payload, $user),
                 'pay_installment_item' => $this->executePay($payload, $user),
                 default => ['ok' => false, 'error' => 'نوع الإجراء غير معروف.'],
             };
@@ -208,12 +293,7 @@ class AssistantToolRunner
 
         $rows = $this->customerService->getCustomersForSelect($user, $query)
             ->take(8)
-            ->map(fn (Customer $c) => [
-                'id' => $c->id,
-                'name' => $c->name,
-                'phone' => $c->phone,
-                'governorate' => $c->governorate,
-            ])
+            ->map(fn (Customer $c) => $this->customerListRow($c))
             ->values()
             ->all();
 
@@ -222,6 +302,34 @@ class AssistantToolRunner
             'result' => [
                 'count' => count($rows),
                 'customers' => $rows,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{ok: bool, result?: array<string, mixed>, error?: string, navigation?: array<string, mixed>|null}
+     */
+    private function listCustomers(array $args, User $user): array
+    {
+        $limit = (int) ($args['limit'] ?? 15);
+        $limit = max(1, min(30, $limit));
+        $query = $this->nullableString($args['query'] ?? null);
+
+        $rows = $this->customerService->getCustomersForSelect($user, $query)
+            ->take($limit)
+            ->map(fn (Customer $c) => $this->customerListRow($c))
+            ->values()
+            ->all();
+
+        return [
+            'ok' => true,
+            'result' => [
+                'count' => count($rows),
+                'customers' => $rows,
+            ],
+            'navigation' => [
+                'screen' => 'CustomerList',
             ],
         ];
     }
@@ -245,6 +353,109 @@ class AssistantToolRunner
                 'phone' => $customer->phone,
                 'national_id' => $customer->national_id,
                 'governorate' => $customer->governorate,
+                'governorate_label' => GovernorateHelper::label($customer->governorate),
+                'address' => $customer->address,
+            ],
+            'navigation' => [
+                'screen' => 'CustomerDetail',
+                'params' => ['id' => $customer->id],
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{ok: bool, result?: array<string, mixed>, error?: string, navigation?: array<string, mixed>|null}
+     */
+    private function summarizeCustomerInstallments(array $args, User $user): array
+    {
+        $resolved = $this->resolveCustomer($args, $user);
+        if (! ($resolved['ok'] ?? false)) {
+            return $resolved;
+        }
+
+        /** @var Customer $customer */
+        $customer = $resolved['customer'];
+
+        $installments = Installment::query()
+            ->with(['items' => fn ($q) => $q->orderBy('due_date')->orderBy('id')])
+            ->where('customer_id', $customer->id)
+            ->when(! $user->canManageMerchantData(), fn ($q) => $q->where('user_id', $user->id))
+            ->orderByDesc('id')
+            ->get();
+
+        $today = now()->startOfDay();
+        $plans = [];
+        $totalAmount = 0.0;
+        $totalPaid = 0.0;
+        $overdueCount = 0;
+
+        foreach ($installments as $installment) {
+            $planPaid = 0.0;
+            $planRemaining = 0.0;
+            $itemsSummary = [];
+
+            foreach ($installment->items as $index => $item) {
+                $due = round((float) $item->amount, 2);
+                $paid = round((float) ($item->paid_amount ?? 0), 2);
+                if ($item->status === 'paid') {
+                    $paid = $due;
+                }
+                $remaining = max(0, round($due - $paid, 2));
+                $planPaid += $paid;
+                $planRemaining += $remaining;
+
+                $isOverdue = $remaining > 0.001
+                    && in_array($item->status, ['pending', 'partial', 'overdue'], true)
+                    && $item->due_date
+                    && $item->due_date->lt($today);
+                if ($isOverdue) {
+                    $overdueCount++;
+                }
+
+                $itemsSummary[] = [
+                    'month' => $index + 1,
+                    'item_id' => $item->id,
+                    'due_date' => $item->due_date?->toDateString(),
+                    'amount' => $due,
+                    'paid_amount' => $paid,
+                    'remaining' => $remaining,
+                    'status' => $item->status,
+                    'overdue' => $isOverdue,
+                ];
+            }
+
+            $planTotal = round((float) $installment->total_amount, 2);
+            $totalAmount += $planTotal;
+            $totalPaid += $planPaid;
+
+            $plans[] = [
+                'id' => $installment->id,
+                'name' => $installment->name,
+                'status' => $installment->status,
+                'total_amount' => $planTotal,
+                'paid_amount' => round($planPaid, 2),
+                'remaining_amount' => round($planRemaining, 2),
+                'months' => (int) $installment->months,
+                'start_date' => $installment->start_date?->toDateString() ?? (string) $installment->start_date,
+                'items' => $itemsSummary,
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'result' => [
+                'customer' => [
+                    'id' => $customer->id,
+                    'name' => $customer->name,
+                    'phone' => $customer->phone,
+                ],
+                'plans_count' => count($plans),
+                'total_amount' => round($totalAmount, 2),
+                'total_paid' => round($totalPaid, 2),
+                'total_remaining' => round($totalAmount - $totalPaid, 2),
+                'overdue_items_count' => $overdueCount,
+                'plans' => $plans,
             ],
             'navigation' => [
                 'screen' => 'CustomerDetail',
@@ -316,51 +527,125 @@ class AssistantToolRunner
 
     /**
      * @param  array<string, mixed>  $args
+     * @return array{ok: bool, result?: array<string, mixed>, error?: string, navigation?: array<string, mixed>|null}
+     */
+    private function openScreen(array $args, User $user): array
+    {
+        $screen = strtolower(trim((string) ($args['screen'] ?? '')));
+        $id = (int) ($args['id'] ?? 0);
+
+        return match ($screen) {
+            'customers', 'customer_list' => [
+                'ok' => true,
+                'result' => ['opened' => 'CustomerList'],
+                'navigation' => ['screen' => 'CustomerList'],
+            ],
+            'customer_detail', 'customer' => $this->openCustomerDetail($id, $user),
+            'installments', 'installment_list' => [
+                'ok' => true,
+                'result' => ['opened' => 'InstallmentList'],
+                'navigation' => ['screen' => 'InstallmentList'],
+            ],
+            'installment_detail', 'installment' => $this->openInstallmentDetail($id, $user),
+            'dashboard', 'home' => [
+                'ok' => true,
+                'result' => ['opened' => 'Dashboard'],
+                'navigation' => ['screen' => 'Dashboard'],
+            ],
+            'overdue' => [
+                'ok' => true,
+                'result' => ['opened' => 'Overdue'],
+                'navigation' => ['screen' => 'Overdue'],
+            ],
+            'due_soon', 'duesoon' => [
+                'ok' => true,
+                'result' => ['opened' => 'DueSoon'],
+                'navigation' => ['screen' => 'DueSoon'],
+            ],
+            'reports' => [
+                'ok' => true,
+                'result' => ['opened' => 'Reports'],
+                'navigation' => ['screen' => 'Reports'],
+            ],
+            'notifications' => [
+                'ok' => true,
+                'result' => ['opened' => 'Notifications'],
+                'navigation' => ['screen' => 'Notifications'],
+            ],
+            default => [
+                'ok' => false,
+                'error' => 'شاشة غير معروفة. استخدم: customers, customer_detail, installments, installment_detail, dashboard, overdue, due_soon, reports, notifications',
+            ],
+        };
+    }
+
+    /**
+     * @return array{ok: bool, result?: array<string, mixed>, error?: string, navigation?: array<string, mixed>|null}
+     */
+    private function openCustomerDetail(int $id, User $user): array
+    {
+        $customer = $this->ownedCustomer($id, $user);
+        if (! $customer) {
+            return ['ok' => false, 'error' => 'لازم رقم عميل صالح لفتح التفاصيل.'];
+        }
+
+        return [
+            'ok' => true,
+            'result' => ['opened' => 'CustomerDetail', 'id' => $customer->id],
+            'navigation' => [
+                'screen' => 'CustomerDetail',
+                'params' => ['id' => $customer->id],
+            ],
+        ];
+    }
+
+    /**
+     * @return array{ok: bool, result?: array<string, mixed>, error?: string, navigation?: array<string, mixed>|null}
+     */
+    private function openInstallmentDetail(int $id, User $user): array
+    {
+        $installment = $this->ownedInstallment($id, $user);
+        if (! $installment) {
+            return ['ok' => false, 'error' => 'لازم رقم قسط صالح لفتح التفاصيل.'];
+        }
+
+        return [
+            'ok' => true,
+            'result' => ['opened' => 'InstallmentDetail', 'id' => $installment->id],
+            'navigation' => [
+                'screen' => 'InstallmentDetail',
+                'params' => ['id' => $installment->id],
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
      * @return array{ok: bool, result?: array<string, mixed>, error?: string, pending_action?: array<string, mixed>|null}
      */
     private function proposeCreateCustomer(array $args, User $user): array
     {
-        $payload = [
-            'name' => trim((string) ($args['name'] ?? '')),
-            'phone' => $this->nullableString($args['phone'] ?? null),
-            'national_id' => $this->nullableString($args['national_id'] ?? null),
-            'governorate' => GovernorateHelper::normalize($args['governorate'] ?? null),
-            'email' => $this->nullableString($args['email'] ?? null),
-            'address' => $this->nullableString($args['address'] ?? null),
-            'notes' => $this->nullableString($args['notes'] ?? null),
-        ];
-
-        $validator = Validator::make($payload, [
-            'name' => ['required', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:50'],
-            'national_id' => ['nullable', 'string', 'size:14'],
-            'governorate' => GovernorateHelper::rule(),
-            'email' => ['nullable', 'email', 'max:255'],
-            'address' => ['nullable', 'string', 'max:500'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
-        if ($validator->fails()) {
-            return [
-                'ok' => false,
-                'error' => $validator->errors()->first() ?: 'بيانات العميل غير مكتملة.',
-            ];
+        $built = $this->buildCustomerPayload($args);
+        if (! ($built['ok'] ?? false)) {
+            return $built;
         }
 
-        if ($payload['national_id']) {
-            $payload['national_id'] = NationalIdHelper::normalize($payload['national_id']);
-        }
+        /** @var array<string, mixed> $payload */
+        $payload = $built['payload'];
 
         $summary = 'إضافة عميل: '.$payload['name'];
         if ($payload['phone']) {
             $summary .= ' — هاتف '.$payload['phone'];
+        }
+        if ($payload['governorate']) {
+            $summary .= ' — '.GovernorateHelper::label($payload['governorate']);
         }
 
         $id = $this->pendingActionStore->put($user->id, [
             'type' => 'create_customer',
             'summary_ar' => $summary,
             'payload' => $payload,
-            'payload_preview' => $payload,
+            'payload_preview' => $this->customerPreview($payload),
         ]);
 
         return [
@@ -370,7 +655,7 @@ class AssistantToolRunner
                 'id' => $id,
                 'type' => 'create_customer',
                 'summary_ar' => $summary,
-                'payload_preview' => $payload,
+                'payload_preview' => $this->customerPreview($payload),
             ],
         ];
     }
@@ -411,55 +696,34 @@ class AssistantToolRunner
             return ['ok' => false, 'error' => 'لازم تحدد عميل صالح قبل إنشاء القسط.'];
         }
 
-        $startDate = $this->nullableString($args['start_date'] ?? null) ?: now()->toDateString();
-        $payload = [
-            'customer_id' => $customer->id,
-            'total_amount' => round((float) ($args['total_amount'] ?? 0), 2),
-            'months' => (int) ($args['months'] ?? 0),
-            'start_date' => $startDate,
-            'name' => $this->nullableString($args['name'] ?? null),
-            'notes' => $this->nullableString($args['notes'] ?? null),
-            'products' => [],
-        ];
-
-        $validator = Validator::make($payload, [
-            'customer_id' => [
-                'required',
-                Rule::exists('customers', 'id')->where(function ($query) use ($user) {
-                    if (! $user->canManageMerchantData()) {
-                        $query->where('user_id', $user->id);
-                    }
-                }),
-            ],
-            'total_amount' => ['required', 'numeric', 'min:0.01'],
-            'months' => ['required', 'integer', 'min:1', 'max:120'],
-            'start_date' => ['required', 'date'],
-            'name' => ['nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
-        if ($validator->fails()) {
-            return [
-                'ok' => false,
-                'error' => $validator->errors()->first() ?: 'بيانات القسط غير مكتملة.',
-            ];
+        $built = $this->buildInstallmentPayload($args, $customer->id);
+        if (! ($built['ok'] ?? false)) {
+            return $built;
         }
 
+        /** @var array<string, mixed> $payload */
+        $payload = $built['payload'];
+        $prepaid = $payload['prepaid_months'];
+
         $summary = sprintf(
-            'قسط لـ %s بمبلغ %s على %d شهر (بداية %s)',
+            'قسط لـ %s بمبلغ %s على %d شهر (بداية %s)%s',
             $customer->name,
             number_format($payload['total_amount'], 2),
             $payload['months'],
-            $payload['start_date']
+            $payload['start_date'],
+            $prepaid !== [] ? ' — مدفوع مسبقاً: أشهر '.implode('، ', $prepaid) : ''
         );
+
+        $preview = array_merge($payload, [
+            'customer_name' => $customer->name,
+            'prepaid_months_label' => $prepaid !== [] ? implode('، ', $prepaid) : null,
+        ]);
 
         $id = $this->pendingActionStore->put($user->id, [
             'type' => 'create_installment',
             'summary_ar' => $summary,
             'payload' => $payload,
-            'payload_preview' => array_merge($payload, [
-                'customer_name' => $customer->name,
-            ]),
+            'payload_preview' => $preview,
         ]);
 
         return [
@@ -469,9 +733,86 @@ class AssistantToolRunner
                 'id' => $id,
                 'type' => 'create_installment',
                 'summary_ar' => $summary,
-                'payload_preview' => array_merge($payload, [
-                    'customer_name' => $customer->name,
-                ]),
+                'payload_preview' => $preview,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{ok: bool, result?: array<string, mixed>, error?: string, pending_action?: array<string, mixed>|null}
+     */
+    private function proposeCreateCustomerWithInstallment(array $args, User $user): array
+    {
+        $customerBuilt = $this->buildCustomerPayload($args);
+        if (! ($customerBuilt['ok'] ?? false)) {
+            return $customerBuilt;
+        }
+
+        /** @var array<string, mixed> $customerPayload */
+        $customerPayload = $customerBuilt['payload'];
+
+        $installmentArgs = [
+            'total_amount' => $args['total_amount'] ?? null,
+            'months' => $args['months'] ?? null,
+            'start_date' => $args['start_date'] ?? null,
+            'name' => $args['installment_name'] ?? null,
+            'notes' => $args['installment_notes'] ?? ($args['notes'] ?? null),
+            'prepaid_months' => $args['prepaid_months'] ?? [],
+        ];
+
+        // Placeholder customer_id for validation shape; real id assigned on confirm.
+        $installmentBuilt = $this->buildInstallmentPayload($installmentArgs, 0, false);
+        if (! ($installmentBuilt['ok'] ?? false)) {
+            return $installmentBuilt;
+        }
+
+        /** @var array<string, mixed> $installmentPayload */
+        $installmentPayload = $installmentBuilt['payload'];
+        unset($installmentPayload['customer_id']);
+
+        $prepaid = $installmentPayload['prepaid_months'];
+        $summary = sprintf(
+            'عميل جديد %s + قسط %s على %d شهر (بداية %s)%s',
+            $customerPayload['name'],
+            number_format($installmentPayload['total_amount'], 2),
+            $installmentPayload['months'],
+            $installmentPayload['start_date'],
+            $prepaid !== [] ? ' — مدفوع مسبقاً: أشهر '.implode('، ', $prepaid) : ''
+        );
+
+        $payload = [
+            'customer' => $customerPayload,
+            'installment' => $installmentPayload,
+        ];
+
+        $preview = array_merge(
+            $this->customerPreview($customerPayload),
+            [
+                'total_amount' => $installmentPayload['total_amount'],
+                'months' => $installmentPayload['months'],
+                'start_date' => $installmentPayload['start_date'],
+                'prepaid_months' => $prepaid,
+                'prepaid_months_label' => $prepaid !== [] ? implode('، ', $prepaid) : null,
+                'installment_name' => $installmentPayload['name'],
+            ]
+        );
+
+        $id = $this->pendingActionStore->put($user->id, [
+            'type' => 'create_customer_with_installment',
+            'summary_ar' => $summary,
+            'payload' => $payload,
+            'payload_preview' => $preview,
+        ]);
+
+        return [
+            'ok' => true,
+            'result' => ['pending' => true, 'pending_action_id' => $id],
+            'pending_action' => [
+                'id' => $id,
+                'type' => 'create_customer_with_installment',
+                'summary_ar' => $summary,
+                'payload_preview' => $preview,
             ],
         ];
     }
@@ -537,18 +878,20 @@ class AssistantToolRunner
                 : ''
         );
 
+        $preview = [
+            'item_id' => $item->id,
+            'installment_id' => $item->installment_id,
+            'customer_name' => $customerName,
+            'paid_amount' => $paidAmount,
+            'remaining_before' => $remaining,
+            'carry_remainder' => $carry,
+        ];
+
         $id = $this->pendingActionStore->put($user->id, [
             'type' => 'pay_installment_item',
             'summary_ar' => $summary,
             'payload' => $payload,
-            'payload_preview' => [
-                'item_id' => $item->id,
-                'installment_id' => $item->installment_id,
-                'customer_name' => $customerName,
-                'paid_amount' => $paidAmount,
-                'remaining_before' => $remaining,
-                'carry_remainder' => $carry,
-            ],
+            'payload_preview' => $preview,
         ]);
 
         return [
@@ -558,14 +901,7 @@ class AssistantToolRunner
                 'id' => $id,
                 'type' => 'pay_installment_item',
                 'summary_ar' => $summary,
-                'payload_preview' => [
-                    'item_id' => $item->id,
-                    'installment_id' => $item->installment_id,
-                    'customer_name' => $customerName,
-                    'paid_amount' => $paidAmount,
-                    'remaining_before' => $remaining,
-                    'carry_remainder' => $carry,
-                ],
+                'payload_preview' => $preview,
             ],
         ];
     }
@@ -605,6 +941,49 @@ class AssistantToolRunner
                 'id' => $installment->id,
                 'customer_id' => $installment->customer_id,
                 'total_amount' => (float) $installment->total_amount,
+                'prepaid_months' => $payload['prepaid_months'] ?? [],
+            ],
+            'navigation' => [
+                'screen' => 'InstallmentDetail',
+                'params' => ['id' => $installment->id],
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{ok: bool, result?: array<string, mixed>, navigation?: array<string, mixed>|null, error?: string}
+     */
+    private function executeCreateCustomerWithInstallment(array $payload, User $user): array
+    {
+        $customerPayload = is_array($payload['customer'] ?? null) ? $payload['customer'] : [];
+        $installmentPayload = is_array($payload['installment'] ?? null) ? $payload['installment'] : [];
+
+        if ($customerPayload === [] || $installmentPayload === []) {
+            return ['ok' => false, 'error' => 'بيانات العميل أو القسط ناقصة.'];
+        }
+
+        $result = DB::transaction(function () use ($customerPayload, $installmentPayload, $user) {
+            $customer = $this->customerService->createCustomer($customerPayload, $user);
+            $installmentPayload['customer_id'] = $customer->id;
+            $installment = $this->installmentService->createInstallment($installmentPayload, $user);
+
+            return compact('customer', 'installment');
+        });
+
+        /** @var Customer $customer */
+        $customer = $result['customer'];
+        /** @var Installment $installment */
+        $installment = $result['installment'];
+
+        return [
+            'ok' => true,
+            'result' => [
+                'customer_id' => $customer->id,
+                'customer_name' => $customer->name,
+                'installment_id' => $installment->id,
+                'total_amount' => (float) $installment->total_amount,
+                'prepaid_months' => $installmentPayload['prepaid_months'] ?? [],
             ],
             'navigation' => [
                 'screen' => 'InstallmentDetail',
@@ -638,6 +1017,211 @@ class AssistantToolRunner
                 'params' => ['id' => $updated->installment_id],
             ],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{ok: bool, payload?: array<string, mixed>, error?: string}
+     */
+    private function buildCustomerPayload(array $args): array
+    {
+        $nationalRaw = $this->nullableString($args['national_id'] ?? null);
+        $nationalId = $nationalRaw !== null ? NationalIdHelper::normalize($nationalRaw) : null;
+        if ($nationalRaw !== null && ($nationalId === null || strlen($nationalId) !== NationalIdHelper::LENGTH)) {
+            return [
+                'ok' => false,
+                'error' => 'الرقم القومي لازم يكون 14 رقم. لو مش متاح سيبه فاضي.',
+            ];
+        }
+
+        $govRaw = $this->nullableString($args['governorate'] ?? null);
+        $governorate = GovernorateHelper::normalize($govRaw);
+        if ($govRaw !== null && $governorate === null) {
+            return [
+                'ok' => false,
+                'error' => 'المحافظة غير معروفة. اكتب اسم محافظة مصرية زي القاهرة أو الجيزة.',
+            ];
+        }
+
+        $payload = [
+            'name' => trim((string) ($args['name'] ?? '')),
+            'phone' => $this->nullableString($args['phone'] ?? null),
+            'national_id' => $nationalId,
+            'governorate' => $governorate,
+            'email' => $this->nullableString($args['email'] ?? null),
+            'address' => $this->nullableString($args['address'] ?? null),
+            'notes' => $this->nullableString($args['notes'] ?? null),
+            'job' => $this->nullableString($args['job'] ?? null),
+        ];
+
+        $validator = Validator::make($payload, [
+            'name' => ['required', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'national_id' => ['nullable', 'string', 'size:14'],
+            'governorate' => GovernorateHelper::rule(),
+            'email' => ['nullable', 'email', 'max:255'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'notes' => ['nullable', 'string'],
+            'job' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if ($validator->fails()) {
+            return [
+                'ok' => false,
+                'error' => $validator->errors()->first() ?: 'بيانات العميل غير مكتملة.',
+            ];
+        }
+
+        return ['ok' => true, 'payload' => $payload];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{ok: bool, payload?: array<string, mixed>, error?: string}
+     */
+    private function buildInstallmentPayload(array $args, int $customerId, bool $requireCustomer = true): array
+    {
+        $startDate = $this->nullableString($args['start_date'] ?? null) ?: now()->toDateString();
+        $months = (int) ($args['months'] ?? 0);
+        $prepaid = $this->normalizePrepaidMonths($args['prepaid_months'] ?? [], $months);
+        if ($prepaid['error'] ?? null) {
+            return ['ok' => false, 'error' => $prepaid['error']];
+        }
+
+        $payload = [
+            'customer_id' => $customerId,
+            'total_amount' => round((float) ($args['total_amount'] ?? 0), 2),
+            'months' => $months,
+            'start_date' => $startDate,
+            'name' => $this->nullableString($args['name'] ?? null),
+            'notes' => $this->nullableString($args['notes'] ?? null),
+            'products' => [],
+            'prepaid_months' => $prepaid['months'],
+        ];
+
+        $rules = [
+            'total_amount' => ['required', 'numeric', 'min:0.01'],
+            'months' => ['required', 'integer', 'min:1', 'max:120'],
+            'start_date' => ['required', 'date'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
+        ];
+
+        if ($requireCustomer) {
+            $rules['customer_id'] = ['required', 'integer', 'min:1'];
+        }
+
+        $validator = Validator::make($payload, $rules);
+
+        if ($validator->fails()) {
+            return [
+                'ok' => false,
+                'error' => $validator->errors()->first() ?: 'بيانات القسط غير مكتملة.',
+            ];
+        }
+
+        return ['ok' => true, 'payload' => $payload];
+    }
+
+    /**
+     * @param  mixed  $raw
+     * @return array{months?: list<int>, error?: string}
+     */
+    private function normalizePrepaidMonths(mixed $raw, int $months): array
+    {
+        if ($raw === null || $raw === '' || $raw === []) {
+            return ['months' => []];
+        }
+
+        if (! is_array($raw)) {
+            return ['error' => 'الشهور المدفوعة مسبقاً لازم تكون قائمة أرقام زي [1,2].'];
+        }
+
+        $normalized = [];
+        foreach ($raw as $value) {
+            $month = (int) $value;
+            if ($month < 1 || ($months > 0 && $month > $months)) {
+                return ['error' => 'رقم الشهر المدفوع مسبقاً لازم يكون بين 1 وعدد الشهور.'];
+            }
+            $normalized[] = $month;
+        }
+
+        $normalized = array_values(array_unique($normalized));
+        sort($normalized);
+
+        return ['months' => $normalized];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function customerPreview(array $payload): array
+    {
+        return [
+            'name' => $payload['name'] ?? null,
+            'phone' => $payload['phone'] ?? null,
+            'national_id' => $payload['national_id'] ?? null,
+            'governorate' => $payload['governorate'] ?? null,
+            'governorate_label' => GovernorateHelper::label($payload['governorate'] ?? null),
+            'address' => $payload['address'] ?? null,
+            'email' => $payload['email'] ?? null,
+            'job' => $payload['job'] ?? null,
+            'notes' => $payload['notes'] ?? null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function customerListRow(Customer $c): array
+    {
+        return [
+            'id' => $c->id,
+            'name' => $c->name,
+            'phone' => $c->phone,
+            'governorate' => $c->governorate,
+            'governorate_label' => GovernorateHelper::label($c->governorate),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{ok: bool, customer?: Customer, error?: string, result?: array<string, mixed>}
+     */
+    private function resolveCustomer(array $args, User $user): array
+    {
+        $customerId = (int) ($args['customer_id'] ?? 0);
+        if ($customerId <= 0 && ! empty($args['customer_query'])) {
+            $matches = $this->customerService
+                ->getCustomersForSelect($user, (string) $args['customer_query'])
+                ->take(5)
+                ->values();
+            if ($matches->count() === 0) {
+                return ['ok' => false, 'error' => 'مفيش عميل مطابق.'];
+            }
+            if ($matches->count() > 1) {
+                return [
+                    'ok' => true,
+                    'result' => [
+                        'ambiguous' => true,
+                        'customers' => $matches->map(fn (Customer $c) => [
+                            'id' => $c->id,
+                            'name' => $c->name,
+                            'phone' => $c->phone,
+                        ])->all(),
+                    ],
+                ];
+            }
+            $customerId = (int) $matches->first()->id;
+        }
+
+        $customer = $this->ownedCustomer($customerId, $user);
+        if (! $customer) {
+            return ['ok' => false, 'error' => 'حدد العميل بالاسم أو الرقم.'];
+        }
+
+        return ['ok' => true, 'customer' => $customer];
     }
 
     /**

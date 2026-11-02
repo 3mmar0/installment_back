@@ -67,9 +67,57 @@ class GovernorateHelper
             return null;
         }
 
-        $code = strtolower(trim($code));
+        $raw = trim($code);
+        if ($raw === '') {
+            return null;
+        }
 
-        return $code !== '' && isset(self::all()[$code]) ? $code : null;
+        $stripped = preg_replace('/^(محافظة|محافظه)\s+/u', '', $raw) ?? $raw;
+        $stripped = trim($stripped);
+        $lower = mb_strtolower($stripped);
+
+        if (isset(self::all()[$lower])) {
+            return $lower;
+        }
+
+        foreach (self::all() as $key => $meta) {
+            if (mb_strtolower((string) $meta['label_ar']) === $lower
+                || mb_strtolower((string) $meta['label_en']) === $lower) {
+                return $key;
+            }
+        }
+
+        $aliases = [
+            'القاهره' => 'cairo',
+            'الجيزه' => 'giza',
+            'اسكندرية' => 'alexandria',
+            'الاسكندرية' => 'alexandria',
+            'الإسكندريه' => 'alexandria',
+            'الاسكندريه' => 'alexandria',
+            'كفرالشيخ' => 'kafr_el_sheikh',
+            'كفر الشيخ' => 'kafr_el_sheikh',
+            'بور سعيد' => 'port_said',
+            'بورسعيد' => 'port_said',
+            'بنيسويف' => 'beni_suef',
+            'بنى سويف' => 'beni_suef',
+            'الفيوم' => 'fayoum',
+            'الوادي الجديد' => 'new_valley',
+            'الوادى الجديد' => 'new_valley',
+            'مطروح' => 'matrouh',
+            'البحر الاحمر' => 'red_sea',
+            'البحر الأحمر' => 'red_sea',
+            'شمال سيناء' => 'north_sinai',
+            'شمال سينا' => 'north_sinai',
+            'جنوب سيناء' => 'south_sinai',
+            'جنوب سينا' => 'south_sinai',
+        ];
+
+        $aliasKey = $aliases[$stripped] ?? $aliases[$lower] ?? null;
+        if ($aliasKey !== null && isset(self::all()[$aliasKey])) {
+            return $aliasKey;
+        }
+
+        return null;
     }
 
     public static function region(?string $code): ?string

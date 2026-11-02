@@ -138,6 +138,147 @@ it('cancels a pending action through the confirm endpoint', function () {
     expect(Customer::query()->where('name', 'لن يُنشأ')->exists())->toBeFalse();
 });
 
+it('creates customer with installment and prepaid months only after confirm', function () {
+    $merchant = actingAsMerchant();
+    $runner = app(AssistantToolRunner::class);
+    $startDate = now()->subMonths(2)->toDateString();
+
+    $proposed = $runner->run('propose_create_customer_with_installment', [
+        'name' => 'عميل مركّب',
+        'phone' => '01001112233',
+        'governorate' => 'القاهرة',
+        'address' => 'مدينة نصر',
+        'total_amount' => 20000,
+        'months' => 5,
+        'start_date' => $startDate,
+        'prepaid_months' => [1, 2],
+    ], $merchant);
+
+    expect($proposed['ok'])->toBeTrue()
+        ->and($proposed['pending_action']['type'] ?? null)->toBe('create_customer_with_installment')
+        ->and(Customer::query()->where('name', 'عميل مركّب')->exists())->toBeFalse();
+
+    $pending = app(PendingActionStore::class)->get($merchant->id, $proposed['pending_action']['id']);
+    $confirmed = $runner->confirm($pending, $merchant);
+
+    expect($confirmed['ok'])->toBeTrue()
+        ->and($confirmed['navigation']['screen'] ?? null)->toBe('InstallmentDetail');
+
+    $customer = Customer::query()->where('name', 'عميل مركّب')->first();
+    expect($customer)->not->toBeNull()
+        ->and($customer->governorate)->toBe('cairo')
+        ->and($customer->address)->toBe('مدينة نصر');
+
+    $installment = Installment::query()->where('customer_id', $customer->id)->first();
+    expect($installment)->not->toBeNull()
+        ->and((float) $installment->total_amount)->toBe(20000.0)
+        ->and((int) $installment->months)->toBe(5);
+
+    $items = $installment->items()->orderBy('due_date')->orderBy('id')->get();
+    expect($items)->toHaveCount(5)
+        ->and($items[0]->status)->toBe('paid')
+        ->and($items[1]->status)->toBe('paid')
+        ->and($items[2]->status)->toBe('pending');
+});
+
+it('supports prepaid months when proposing installment for existing customer', function () {
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create(['name' => 'ليلى']);
+    $runner = app(AssistantToolRunner::class);
+
+    $proposed = $runner->run('propose_create_installment', [
+        'customer_id' => $customer->id,
+        'total_amount' => 1000,
+        'months' => 4,
+        'start_date' => now()->subMonth()->toDateString(),
+        'prepaid_months' => [1],
+    ], $merchant);
+
+    $pending = app(PendingActionStore::class)->get($merchant->id, $proposed['pending_action']['id']);
+    $confirmed = $runner->confirm($pending, $merchant);
+
+    $installment = Installment::query()->where('customer_id', $customer->id)->first();
+    $items = $installment->items()->orderBy('due_date')->orderBy('id')->get();
+
+    expect($confirmed['ok'])->toBeTrue()
+        ->and($items[0]->status)->toBe('paid')
+        ->and($items[1]->status)->toBe('pending');
+});
+
+it('lists customers and summarizes installments', function () {
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create(['name' => 'نور']);
+    $installment = Installment::factory()->forCustomer($customer)->create([
+        'total_amount' => 900,
+        'months' => 3,
+    ]);
+    InstallmentItem::factory()->forInstallment($installment)->create([
+        'amount' => 300,
+        'due_date' => now()->subDays(10)->toDateString(),
+        'status' => 'pending',
+    ]);
+    InstallmentItem::factory()->forInstallment($installment)->create([
+        'amount' => 300,
+        'due_date' => now()->addMonth()->toDateString(),
+        'status' => 'pending',
+    ]);
+    InstallmentItem::factory()->forInstallment($installment)->create([
+        'amount' => 300,
+        'due_date' => now()->addMonths(2)->toDateString(),
+        'status' => 'pending',
+    ]);
+
+    $runner = app(AssistantToolRunner::class);
+
+    $listed = $runner->run('list_customers', ['query' => 'نور'], $merchant);
+    expect($listed['ok'])->toBeTrue()
+        ->and($listed['result']['count'] ?? 0)->toBeGreaterThan(0)
+        ->and($listed['navigation']['screen'] ?? null)->toBe('CustomerList');
+
+    $summary = $runner->run('summarize_customer_installments', [
+        'customer_id' => $customer->id,
+    ], $merchant);
+
+    expect($summary['ok'])->toBeTrue()
+        ->and($summary['result']['plans_count'] ?? 0)->toBe(1)
+        ->and($summary['result']['overdue_items_count'] ?? 0)->toBe(1)
+        ->and($summary['navigation']['screen'] ?? null)->toBe('CustomerDetail');
+});
+
+it('opens app screens through open_screen', function () {
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create();
+    $runner = app(AssistantToolRunner::class);
+
+    expect($runner->run('open_screen', ['screen' => 'dashboard'], $merchant)['navigation']['screen'] ?? null)
+        ->toBe('Dashboard')
+        ->and($runner->run('open_screen', ['screen' => 'customers'], $merchant)['navigation']['screen'] ?? null)
+        ->toBe('CustomerList')
+        ->and($runner->run('open_screen', ['screen' => 'overdue'], $merchant)['navigation']['screen'] ?? null)
+        ->toBe('Overdue')
+        ->and($runner->run('open_screen', [
+            'screen' => 'customer_detail',
+            'id' => $customer->id,
+        ], $merchant)['navigation'] ?? null)
+        ->toMatchArray([
+            'screen' => 'CustomerDetail',
+            'params' => ['id' => $customer->id],
+        ]);
+});
+
+it('rejects invalid national id with a clear arabic message', function () {
+    $merchant = actingAsMerchant();
+    $runner = app(AssistantToolRunner::class);
+
+    $result = $runner->run('propose_create_customer', [
+        'name' => 'اختبار',
+        'national_id' => '12345',
+    ], $merchant);
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['error'] ?? '')->toContain('14');
+});
+
 it('enforces the daily assistant message limit', function () {
     config([
         'assistant.enabled' => true,
