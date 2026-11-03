@@ -138,22 +138,32 @@ class LimitsHelper
         $payload['reports'] = $payload['reports'] ?? self::DEFAULT_LIMITS['reports'];
         $payload['features'] = self::normalizeFeatures($payload['features'] ?? null);
 
-        // Preserve current usage counts if they exist
+        // Preserve current usage unless explicitly provided in attributes (tests / admin).
         if ($existingLimit) {
             $payload['customers_used'] = $existingLimit->customers_used ?? 0;
             $payload['installments_used'] = $existingLimit->installments_used ?? 0;
             $payload['notifications_used'] = $existingLimit->notifications_used ?? 0;
-            $payload['assistant_messages_used'] = $existingLimit->assistant_messages_used ?? 0;
-            $payload['whatsapp_messages_used'] = $existingLimit->whatsapp_messages_used ?? 0;
-            $payload['assistant_messages_bonus'] = $existingLimit->assistant_messages_bonus ?? 0;
-            $payload['whatsapp_messages_bonus'] = $existingLimit->whatsapp_messages_bonus ?? 0;
-            $payload['usage_period'] = $existingLimit->usage_period ?? now()->format('Y-m');
+            $payload['assistant_messages_used'] = array_key_exists('assistant_messages_used', $attributes)
+                ? (int) $attributes['assistant_messages_used']
+                : ($existingLimit->assistant_messages_used ?? 0);
+            $payload['whatsapp_messages_used'] = array_key_exists('whatsapp_messages_used', $attributes)
+                ? (int) $attributes['whatsapp_messages_used']
+                : ($existingLimit->whatsapp_messages_used ?? 0);
+            $payload['assistant_messages_bonus'] = array_key_exists('assistant_messages_bonus', $attributes)
+                ? (int) $attributes['assistant_messages_bonus']
+                : ($existingLimit->assistant_messages_bonus ?? 0);
+            $payload['whatsapp_messages_bonus'] = array_key_exists('whatsapp_messages_bonus', $attributes)
+                ? (int) $attributes['whatsapp_messages_bonus']
+                : ($existingLimit->whatsapp_messages_bonus ?? 0);
+            $payload['usage_period'] = array_key_exists('usage_period', $attributes)
+                ? $attributes['usage_period']
+                : ($existingLimit->usage_period ?? now()->format('Y-m'));
         } else {
-            $payload['assistant_messages_used'] = 0;
-            $payload['whatsapp_messages_used'] = 0;
-            $payload['assistant_messages_bonus'] = $payload['assistant_messages_bonus'] ?? 0;
-            $payload['whatsapp_messages_bonus'] = $payload['whatsapp_messages_bonus'] ?? 0;
-            $payload['usage_period'] = now()->format('Y-m');
+            $payload['assistant_messages_used'] = (int) ($attributes['assistant_messages_used'] ?? 0);
+            $payload['whatsapp_messages_used'] = (int) ($attributes['whatsapp_messages_used'] ?? 0);
+            $payload['assistant_messages_bonus'] = (int) ($attributes['assistant_messages_bonus'] ?? $payload['assistant_messages_bonus'] ?? 0);
+            $payload['whatsapp_messages_bonus'] = (int) ($attributes['whatsapp_messages_bonus'] ?? $payload['whatsapp_messages_bonus'] ?? 0);
+            $payload['usage_period'] = $attributes['usage_period'] ?? now()->format('Y-m');
         }
 
         $userLimit = UserLimit::updateOrCreate(
@@ -544,6 +554,8 @@ class LimitsHelper
             'notifications',
             'assistant_messages',
             'whatsapp_messages',
+            'assistant_messages_used',
+            'whatsapp_messages_used',
             'assistant_messages_bonus',
             'whatsapp_messages_bonus',
             'usage_period',

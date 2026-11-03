@@ -17,10 +17,11 @@ it('returns assistant status for a merchant', function () {
     config([
         'assistant.enabled' => true,
         'assistant.gemini.api_key' => 'test-key',
-        'assistant.daily_message_limit' => 30,
     ]);
 
-    actingAsMerchant();
+    actingAsMerchant([
+        'assistant_messages' => ['from' => 0, 'to' => 30],
+    ]);
 
     $this->getJson('/api/assistant/status')
         ->assertOk()

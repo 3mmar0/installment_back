@@ -26,6 +26,8 @@ class SubscriptionResource extends JsonResource
             'customers' => $this->customers,
             'installments' => $this->installments,
             'notifications' => $this->notifications,
+            'assistant_messages' => $this->assistant_messages,
+            'whatsapp_messages' => $this->whatsapp_messages,
             'reports' => $this->reports,
             'features' => $this->features,
             'created_at' => $this->created_at?->toISOString(),
