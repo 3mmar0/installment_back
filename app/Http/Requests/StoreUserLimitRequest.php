@@ -41,6 +41,12 @@ class StoreUserLimitRequest extends FormRequest
             'notifications' => ['nullable', 'array'],
             'notifications.from' => ['nullable', 'integer', 'min:0'],
             'notifications.to' => ['nullable', 'integer', 'min:0'],
+            'assistant_messages' => ['nullable', 'array'],
+            'assistant_messages.from' => ['nullable', 'integer', 'min:0'],
+            'assistant_messages.to' => ['nullable', 'integer', 'min:0'],
+            'whatsapp_messages' => ['nullable', 'array'],
+            'whatsapp_messages.from' => ['nullable', 'integer', 'min:0'],
+            'whatsapp_messages.to' => ['nullable', 'integer', 'min:0'],
             'features' => ['nullable', 'array'],
             'reports' => ['nullable', 'boolean'],
         ];

@@ -8,9 +8,12 @@ use App\Http\Requests\StoreUserLimitRequest;
 use App\Http\Requests\UpdateUserLimitRequest;
 use App\Http\Resources\UserLimitResource;
 use App\Http\Traits\ApiResponse;
+use App\Models\MerchantGift;
+use App\Models\User;
 use App\Models\UserLimit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class UserLimitController extends Controller
 {
@@ -166,5 +169,69 @@ class UserLimitController extends Controller
             'can_access' => $canAccess,
             'subscription' => $subscriptionInfo['subscription'] ?? null,
         ], 'تم التحقق من إمكانية الوصول إلى الميزة بنجاح');
+    }
+
+    /**
+     * Reset monthly AI/WhatsApp usage for a merchant.
+     */
+    public function resetUsage(Request $request, User $user): JsonResponse
+    {
+        $data = $request->validate([
+            'clear_bonus' => ['sometimes', 'boolean'],
+        ]);
+
+        $limit = LimitsHelper::resetMonthlyUsage(
+            $user->id,
+            (bool) ($data['clear_bonus'] ?? false)
+        );
+
+        return $this->successResponse(
+            new UserLimitResource($limit->loadMissing('user')),
+            'تم إعادة ضبط استخدام الرسائل الشهري'
+        );
+    }
+
+    /**
+     * Grant a gift bonus to a merchant.
+     */
+    public function grantGift(Request $request, User $user): JsonResponse
+    {
+        $data = $request->validate([
+            'resource' => ['required', 'string', Rule::in(MerchantGift::RESOURCES)],
+            'amount' => ['required', 'integer', 'min:1', 'max:100000'],
+            'note' => ['nullable', 'string', 'max:500'],
+            'source' => ['sometimes', 'string', Rule::in(['gift', 'admin_adjust'])],
+        ]);
+
+        $gift = LimitsHelper::grantGift(
+            $user->id,
+            $data['resource'],
+            (int) $data['amount'],
+            $request->user()?->id,
+            $data['note'] ?? null,
+            $data['source'] ?? 'gift'
+        );
+
+        $limit = LimitsHelper::getUserLimits($user->id);
+
+        return $this->successResponse([
+            'gift' => $gift,
+            'limits' => $limit ? new UserLimitResource($limit) : null,
+        ], 'تم منح الهدية بنجاح');
+    }
+
+    /**
+     * List gifts granted to a merchant.
+     */
+    public function gifts(User $user): JsonResponse
+    {
+        $gifts = MerchantGift::query()
+            ->with('granter:id,name,email')
+            ->where('user_id', $user->id)
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
+
+        return $this->successResponse($gifts, 'تم جلب سجل الهدايا');
     }
 }

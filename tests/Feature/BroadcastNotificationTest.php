@@ -3,19 +3,6 @@
 use App\Enums\UserRole;
 use App\Models\Notification;
 use App\Models\User;
-use Laravel\Sanctum\Sanctum;
-
-function actingAsPlatformAdmin(): User
-{
-    $admin = User::factory()->create([
-        'role' => UserRole::Owner,
-        'is_platform_admin' => true,
-    ]);
-
-    Sanctum::actingAs($admin);
-
-    return $admin;
-}
 
 it('broadcasts a system announcement to every regular user when no user_ids are sent', function () {
     actingAsPlatformAdmin();
@@ -75,6 +62,25 @@ it('gives platform admins one broadcast summary instead of a copy per recipient'
         ->and($adminNotes->first()->data['recipient_count'])->toBe(2)
         ->and($adminNotes->first()->message)->toContain('2')
         ->and($adminNotes->first()->message)->toContain('نزل النسخة الجديدة');
+});
+
+it('stores video_url on broadcast notification payload', function () {
+    actingAsPlatformAdmin();
+    $merchant = merchantWithPlan();
+
+    $this->postJson('/api/admin/system/broadcast-notification', [
+        'title' => 'إعلان بفيديو',
+        'message' => 'شاهد الفيديو',
+        'type' => 'system_announcement',
+        'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        'user_ids' => [$merchant->id],
+    ])->assertOk();
+
+    $notification = Notification::query()->where('user_id', $merchant->id)->first();
+
+    expect($notification)->not->toBeNull()
+        ->and($notification->data['video_url'] ?? null)->toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+        ->and($notification->data['display_as'] ?? null)->toBe('modal');
 });
 
 it('rejects targeted announcements that include users who are not regular users', function () {

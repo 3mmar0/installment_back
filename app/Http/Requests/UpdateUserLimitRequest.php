@@ -40,6 +40,12 @@ class UpdateUserLimitRequest extends FormRequest
             'notifications' => ['sometimes', 'nullable', 'array'],
             'notifications.from' => ['nullable', 'integer', 'min:0'],
             'notifications.to' => ['nullable', 'integer', 'min:0'],
+            'assistant_messages' => ['sometimes', 'nullable', 'array'],
+            'assistant_messages.from' => ['nullable', 'integer', 'min:0'],
+            'assistant_messages.to' => ['nullable', 'integer', 'min:0'],
+            'whatsapp_messages' => ['sometimes', 'nullable', 'array'],
+            'whatsapp_messages.from' => ['nullable', 'integer', 'min:0'],
+            'whatsapp_messages.to' => ['nullable', 'integer', 'min:0'],
             'features' => ['sometimes', 'nullable', 'array'],
             'reports' => ['sometimes', 'nullable', 'boolean'],
         ];

@@ -41,6 +41,18 @@ expect()->extend('toBeOne', function () {
 |
 */
 
+function actingAsPlatformAdmin(): App\Models\User
+{
+    $admin = App\Models\User::factory()->create([
+        'role' => App\Enums\UserRole::Owner,
+        'is_platform_admin' => true,
+    ]);
+
+    Laravel\Sanctum\Sanctum::actingAs($admin);
+
+    return $admin;
+}
+
 /**
  * Create a merchant with an active plan.
  *
@@ -60,7 +72,14 @@ function merchantWithPlan(array $limits = []): App\Models\User
         'installments' => ['from' => 0, 'to' => 100],
         'notifications' => ['from' => 0, 'to' => 100],
         'reports' => true,
-        'features' => ['basic_reports' => true, 'internal_credit_score' => true],
+        'assistant_messages' => ['from' => 0, 'to' => 100],
+        'whatsapp_messages' => ['from' => 0, 'to' => 100],
+        'features' => [
+            'basic_reports' => true,
+            'internal_credit_score' => true,
+            'assistant' => true,
+            'whatsapp' => true,
+        ],
         'status' => 'active',
     ], $limits));
 

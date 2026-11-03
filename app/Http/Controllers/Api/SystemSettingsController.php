@@ -92,6 +92,7 @@ class SystemSettingsController extends Controller
             'message' => ['required', 'string', 'max:5000'],
             'type' => ['required', 'string', 'in:system_announcement,mobile_app_update'],
             'action_url' => ['nullable', 'url', 'max:2048'],
+            'video_url' => ['nullable', 'url', 'max:2048'],
             'image' => ['nullable', 'image', 'max:5120'],
             'image_url' => ['nullable', 'url', 'max:2048'],
             'user_ids' => ['nullable', 'array'],
@@ -108,6 +109,10 @@ class SystemSettingsController extends Controller
 
         if (! empty($data['action_url'])) {
             $payload['action_url'] = $data['action_url'];
+        }
+
+        if (! empty($data['video_url'])) {
+            $payload['video_url'] = $data['video_url'];
         }
 
         if ($request->hasFile('image')) {

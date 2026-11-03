@@ -279,11 +279,10 @@ it('rejects invalid national id with a clear arabic message', function () {
         ->and($result['error'] ?? '')->toContain('14');
 });
 
-it('enforces the daily assistant message limit', function () {
+it('enforces the monthly assistant message limit from the plan', function () {
     config([
         'assistant.enabled' => true,
         'assistant.gemini.api_key' => 'test-key',
-        'assistant.daily_message_limit' => 1,
     ]);
 
     Http::fake([
@@ -296,7 +295,15 @@ it('enforces the daily assistant message limit', function () {
         ], 200),
     ]);
 
-    actingAsMerchant();
+    $merchant = actingAsMerchant();
+    $limit = $merchant->userLimit;
+    $limit->update([
+        'assistant_messages' => ['from' => 0, 'to' => 1],
+        'assistant_messages_used' => 0,
+        'assistant_messages_bonus' => 0,
+        'usage_period' => now()->format('Y-m'),
+        'features' => array_merge($limit->features ?? [], ['assistant' => true]),
+    ]);
 
     $this->postJson('/api/assistant/message', ['message' => 'مساعدة'])
         ->assertOk()
@@ -307,5 +314,5 @@ it('enforces the daily assistant message limit', function () {
         ->assertJsonPath('data.remaining_today', 0);
 
     expect($this->postJson('/api/assistant/message', ['message' => 'تالت'])->json('data.reply'))
-        ->toContain('وصلت للحد اليومي');
+        ->toContain('وصلت للحد الشهري');
 });

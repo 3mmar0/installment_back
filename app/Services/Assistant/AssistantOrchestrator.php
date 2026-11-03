@@ -37,7 +37,7 @@ class AssistantOrchestrator
                 $sessionId ?: '',
                 null,
                 null,
-                $this->sessions->remainingDailyMessages($user->id)
+                $this->sessions->remainingMonthlyMessages($user->id)
             );
         }
 
@@ -49,17 +49,29 @@ class AssistantOrchestrator
                 $sessionId ?: '',
                 null,
                 null,
-                $this->sessions->remainingDailyMessages($user->id)
+                $this->sessions->remainingMonthlyMessages($user->id)
             );
         }
 
-        if (! $this->sessions->consumeDailyMessage($user->id)) {
-            $this->logFail('daily_limit_reached', $user, $sessionId, [
-                'daily_limit' => (int) config('assistant.daily_message_limit', 30),
+        if (! $this->sessions->isFeatureEnabled($user->id)) {
+            $this->logFail('assistant_feature_disabled', $user, $sessionId);
+
+            return $this->response(
+                'المساعد الذكي غير متاح في خطتك الحالية.',
+                $sessionId ?: '',
+                null,
+                null,
+                0
+            );
+        }
+
+        if (! $this->sessions->consumeMonthlyMessage($user->id)) {
+            $this->logFail('monthly_limit_reached', $user, $sessionId, [
+                'remaining' => $this->sessions->remainingMonthlyMessages($user->id),
             ]);
 
             return $this->response(
-                'وصلت للحد اليومي لرسائل المساعد. جرّب بكرة.',
+                'وصلت للحد الشهري لرسائل المساعد في خطتك.',
                 $sessionId ?: '',
                 null,
                 null,
@@ -200,7 +212,7 @@ class AssistantOrchestrator
             $sessionId,
             $pendingAction,
             $navigation,
-            $this->sessions->remainingDailyMessages($user->id)
+            $this->sessions->remainingMonthlyMessages($user->id)
         );
     }
 
@@ -228,7 +240,7 @@ class AssistantOrchestrator
                 'pending_action' => null,
                 'navigation' => null,
                 'result' => null,
-                'remaining_today' => $this->sessions->remainingDailyMessages($user->id),
+                'remaining_today' => $this->sessions->remainingMonthlyMessages($user->id),
             ];
         }
 
@@ -247,7 +259,7 @@ class AssistantOrchestrator
                 'pending_action' => null,
                 'navigation' => null,
                 'result' => null,
-                'remaining_today' => $this->sessions->remainingDailyMessages($user->id),
+                'remaining_today' => $this->sessions->remainingMonthlyMessages($user->id),
             ];
         }
 
@@ -265,7 +277,7 @@ class AssistantOrchestrator
                 'pending_action' => null,
                 'navigation' => null,
                 'result' => null,
-                'remaining_today' => $this->sessions->remainingDailyMessages($user->id),
+                'remaining_today' => $this->sessions->remainingMonthlyMessages($user->id),
             ];
         }
 
@@ -284,20 +296,25 @@ class AssistantOrchestrator
             'pending_action' => null,
             'navigation' => $executed['navigation'] ?? null,
             'result' => $executed['result'] ?? null,
-            'remaining_today' => $this->sessions->remainingDailyMessages($user->id),
+            'remaining_today' => $this->sessions->remainingMonthlyMessages($user->id),
         ];
     }
 
     /**
-     * @return array{enabled: bool, configured: bool, remaining_today: int, daily_limit: int}
+     * @return array{enabled: bool, configured: bool, feature_enabled: bool, remaining_today: int, daily_limit: int}
      */
     public function status(User $user): array
     {
+        $featureEnabled = $this->sessions->isFeatureEnabled($user->id);
+        $limit = $this->sessions->monthlyLimit($user->id);
+        $remaining = $featureEnabled ? $this->sessions->remainingMonthlyMessages($user->id) : 0;
+
         return [
-            'enabled' => (bool) config('assistant.enabled', true),
+            'enabled' => (bool) config('assistant.enabled', true) && $featureEnabled,
             'configured' => (string) config('assistant.gemini.api_key') !== '',
-            'remaining_today' => $this->sessions->remainingDailyMessages($user->id),
-            'daily_limit' => (int) config('assistant.daily_message_limit', 30),
+            'feature_enabled' => $featureEnabled,
+            'remaining_today' => $remaining === PHP_INT_MAX ? 999999 : $remaining,
+            'daily_limit' => $limit === PHP_INT_MAX ? 999999 : $limit,
         ];
     }
 

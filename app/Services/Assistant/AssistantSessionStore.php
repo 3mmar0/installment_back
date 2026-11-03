@@ -2,6 +2,8 @@
 
 namespace App\Services\Assistant;
 
+use App\Helpers\LimitsHelper;
+use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -42,35 +44,83 @@ class AssistantSessionStore
         );
     }
 
-    public function remainingDailyMessages(int $userId): int
+    public function isFeatureEnabled(int $userId): bool
     {
-        $limit = (int) config('assistant.daily_message_limit', 30);
-        $used = (int) Cache::get($this->dailyKey($userId), 0);
+        $user = User::query()->find($userId);
+        if ($user && $user->isOwner()) {
+            return true;
+        }
 
-        return max(0, $limit - $used);
+        return LimitsHelper::canAccessFeature($userId, 'assistant');
     }
 
-    public function consumeDailyMessage(int $userId): bool
+    public function monthlyLimit(int $userId): int
     {
-        $limit = (int) config('assistant.daily_message_limit', 30);
-        $key = $this->dailyKey($userId);
-        $used = (int) Cache::get($key, 0);
-        if ($used >= $limit) {
+        $user = User::query()->find($userId);
+        if ($user && $user->isOwner()) {
+            return PHP_INT_MAX;
+        }
+
+        $remaining = LimitsHelper::getRemainingCount($userId, 'assistant_messages');
+        $used = 0;
+        $info = LimitsHelper::getSubscriptionInfo($userId);
+        if ($info) {
+            $used = (int) ($info['usage']['assistant_messages_used'] ?? 0);
+        }
+
+        if ($remaining === PHP_INT_MAX) {
+            return PHP_INT_MAX;
+        }
+
+        return $used + $remaining;
+    }
+
+    public function remainingMonthlyMessages(int $userId): int
+    {
+        $user = User::query()->find($userId);
+        if ($user && $user->isOwner()) {
+            return PHP_INT_MAX;
+        }
+
+        if (! $this->isFeatureEnabled($userId)) {
+            return 0;
+        }
+
+        return LimitsHelper::getRemainingCount($userId, 'assistant_messages');
+    }
+
+    public function consumeMonthlyMessage(int $userId): bool
+    {
+        $user = User::query()->find($userId);
+        if ($user && $user->isOwner()) {
+            return true;
+        }
+
+        if (! $this->isFeatureEnabled($userId)) {
             return false;
         }
 
-        Cache::put($key, $used + 1, now()->endOfDay());
+        if (! LimitsHelper::canCreate($userId, 'assistant_messages')) {
+            return false;
+        }
 
-        return true;
+        return LimitsHelper::incrementUsage($userId, 'assistant_messages');
+    }
+
+    /** @deprecated Use remainingMonthlyMessages */
+    public function remainingDailyMessages(int $userId): int
+    {
+        return $this->remainingMonthlyMessages($userId);
+    }
+
+    /** @deprecated Use consumeMonthlyMessage */
+    public function consumeDailyMessage(int $userId): bool
+    {
+        return $this->consumeMonthlyMessage($userId);
     }
 
     private function key(int $userId, string $sessionId): string
     {
         return "assistant:session:{$userId}:{$sessionId}";
-    }
-
-    private function dailyKey(int $userId): string
-    {
-        return 'assistant:daily:'.$userId.':'.now()->toDateString();
     }
 }

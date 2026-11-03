@@ -5,6 +5,7 @@ namespace App\Helpers;
 use App\Enums\UserRole;
 use App\Models\Customer;
 use App\Models\Installment;
+use App\Models\MerchantGift;
 use App\Models\Notification;
 use App\Models\Subscription;
 use App\Models\SubscriptionAssignment;
@@ -25,8 +26,15 @@ class LimitsHelper
         'customers' => ['from' => 0, 'to' => 1000],
         'installments' => ['from' => 0, 'to' => 1000],
         'notifications' => ['from' => 0, 'to' => 1000],
+        'assistant_messages' => ['from' => 0, 'to' => 20],
+        'whatsapp_messages' => ['from' => 0, 'to' => 20],
         'reports' => true,
-        'features' => ['basic_reports' => true, 'internal_credit_score' => false],
+        'features' => [
+            'basic_reports' => true,
+            'internal_credit_score' => false,
+            'assistant' => true,
+            'whatsapp' => false,
+        ],
     ];
 
     /**
@@ -43,6 +51,8 @@ class LimitsHelper
             'customers' => self::DEFAULT_LIMITS['customers'],
             'installments' => self::DEFAULT_LIMITS['installments'],
             'notifications' => self::DEFAULT_LIMITS['notifications'],
+            'assistant_messages' => self::DEFAULT_LIMITS['assistant_messages'],
+            'whatsapp_messages' => self::DEFAULT_LIMITS['whatsapp_messages'],
             'reports' => self::DEFAULT_LIMITS['reports'],
             'features' => self::DEFAULT_LIMITS['features'],
             'is_active' => true,
@@ -123,14 +133,27 @@ class LimitsHelper
         $payload['customers'] = self::normalizeLimitConfig('customers', $payload['customers'] ?? null);
         $payload['installments'] = self::normalizeLimitConfig('installments', $payload['installments'] ?? null);
         $payload['notifications'] = self::normalizeLimitConfig('notifications', $payload['notifications'] ?? null);
+        $payload['assistant_messages'] = self::normalizeLimitConfig('assistant_messages', $payload['assistant_messages'] ?? null);
+        $payload['whatsapp_messages'] = self::normalizeLimitConfig('whatsapp_messages', $payload['whatsapp_messages'] ?? null);
         $payload['reports'] = $payload['reports'] ?? self::DEFAULT_LIMITS['reports'];
-        $payload['features'] = $payload['features'] ?? self::DEFAULT_LIMITS['features'];
+        $payload['features'] = self::normalizeFeatures($payload['features'] ?? null);
 
         // Preserve current usage counts if they exist
         if ($existingLimit) {
             $payload['customers_used'] = $existingLimit->customers_used ?? 0;
             $payload['installments_used'] = $existingLimit->installments_used ?? 0;
             $payload['notifications_used'] = $existingLimit->notifications_used ?? 0;
+            $payload['assistant_messages_used'] = $existingLimit->assistant_messages_used ?? 0;
+            $payload['whatsapp_messages_used'] = $existingLimit->whatsapp_messages_used ?? 0;
+            $payload['assistant_messages_bonus'] = $existingLimit->assistant_messages_bonus ?? 0;
+            $payload['whatsapp_messages_bonus'] = $existingLimit->whatsapp_messages_bonus ?? 0;
+            $payload['usage_period'] = $existingLimit->usage_period ?? now()->format('Y-m');
+        } else {
+            $payload['assistant_messages_used'] = 0;
+            $payload['whatsapp_messages_used'] = 0;
+            $payload['assistant_messages_bonus'] = $payload['assistant_messages_bonus'] ?? 0;
+            $payload['whatsapp_messages_bonus'] = $payload['whatsapp_messages_bonus'] ?? 0;
+            $payload['usage_period'] = now()->format('Y-m');
         }
 
         $userLimit = UserLimit::updateOrCreate(
@@ -223,6 +246,8 @@ class LimitsHelper
             'customers' => $subscription->customers,
             'installments' => $subscription->installments,
             'notifications' => $subscription->notifications,
+            'assistant_messages' => $subscription->assistant_messages ?? self::DEFAULT_LIMITS['assistant_messages'],
+            'whatsapp_messages' => $subscription->whatsapp_messages ?? self::DEFAULT_LIMITS['whatsapp_messages'],
             'reports' => $subscription->reports,
             'features' => $assignment->features,
             'start_date' => $startDate,
@@ -270,12 +295,25 @@ class LimitsHelper
                 'customers' => ['from' => 0, 'to' => null],
                 'installments' => ['from' => 0, 'to' => null],
                 'notifications' => ['from' => 0, 'to' => null],
+                'assistant_messages' => ['from' => 0, 'to' => null],
+                'whatsapp_messages' => ['from' => 0, 'to' => null],
                 'reports' => true,
-                'features' => ['all' => true],
+                'features' => [
+                    'all' => true,
+                    'assistant' => true,
+                    'whatsapp' => true,
+                    'internal_credit_score' => true,
+                    'basic_reports' => true,
+                ],
             ]);
         }
 
-        return UserLimit::forUser($userId)->active()->first();
+        $limit = UserLimit::forUser($userId)->active()->first();
+        if ($limit) {
+            $limit->refreshMonthlyPeriodIfNeeded();
+        }
+
+        return $limit;
     }
 
     /**
@@ -360,10 +398,61 @@ class LimitsHelper
             'customers' => 'لقد وصلت إلى الحد الأقصى لعدد العملاء المسموح به في خطتك.',
             'installments' => 'لقد وصلت إلى الحد الأقصى لعدد الأقساط المسموح بها في خطتك.',
             'notifications' => 'لقد وصلت إلى الحد الأقصى لعدد الإشعارات المسموح بها في خطتك.',
+            'assistant_messages' => 'وصلت للحد الشهري لرسائل المساعد الذكي في خطتك.',
+            'whatsapp_messages' => 'وصلت للحد الشهري لرسائل الواتس في خطتك.',
             'reports' => 'ميزة التقارير غير متاحة في خطتك الحالية.',
+            'assistant' => 'المساعد الذكي غير متاح في خطتك الحالية.',
+            'whatsapp' => 'رسائل الواتس غير متاحة في خطتك الحالية.',
         ];
 
         return $messages[$resourceType] ?? 'لقد وصلت إلى الحد المسموح لهذا المورد.';
+    }
+
+    /**
+     * Grant a gift bonus for a monthly messaging resource.
+     */
+    public static function grantGift(
+        int $userId,
+        string $resource,
+        int $amount,
+        ?int $grantedBy = null,
+        ?string $note = null,
+        string $source = 'gift'
+    ): MerchantGift {
+        if (! in_array($resource, MerchantGift::RESOURCES, true)) {
+            throw new \InvalidArgumentException('نوع الهدية غير مدعوم.');
+        }
+
+        if ($amount < 1) {
+            throw new \InvalidArgumentException('كمية الهدية لازم تكون أكبر من صفر.');
+        }
+
+        $userLimit = UserLimit::query()->where('user_id', $userId)->first()
+            ?? self::createOrUpdateUserLimits($userId);
+
+        $userLimit->addBonus($resource, $amount);
+
+        return MerchantGift::query()->create([
+            'user_id' => $userId,
+            'granted_by' => $grantedBy,
+            'resource' => $resource,
+            'amount' => $amount,
+            'source' => $source,
+            'note' => $note,
+        ]);
+    }
+
+    /**
+     * Reset monthly messaging usage for a merchant (keeps gifts by default).
+     */
+    public static function resetMonthlyUsage(int $userId, bool $clearBonus = false): UserLimit
+    {
+        $userLimit = UserLimit::query()->where('user_id', $userId)->first()
+            ?? self::createOrUpdateUserLimits($userId);
+
+        $userLimit->resetMonthlyUsage($clearBonus);
+
+        return $userLimit->fresh();
     }
 
     /**
@@ -394,6 +483,8 @@ class LimitsHelper
                 'customers' => $userLimit->customers,
                 'installments' => $userLimit->installments,
                 'notifications' => $userLimit->notifications,
+                'assistant_messages' => $userLimit->assistant_messages,
+                'whatsapp_messages' => $userLimit->whatsapp_messages,
                 'features' => $userLimit->features,
                 'reports' => $userLimit->reports,
             ],
@@ -401,11 +492,18 @@ class LimitsHelper
                 'customers_used' => $userLimit->customers_used,
                 'installments_used' => $userLimit->installments_used,
                 'notifications_used' => $userLimit->notifications_used,
+                'assistant_messages_used' => $userLimit->assistant_messages_used,
+                'whatsapp_messages_used' => $userLimit->whatsapp_messages_used,
+                'assistant_messages_bonus' => $userLimit->assistant_messages_bonus,
+                'whatsapp_messages_bonus' => $userLimit->whatsapp_messages_bonus,
+                'usage_period' => $userLimit->usage_period,
             ],
             'remaining' => [
                 'customers' => $userLimit->getRemainingCount('customers'),
                 'installments' => $userLimit->getRemainingCount('installments'),
                 'notifications' => $userLimit->getRemainingCount('notifications'),
+                'assistant_messages' => $userLimit->getRemainingCount('assistant_messages'),
+                'whatsapp_messages' => $userLimit->getRemainingCount('whatsapp_messages'),
             ],
         ];
     }
@@ -444,6 +542,11 @@ class LimitsHelper
             'customers',
             'installments',
             'notifications',
+            'assistant_messages',
+            'whatsapp_messages',
+            'assistant_messages_bonus',
+            'whatsapp_messages_bonus',
+            'usage_period',
             'reports',
             'features',
             'start_date',
@@ -456,6 +559,19 @@ class LimitsHelper
             'price' => $attributes['price'] ?? 0,
             'duration' => $attributes['duration'] ?? 'monthly',
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected static function normalizeFeatures(mixed $features): array
+    {
+        $defaults = self::DEFAULT_LIMITS['features'];
+        if (! is_array($features)) {
+            return $defaults;
+        }
+
+        return array_merge($defaults, $features);
     }
 
     /**

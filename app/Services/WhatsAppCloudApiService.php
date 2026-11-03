@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Helpers\LimitsHelper;
+use App\Models\User;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -14,14 +16,20 @@ class WhatsAppCloudApiService
      *
      * @return array<string, mixed>
      */
-    public function sendText(string $to, string $body): array
+    public function sendText(string $to, string $body, ?User $merchant = null): array
     {
-        return $this->send([
+        $this->assertMerchantCanSend($merchant);
+
+        $result = $this->send([
             'messaging_product' => 'whatsapp',
             'to' => $this->normalizeRecipient($to),
             'type' => 'text',
             'text' => ['body' => $body],
         ]);
+
+        $this->consumeMerchantQuota($merchant);
+
+        return $result;
     }
 
     /**
@@ -30,8 +38,15 @@ class WhatsAppCloudApiService
      * @param  array<int, array<string, mixed>>  $components
      * @return array<string, mixed>
      */
-    public function sendTemplate(string $to, string $name, string $language = 'ar', array $components = []): array
-    {
+    public function sendTemplate(
+        string $to,
+        string $name,
+        string $language = 'ar',
+        array $components = [],
+        ?User $merchant = null
+    ): array {
+        $this->assertMerchantCanSend($merchant);
+
         $template = [
             'name' => $name,
             'language' => ['code' => $language],
@@ -41,12 +56,16 @@ class WhatsAppCloudApiService
             $template['components'] = $components;
         }
 
-        return $this->send([
+        $result = $this->send([
             'messaging_product' => 'whatsapp',
             'to' => $this->normalizeRecipient($to),
             'type' => 'template',
             'template' => $template,
         ]);
+
+        $this->consumeMerchantQuota($merchant);
+
+        return $result;
     }
 
     /**
@@ -83,6 +102,30 @@ class WhatsAppCloudApiService
         $json = $response->json();
 
         return $json;
+    }
+
+    private function assertMerchantCanSend(?User $merchant): void
+    {
+        if (! $merchant || $merchant->isOwner()) {
+            return;
+        }
+
+        if (! LimitsHelper::canAccessFeature($merchant->id, 'whatsapp')) {
+            throw new RuntimeException(LimitsHelper::getLimitExceededMessage('whatsapp'));
+        }
+
+        if (! LimitsHelper::canCreate($merchant->id, 'whatsapp_messages')) {
+            throw new RuntimeException(LimitsHelper::getLimitExceededMessage('whatsapp_messages'));
+        }
+    }
+
+    private function consumeMerchantQuota(?User $merchant): void
+    {
+        if (! $merchant || $merchant->isOwner()) {
+            return;
+        }
+
+        LimitsHelper::incrementUsage($merchant->id, 'whatsapp_messages');
     }
 
     private function normalizeRecipient(string $recipient): string

@@ -258,6 +258,9 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::get('limits/{userLimit}', 'show');
             Route::put('limits/{userLimit}', 'update');
             Route::delete('limits/{userLimit}', 'destroy');
+            Route::post('users/{user}/limits/reset-usage', 'resetUsage');
+            Route::post('users/{user}/gifts', 'grantGift');
+            Route::get('users/{user}/gifts', 'gifts');
         });
 
         Route::controller(UserController::class)->group(function () {
