@@ -26,8 +26,8 @@ class LimitsHelper
         'customers' => ['from' => 0, 'to' => 1000],
         'installments' => ['from' => 0, 'to' => 1000],
         'notifications' => ['from' => 0, 'to' => 1000],
-        'assistant_messages' => ['from' => 0, 'to' => 20],
-        'whatsapp_messages' => ['from' => 0, 'to' => 20],
+        'assistant_messages' => ['from' => 0, 'to' => 10],
+        'whatsapp_messages' => ['from' => 0, 'to' => 10],
         'reports' => true,
         'features' => [
             'basic_reports' => true,
@@ -51,10 +51,15 @@ class LimitsHelper
             'customers' => self::DEFAULT_LIMITS['customers'],
             'installments' => self::DEFAULT_LIMITS['installments'],
             'notifications' => self::DEFAULT_LIMITS['notifications'],
-            'assistant_messages' => self::DEFAULT_LIMITS['assistant_messages'],
-            'whatsapp_messages' => self::DEFAULT_LIMITS['whatsapp_messages'],
+            // Voice form filling stays available locally in the mobile app;
+            // the hosted AI chat and WhatsApp automation require a paid plan.
+            'assistant_messages' => ['from' => 0, 'to' => 0],
+            'whatsapp_messages' => ['from' => 0, 'to' => 0],
             'reports' => self::DEFAULT_LIMITS['reports'],
-            'features' => self::DEFAULT_LIMITS['features'],
+            'features' => array_replace(self::DEFAULT_LIMITS['features'], [
+                'assistant' => false,
+                'whatsapp' => false,
+            ]),
             'is_active' => true,
         ];
     }
