@@ -115,6 +115,8 @@ class WhatsAppReminderService
 
             $sent = 0;
             foreach ($customerItems as $item) {
+                $this->paceBeforeNextSend($sent > 0 || $stats['messages_sent'] > 0);
+
                 try {
                     $body = $this->buildMessage($customer, $item);
                     $this->whatsApp->sendText($phone, $body, $user, consumeMerchantQuota: false);
@@ -142,6 +144,23 @@ class WhatsAppReminderService
         }
 
         return $stats;
+    }
+
+    /**
+     * Avoid hammering Meta by spacing consecutive sends.
+     */
+    private function paceBeforeNextSend(bool $needsDelay): void
+    {
+        if (! $needsDelay) {
+            return;
+        }
+
+        $seconds = (float) config('services.whatsapp.send_delay_seconds', 2.5);
+        if ($seconds <= 0) {
+            return;
+        }
+
+        usleep((int) round($seconds * 1_000_000));
     }
 
     private function chargeMerchantOncePerDay(User $user, Customer $customer, int $messagesSent): bool

@@ -23,6 +23,7 @@ it('sends one whatsapp message per installment but charges merchant quota once p
         'graph_version' => 'v21.0',
         'app_secret' => null,
         'verify_token' => null,
+        'send_delay_seconds' => 0,
     ]);
     PlatformWhatsAppQuota::setLimit(100);
     PlatformWhatsAppQuota::setUsed(0);
@@ -91,6 +92,7 @@ it('skips whatsapp reminders when customer opt-in is off', function () {
         'phone_number_id' => '123',
         'access_token' => 'token',
         'graph_version' => 'v21.0',
+        'send_delay_seconds' => 0,
     ]);
     PlatformWhatsAppQuota::setLimit(50);
 

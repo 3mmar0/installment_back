@@ -48,6 +48,8 @@ return [
         'access_token' => env('WHATSAPP_ACCESS_TOKEN'),
         'verify_token' => env('WHATSAPP_WEBHOOK_VERIFY_TOKEN'),
         'app_secret' => env('WHATSAPP_APP_SECRET'),
+        // Seconds to wait between consecutive Cloud API sends (rate pacing).
+        'send_delay_seconds' => (float) env('WHATSAPP_SEND_DELAY_SECONDS', 2.5),
     ],
 
 ];
