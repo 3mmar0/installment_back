@@ -20,6 +20,8 @@ use App\Http\Controllers\Api\PaymentRequestController;
 use App\Http\Controllers\Api\ReportsHubController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\SubscriptionPurchaseRequestController;
+use App\Http\Controllers\Api\SubscriptionTrialController;
 use App\Http\Controllers\Api\SystemSettingsController;
 use App\Http\Controllers\Api\UnifiedAuthController;
 use App\Http\Controllers\Api\UserController;
@@ -129,7 +131,11 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
 
     // User subscription change (upgrade/downgrade) and cancel current plan
     Route::post('subscriptions/cancel', [SubscriptionController::class, 'cancelCurrent']);
+    Route::post('subscriptions/free/{subscription}/select', [SubscriptionController::class, 'selectFree']);
     Route::post('subscriptions/{subscription}/change', [SubscriptionController::class, 'changeSubscription']);
+    Route::post('subscription-purchase-requests', [SubscriptionPurchaseRequestController::class, 'store']);
+    Route::get('subscription-purchase-requests/current', [SubscriptionPurchaseRequestController::class, 'current']);
+    Route::post('trials/start', [SubscriptionTrialController::class, 'start']);
 
     // Support / complaints (no active subscription required)
     Route::controller(ComplaintController::class)->group(function () {
@@ -250,6 +256,12 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::put('subscriptions-update/{subscription}', 'update');
             Route::delete('subscriptions-delete/{subscription}', 'destroy');
             Route::post('subscriptions/{subscription}/assign', 'assign');
+        });
+
+        Route::prefix('admin/subscription-purchase-requests')->controller(SubscriptionPurchaseRequestController::class)->group(function () {
+            Route::get('/', 'index');
+            Route::post('{purchaseRequest}/approve', 'approve');
+            Route::post('{purchaseRequest}/reject', 'reject');
         });
 
         Route::controller(UserLimitController::class)->group(function () {

@@ -11,6 +11,8 @@ use App\Http\Resources\UserLimitResource;
 use App\Http\Traits\ApiResponse;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Models\SubscriptionPurchaseRequest;
+use App\Services\SubscriptionEntitlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -26,7 +28,6 @@ class SubscriptionController extends Controller
     public function publicIndex(): JsonResponse
     {
         $subscriptions = Subscription::active()
-            ->where('slug', 'free')
             ->orderBy('price')
             ->get();
 
@@ -106,6 +107,10 @@ class SubscriptionController extends Controller
      */
     public function destroy(Subscription $subscription): JsonResponse
     {
+        if ($subscription->assignments()->exists() || SubscriptionPurchaseRequest::where('subscription_id', $subscription->id)->exists()) {
+            return $this->errorResponse('لا يمكن حذف خطة مرتبطة باشتراكات أو طلبات قائمة. قم بإيقافها بدلاً من ذلك.', 422);
+        }
+
         $subscription->delete();
 
         return $this->deletedResponse('تم حذف خطة الاشتراك بنجاح');
@@ -164,27 +169,20 @@ class SubscriptionController extends Controller
      */
     public function changeSubscription(Request $request, Subscription $subscription): JsonResponse
     {
-        $user = $request->user();
+        unset($request, $subscription);
 
-        // Ensure the subscription is active
-        if (!$subscription->is_active) {
-            return $this->errorResponse('الخطة المحددة غير متاحة حالياً', 400);
+        return $this->errorResponse('تم إيقاف التغيير المباشر للخطة. استخدم طلب شراء أو اختيار الباقة المجانية.', 410);
+    }
+
+    public function selectFree(Request $request, Subscription $subscription, SubscriptionEntitlementService $entitlements): JsonResponse
+    {
+        if (! $subscription->is_active || (float) $subscription->price !== 0.0) {
+            return $this->errorResponse('يمكن اختيار الباقات المجانية النشطة فقط مباشرة.', 422);
         }
 
-        // Apply subscription to the authenticated user
-        $overrides = $request->validate([
-            'start_date' => ['sometimes', 'nullable', 'date'],
-            'end_date' => ['sometimes', 'nullable', 'date', 'after_or_equal:start_date'],
-            'status' => ['sometimes', 'nullable', 'string', 'in:active,paused,canceled'],
-            'features' => ['sometimes', 'nullable', 'array'],
-        ]);
+        $assignment = $entitlements->activate($subscription, $request->user()->id, 'free', $request->user()->id);
 
-        $userLimit = LimitsHelper::applySubscriptionToUser($user->id, $subscription, $overrides);
-
-        return $this->successResponse(
-            new UserLimitResource($userLimit),
-            'تم تغيير الاشتراك بنجاح'
-        );
+        return $this->successResponse(new UserLimitResource($assignment->userLimit()->first()), 'تم تفعيل الباقة المجانية');
     }
 
     /**

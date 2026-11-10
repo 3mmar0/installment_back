@@ -143,7 +143,7 @@ class AssistantToolRunner
             ],
             [
                 'name' => 'propose_create_installment',
-                'description' => 'Propose creating an installment plan for an existing customer. Supports prepaid_months. Does not save until confirm.',
+                'description' => 'Propose creating an installment for an EXISTING customer after an interactive chat gathered the fields. Call ONLY when you already have customer (id or clear unique name), total_amount, and months. Ask the user step-by-step first; do not call this on the first vague "create installment" message. Supports prepaid_months. Does not save until the user confirms in the app.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -165,7 +165,7 @@ class AssistantToolRunner
             ],
             [
                 'name' => 'propose_create_customer_with_installment',
-                'description' => 'Propose creating a NEW customer and an installment in one confirmation. Use when the user asks to add a customer and set up installments together (including prepaid months and past start date).',
+                'description' => 'Propose creating a NEW customer and an installment in one confirmation AFTER gathering customer+installment fields interactively in chat. Use when the user wants a new customer with an installment together. Do not call until name, total_amount, and months are known.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -666,6 +666,19 @@ class AssistantToolRunner
      */
     private function proposeCreateInstallment(array $args, User $user): array
     {
+        $missing = $this->missingInstallmentFields($args, requireCustomer: true);
+        if ($missing !== []) {
+            return [
+                'ok' => false,
+                'error' => 'لسه ناقص: '.implode('، ', $missing).'. اسأل المستخدم عن الحقل التالي فقط ثم كمّل.',
+                'result' => [
+                    'interactive' => true,
+                    'missing_fields' => $missing,
+                    'next_question_ar' => $this->nextInstallmentQuestion($missing),
+                ],
+            ];
+        }
+
         $customerId = (int) ($args['customer_id'] ?? 0);
         if ($customerId <= 0 && ! empty($args['customer_query'])) {
             $matches = $this->customerService
@@ -685,6 +698,7 @@ class AssistantToolRunner
                             'name' => $c->name,
                             'phone' => $c->phone,
                         ])->all(),
+                        'next_question_ar' => 'في أكتر من عميل بنفس الاسم. أنهي واحد تقصد؟ اذكر الرقم أو الاسم بالكامل.',
                     ],
                 ];
             }
@@ -693,7 +707,15 @@ class AssistantToolRunner
 
         $customer = $this->ownedCustomer($customerId, $user);
         if (! $customer) {
-            return ['ok' => false, 'error' => 'لازم تحدد عميل صالح قبل إنشاء القسط.'];
+            return [
+                'ok' => false,
+                'error' => 'لازم تحدد عميل صالح قبل إنشاء القسط.',
+                'result' => [
+                    'interactive' => true,
+                    'missing_fields' => ['customer'],
+                    'next_question_ar' => 'أنهي عميل؟ قول الاسم أو اختار من قائمة العملاء.',
+                ],
+            ];
         }
 
         $built = $this->buildInstallmentPayload($args, $customer->id);
@@ -1073,6 +1095,49 @@ class AssistantToolRunner
         }
 
         return ['ok' => true, 'payload' => $payload];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return list<string>
+     */
+    private function missingInstallmentFields(array $args, bool $requireCustomer = true): array
+    {
+        $missing = [];
+        if ($requireCustomer) {
+            $customerId = (int) ($args['customer_id'] ?? 0);
+            $customerQuery = trim((string) ($args['customer_query'] ?? ''));
+            if ($customerId <= 0 && $customerQuery === '') {
+                $missing[] = 'customer';
+            }
+        }
+
+        $amount = (float) ($args['total_amount'] ?? 0);
+        if ($amount <= 0) {
+            $missing[] = 'total_amount';
+        }
+
+        $months = (int) ($args['months'] ?? 0);
+        if ($months < 1) {
+            $missing[] = 'months';
+        }
+
+        return $missing;
+    }
+
+    /**
+     * @param  list<string>  $missing
+     */
+    private function nextInstallmentQuestion(array $missing): string
+    {
+        $first = $missing[0] ?? '';
+
+        return match ($first) {
+            'customer' => 'أنهي عميل للقسط؟ قول اسم العميل.',
+            'total_amount' => 'المبلغ الإجمالي للقسط كام؟',
+            'months' => 'عدد الأشهر كام؟',
+            default => 'كمّل بيانات القسط الناقصة.',
+        };
     }
 
     /**

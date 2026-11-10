@@ -29,11 +29,24 @@ class TrialHelper
     }
 
     /**
-     * Apply the free plan on registration.
+     * Assign either the selected eligible trial or the free plan on registration.
      */
     public static function applyRegistrationPlan(User $user, ?Subscription $subscription): void
     {
-        unset($subscription);
+        $settings = self::settings();
+        if ($subscription && $subscription->is_active && (float) $subscription->price > 0 && $settings['enabled'] && ! $user->trial_used_at) {
+            app(\App\Services\SubscriptionEntitlementService::class)->activate(
+                $subscription,
+                $user->id,
+                'trial',
+                $user->id,
+                null,
+                now()->addDays($settings['days'])->endOfDay(),
+                ['is_trial' => true]
+            );
+            $user->update(['trial_used_at' => now()]);
+            return;
+        }
 
         $subscription = Subscription::active()->where('slug', 'free')->first();
 
@@ -46,7 +59,7 @@ class TrialHelper
             return;
         }
 
-        LimitsHelper::applySubscriptionToUser($user->id, $subscription);
+        app(\App\Services\SubscriptionEntitlementService::class)->activate($subscription, $user->id, 'free', $user->id);
     }
 
     public static function isTrialFeatures(?array $features): bool

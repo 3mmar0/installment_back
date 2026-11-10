@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreSubscriptionRequest extends FormRequest
 {
@@ -39,5 +40,17 @@ class StoreSubscriptionRequest extends FormRequest
             'features' => ['nullable', 'array'],
             'is_active' => ['nullable', 'boolean'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            foreach (['customers', 'installments', 'notifications', 'assistant_messages', 'whatsapp_messages'] as $resource) {
+                $range = $this->input($resource);
+                if (is_array($range) && array_key_exists('from', $range) && array_key_exists('to', $range) && $range['to'] !== null && (int) $range['from'] > (int) $range['to']) {
+                    $validator->errors()->add("{$resource}.to", 'الحد الأقصى يجب أن يكون أكبر من أو مساوياً للحد الأدنى.');
+                }
+            }
+        });
     }
 }

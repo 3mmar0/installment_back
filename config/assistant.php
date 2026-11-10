@@ -14,7 +14,7 @@ return [
             'trim',
             explode(',', (string) env(
                 'GEMINI_FALLBACK_MODELS',
-                'gemini-3.1-flash-lite,gemini-3.6-flash,gemini-3.8-flash,gemini-2.5-flash-lite,gemini-2.5-flash,gemini-flash-latest'
+                'gemini-3.1-flash-lite,gemini-3.6-flash,gemini-3.5-flash-lite'
             ))
         ))),
         'base_url' => env(
@@ -22,13 +22,18 @@ return [
             'https://generativelanguage.googleapis.com/v1beta'
         ),
         'timeout' => (int) env('GEMINI_TIMEOUT', 30),
+        /**
+         * Set GEMINI_HTTP_VERIFY=false to force-disable TLS verification
+         * (useful on broken local CA bundles). Production Linux should keep default true.
+         */
+        'http_verify' => env('GEMINI_HTTP_VERIFY', true),
     ],
 
     /** Max assistant messages a vendor may send per calendar day. */
     'daily_message_limit' => (int) env('ASSISTANT_DAILY_MESSAGE_LIMIT', 30),
 
-    /** How many prior turns to keep in the session window. */
-    'session_turn_limit' => (int) env('ASSISTANT_SESSION_TURN_LIMIT', 10),
+    /** How many prior turns to keep in the session window (interactive wizards need more). */
+    'session_turn_limit' => (int) env('ASSISTANT_SESSION_TURN_LIMIT', 24),
 
     /** Pending confirmations expire after this many seconds. */
     'pending_action_ttl' => (int) env('ASSISTANT_PENDING_ACTION_TTL', 600),

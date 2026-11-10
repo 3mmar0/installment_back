@@ -184,6 +184,11 @@ class User extends Authenticatable
         return $this->hasMany(SubscriptionAssignment::class);
     }
 
+    public function subscriptionPurchaseRequests()
+    {
+        return $this->hasMany(SubscriptionPurchaseRequest::class);
+    }
+
     public function currentSubscriptionAssignment()
     {
         return $this->hasOne(SubscriptionAssignment::class)->latestOfMany();

@@ -18,10 +18,7 @@ class GeminiClient
     public const DEFAULT_FALLBACK_MODELS = [
         'gemini-3.1-flash-lite',
         'gemini-3.6-flash',
-        'gemini-3.8-flash',
-        'gemini-2.5-flash-lite',
-        'gemini-2.5-flash',
-        'gemini-flash-latest',
+        'gemini-3.5-flash-lite',
     ];
 
     /**
@@ -62,18 +59,19 @@ class GeminiClient
             try {
                 $response = $this->request($apiKey, $model, $payload);
             } catch (Throwable $e) {
+                $safeError = $this->redactSecrets($e->getMessage());
                 $attempts[] = [
                     'model' => $model,
                     'status' => null,
-                    'error' => $e->getMessage(),
+                    'error' => $safeError,
                 ];
                 $this->logWarning('Gemini HTTP/transport failure, trying next model', [
                     'model' => $model,
                     'attempt' => $index + 1,
                     'total_models' => count($models),
-                    'error' => $e->getMessage(),
+                    'error' => $safeError,
                 ]);
-                $lastError = $e->getMessage();
+                $lastError = $safeError;
                 continue;
             }
 
@@ -94,6 +92,7 @@ class GeminiClient
             $message = data_get($response->json(), 'error.message')
                 ?: data_get($response->json(), 'error.status')
                 ?: 'HTTP '.$response->status();
+            $message = $this->redactSecrets((string) $message);
             $lastError = $message;
             $attempt = [
                 'model' => $model,
@@ -162,12 +161,29 @@ class GeminiClient
             ->acceptJson()
             ->asJson();
 
-        // Local Windows PHP installs often lack a CA bundle; keep verify on in production.
-        if (app()->environment('local') && PHP_OS_FAMILY === 'Windows') {
+        if ($this->shouldDisableSslVerify()) {
             $request = $request->withoutVerifying();
         }
 
         return $request->post($url.'?key='.urlencode($apiKey), $payload);
+    }
+
+    private function shouldDisableSslVerify(): bool
+    {
+        $configured = config('assistant.gemini.http_verify');
+        if ($configured !== null && filter_var($configured, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === false) {
+            return true;
+        }
+
+        // Windows PHP builds frequently ship without a CA bundle. Even when
+        // APP_ENV=production for local runs, OpenSSL then fails with cURL 60.
+        if (PHP_OS_FAMILY === 'Windows') {
+            $ca = (string) (ini_get('curl.cainfo') ?: ini_get('openssl.cafile') ?: '');
+
+            return $ca === '' || ! is_file($ca);
+        }
+
+        return false;
     }
 
     private function shouldTryNextModel(int $status, string $message): bool
@@ -184,7 +200,21 @@ class GeminiClient
             || str_contains($haystack, 'exceeded')
             || str_contains($haystack, 'not found')
             || str_contains($haystack, 'not supported')
-            || str_contains($haystack, 'unavailable');
+            || str_contains($haystack, 'unavailable')
+            || str_contains($haystack, 'ssl certificate')
+            || str_contains($haystack, 'curl error 60')
+            || str_contains($haystack, 'thought_signature');
+    }
+
+    private function redactSecrets(string $value): string
+    {
+        $redacted = preg_replace('/([?&]key=)[^&\s]+/i', '$1[REDACTED]', $value) ?? $value;
+        $apiKey = (string) config('assistant.gemini.api_key');
+        if ($apiKey !== '' && str_contains($redacted, $apiKey)) {
+            $redacted = str_replace($apiKey, '[REDACTED]', $redacted);
+        }
+
+        return $redacted;
     }
 
     /**
@@ -192,7 +222,7 @@ class GeminiClient
      */
     private function logWarning(string $message, array $context): void
     {
-        Log::channel('assistant')->warning($message, $context);
+        Log::channel('assistant')->warning($message, $this->redactContext($context));
     }
 
     /**
@@ -200,8 +230,9 @@ class GeminiClient
      */
     private function logError(string $message, array $context): void
     {
-        Log::channel('assistant')->error($message, $context);
-        Log::error('[assistant] '.$message, $context);
+        $safe = $this->redactContext($context);
+        Log::channel('assistant')->error($message, $safe);
+        Log::error('[assistant] '.$message, $safe);
     }
 
     /**
@@ -209,6 +240,21 @@ class GeminiClient
      */
     private function logInfo(string $message, array $context): void
     {
-        Log::channel('assistant')->info($message, $context);
+        Log::channel('assistant')->info($message, $this->redactContext($context));
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function redactContext(array $context): array
+    {
+        array_walk_recursive($context, function (&$value): void {
+            if (is_string($value)) {
+                $value = $this->redactSecrets($value);
+            }
+        });
+
+        return $context;
     }
 }

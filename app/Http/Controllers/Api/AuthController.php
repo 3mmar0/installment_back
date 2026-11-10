@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Http\Traits\ApiResponse;
 use App\Models\User;
+use App\Models\Subscription;
 use App\Enums\UserRole;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
@@ -66,10 +67,13 @@ class AuthController extends Controller
             'governorate' => \App\Helpers\GovernorateHelper::rule(),
             'password' => ['required', 'confirmed', Password::defaults()],
             'registration_source' => ['nullable', 'in:web,mobile,admin'],
+            'trial_subscription_id' => ['nullable', 'integer', 'exists:subscriptions,id'],
         ]);
 
+        $registrationData = $data;
+        unset($registrationData['trial_subscription_id']);
         $result = $this->authService->register([
-            ...$data,
+            ...$registrationData,
             'registration_source' => $data['registration_source'] ?? RegistrationSource::Web->value,
         ]);
         $newUser = $result['user'];
@@ -80,7 +84,7 @@ class AuthController extends Controller
             $this->notificationService->notifyNewUserRegistered($owner, $newUser);
         }
 
-        TrialHelper::applyRegistrationPlan($result['user'], null);
+        TrialHelper::applyRegistrationPlan($result['user'], isset($data['trial_subscription_id']) ? Subscription::find($data['trial_subscription_id']) : null);
 
         return $this->createdResponse([
             'user' => new UserResource($result['user']->load(['userLimit'])),

@@ -15,6 +15,11 @@ Schedule::job(new \App\Jobs\DailyCreditScoreRefreshJob())
     ->name('credit-score-refresh')
     ->withoutOverlapping();
 
+Schedule::command('subscriptions:expire')
+    ->dailyAt('00:05')
+    ->name('expire-subscriptions')
+    ->withoutOverlapping();
+
 // Drop abandoned import previews (never confirmed) and their uploaded files.
 Schedule::call(function () {
     ImportBatch::query()
