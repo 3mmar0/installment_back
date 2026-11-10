@@ -60,6 +60,7 @@ class UpdateCustomerRequest extends FormRequest
             'guarantor_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'guarantor_national_id' => array_merge(['sometimes'], $this->nationalIdRules()),
             'guarantor_phone' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'whatsapp_auto_reminders' => ['sometimes', 'boolean'],
         ];
     }
 

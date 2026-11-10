@@ -95,11 +95,39 @@ class SubscriptionController extends Controller
         }
 
         $subscription->update($data);
+        $subscription = $subscription->fresh();
+
+        $synced = LimitsHelper::syncSubscriptionLimitsToSubscribers($subscription);
+        $payload = (new SubscriptionResource($subscription))->resolve();
+        $payload['subscribers_synced'] = $synced;
 
         return $this->successResponse(
-            new SubscriptionResource($subscription->fresh()),
-            'تم تحديث خطة الاشتراك بنجاح'
+            $payload,
+            'تم تحديث خطة الاشتراك وتطبيقها على المشتركين بنجاح'
         );
+    }
+
+    /**
+     * Assign a subscription plan to many users at once.
+     */
+    public function bulkAssign(Request $request, Subscription $subscription): JsonResponse
+    {
+        $data = $request->validate([
+            'user_ids' => ['required', 'array', 'min:1'],
+            'user_ids.*' => ['integer', 'exists:users,id'],
+            'start_date' => ['sometimes', 'nullable', 'date'],
+            'end_date' => ['sometimes', 'nullable', 'date', 'after_or_equal:start_date'],
+            'status' => ['sometimes', 'nullable', 'string', 'in:active,paused,canceled'],
+            'features' => ['sometimes', 'nullable', 'array'],
+        ]);
+
+        $overrides = Arr::only($data, ['start_date', 'end_date', 'status', 'features']);
+        $result = LimitsHelper::bulkAssignSubscription($subscription, $data['user_ids'], $overrides);
+
+        return $this->successResponse([
+            'assigned' => $result['assigned'],
+            'limits' => UserLimitResource::collection(collect($result['limits'])),
+        ], 'تم تعيين الاشتراك للمستخدمين بنجاح');
     }
 
     /**

@@ -276,6 +276,64 @@ class LimitsHelper
     }
 
     /**
+     * Re-apply plan resource caps/features to every user currently on this subscription.
+     * Preserves usage counters, bonuses, and subscription dates.
+     */
+    public static function syncSubscriptionLimitsToSubscribers(Subscription $subscription): int
+    {
+        $updated = 0;
+
+        UserLimit::query()
+            ->where('subscription_id', $subscription->id)
+            ->where('status', 'active')
+            ->orderBy('id')
+            ->chunkById(100, function ($limits) use ($subscription, &$updated) {
+                foreach ($limits as $limit) {
+                    $limit->update([
+                        'subscription_name' => $subscription->name,
+                        'subscription_slug' => $subscription->slug,
+                        'currency' => $subscription->currency,
+                        'price' => $subscription->price,
+                        'duration' => $subscription->duration,
+                        'description' => $subscription->description,
+                        'customers' => $subscription->customers,
+                        'installments' => $subscription->installments,
+                        'notifications' => $subscription->notifications,
+                        'assistant_messages' => $subscription->assistant_messages ?? self::DEFAULT_LIMITS['assistant_messages'],
+                        'whatsapp_messages' => $subscription->whatsapp_messages ?? self::DEFAULT_LIMITS['whatsapp_messages'],
+                        'reports' => $subscription->reports,
+                        'features' => self::normalizeFeatures($subscription->features),
+                    ]);
+                    $updated++;
+                }
+            });
+
+        return $updated;
+    }
+
+    /**
+     * Assign one plan to many merchants.
+     *
+     * @param  array<int, int>  $userIds
+     * @return array{assigned: int, limits: list<UserLimit>}
+     */
+    public static function bulkAssignSubscription(Subscription $subscription, array $userIds, array $overrides = []): array
+    {
+        $limits = [];
+        foreach (array_unique(array_map('intval', $userIds)) as $userId) {
+            if ($userId < 1) {
+                continue;
+            }
+            $limits[] = self::applySubscriptionToUser($userId, $subscription, $overrides);
+        }
+
+        return [
+            'assigned' => count($limits),
+            'limits' => $limits,
+        ];
+    }
+
+    /**
      * Update usage counts for a user.
      */
     public static function updateUsageCounts(int $userId): void

@@ -56,6 +56,7 @@ class StoreCustomerRequest extends FormRequest
             'guarantor_name' => ['nullable', 'string', 'max:255'],
             'guarantor_national_id' => $this->nationalIdRules(),
             'guarantor_phone' => ['nullable', 'string', 'max:50'],
+            'whatsapp_auto_reminders' => ['sometimes', 'boolean'],
         ];
     }
 

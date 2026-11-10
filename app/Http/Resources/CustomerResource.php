@@ -28,6 +28,7 @@ class CustomerResource extends JsonResource
             'guarantor_name' => $this->guarantor_name,
             'guarantor_national_id' => $this->guarantor_national_id,
             'guarantor_phone' => $this->guarantor_phone,
+            'whatsapp_auto_reminders' => (bool) $this->whatsapp_auto_reminders,
             'has_client_account' => $this->client_account_id !== null,
             'client_account' => $this->when(
                 $this->relationLoaded('clientAccount') && $this->clientAccount,

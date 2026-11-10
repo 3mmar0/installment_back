@@ -431,7 +431,7 @@ it('never disables gemini tls verification in production', function () {
     app()['env'] = $previous;
 });
 
-it('enforces the monthly assistant message limit from the plan', function () {
+it('does not charge interactive chat turns without a billable outcome', function () {
     config([
         'assistant.enabled' => true,
         'assistant.gemini.api_key' => 'test-key',
@@ -459,12 +459,74 @@ it('enforces the monthly assistant message limit from the plan', function () {
 
     $this->postJson('/api/assistant/message', ['message' => 'مساعدة'])
         ->assertOk()
-        ->assertJsonPath('data.reply', 'أهلاً');
+        ->assertJsonPath('data.reply', 'أهلاً')
+        ->assertJsonPath('data.remaining_today', 1);
 
-    $this->postJson('/api/assistant/message', ['message' => 'تاني'])
+    expect((int) $limit->fresh()->assistant_messages_used)->toBe(0);
+});
+
+it('charges once for a successful billable read tool and enforces the monthly limit', function () {
+    config([
+        'assistant.enabled' => true,
+        'assistant.gemini.api_key' => 'test-key',
+    ]);
+
+    Http::fakeSequence()
+        ->push([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [[
+                        'functionCall' => [
+                            'name' => 'list_customers',
+                            'args' => ['limit' => 5],
+                        ],
+                    ]],
+                ],
+            ]],
+        ], 200)
+        ->push([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [['text' => 'دي قائمة العملاء.']],
+                ],
+            ]],
+        ], 200)
+        ->push([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [[
+                        'functionCall' => [
+                            'name' => 'list_customers',
+                            'args' => ['limit' => 5],
+                        ],
+                    ]],
+                ],
+            ]],
+        ], 200)
+        ->push([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [['text' => 'تاني.']],
+                ],
+            ]],
+        ], 200);
+
+    $merchant = actingAsMerchant();
+    $limit = $merchant->userLimit;
+    $limit->update([
+        'assistant_messages' => ['from' => 0, 'to' => 1],
+        'assistant_messages_used' => 0,
+        'assistant_messages_bonus' => 0,
+        'usage_period' => now()->format('Y-m'),
+        'features' => array_merge($limit->features ?? [], ['assistant' => true]),
+    ]);
+
+    $this->postJson('/api/assistant/message', ['message' => 'ورّيني العملاء'])
         ->assertOk()
         ->assertJsonPath('data.remaining_today', 0);
 
-    expect($this->postJson('/api/assistant/message', ['message' => 'تالت'])->json('data.reply'))
+    expect((int) $limit->fresh()->assistant_messages_used)->toBe(1);
+
+    expect($this->postJson('/api/assistant/message', ['message' => 'تاني'])->json('data.reply'))
         ->toContain('وصلت للحد الشهري');
 });

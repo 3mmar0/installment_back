@@ -16,6 +16,12 @@ class UserLimitResource extends JsonResource
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
+            'user' => $this->whenLoaded('user', fn () => [
+                'id' => $this->user?->id,
+                'name' => $this->user?->name,
+                'email' => $this->user?->email,
+                'phone' => $this->user?->phone,
+            ]),
             'subscription_name' => $this->subscription_name,
             'subscription_slug' => $this->subscription_slug,
             'currency' => $this->currency,

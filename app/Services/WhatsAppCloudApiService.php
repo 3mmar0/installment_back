@@ -16,9 +16,14 @@ class WhatsAppCloudApiService
      *
      * @return array<string, mixed>
      */
-    public function sendText(string $to, string $body, ?User $merchant = null): array
-    {
-        $this->assertMerchantCanSend($merchant);
+    public function sendText(
+        string $to,
+        string $body,
+        ?User $merchant = null,
+        bool $consumeMerchantQuota = true
+    ): array {
+        $this->assertMerchantCanSend($merchant, $consumeMerchantQuota);
+        PlatformWhatsAppQuota::assertCanSend();
 
         $result = $this->send([
             'messaging_product' => 'whatsapp',
@@ -27,7 +32,10 @@ class WhatsAppCloudApiService
             'text' => ['body' => $body],
         ]);
 
-        $this->consumeMerchantQuota($merchant);
+        PlatformWhatsAppQuota::consume(1);
+        if ($consumeMerchantQuota) {
+            $this->consumeMerchantQuota($merchant);
+        }
 
         return $result;
     }
@@ -43,9 +51,11 @@ class WhatsAppCloudApiService
         string $name,
         string $language = 'ar',
         array $components = [],
-        ?User $merchant = null
+        ?User $merchant = null,
+        bool $consumeMerchantQuota = true
     ): array {
-        $this->assertMerchantCanSend($merchant);
+        $this->assertMerchantCanSend($merchant, $consumeMerchantQuota);
+        PlatformWhatsAppQuota::assertCanSend();
 
         $template = [
             'name' => $name,
@@ -63,7 +73,10 @@ class WhatsAppCloudApiService
             'template' => $template,
         ]);
 
-        $this->consumeMerchantQuota($merchant);
+        PlatformWhatsAppQuota::consume(1);
+        if ($consumeMerchantQuota) {
+            $this->consumeMerchantQuota($merchant);
+        }
 
         return $result;
     }
@@ -104,7 +117,7 @@ class WhatsAppCloudApiService
         return $json;
     }
 
-    private function assertMerchantCanSend(?User $merchant): void
+    private function assertMerchantCanSend(?User $merchant, bool $requireMerchantQuota = true): void
     {
         if (! $merchant || $merchant->isOwner()) {
             return;
@@ -114,7 +127,7 @@ class WhatsAppCloudApiService
             throw new RuntimeException(LimitsHelper::getLimitExceededMessage('whatsapp'));
         }
 
-        if (! LimitsHelper::canCreate($merchant->id, 'whatsapp_messages')) {
+        if ($requireMerchantQuota && ! LimitsHelper::canCreate($merchant->id, 'whatsapp_messages')) {
             throw new RuntimeException(LimitsHelper::getLimitExceededMessage('whatsapp_messages'));
         }
     }

@@ -234,4 +234,23 @@ class UserLimitController extends Controller
 
         return $this->successResponse($gifts, 'تم جلب سجل الهدايا');
     }
+
+    /**
+     * Authenticated merchant gift history (no granter PII beyond note/amount).
+     */
+    public function myGifts(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return $this->unauthorizedResponse();
+        }
+
+        $gifts = MerchantGift::query()
+            ->where('user_id', $user->id)
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get(['id', 'resource', 'amount', 'note', 'source', 'created_at']);
+
+        return $this->successResponse($gifts, 'تم جلب سجل الهدايا');
+    }
 }

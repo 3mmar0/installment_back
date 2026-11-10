@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\User;
 use App\Services\EmailNotificationService;
+use App\Services\WhatsAppReminderService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -20,8 +21,10 @@ class SendUserPaymentRemindersJob implements ShouldQueue
         public bool $includeOverdue = true,
     ) {}
 
-    public function handle(EmailNotificationService $emailNotificationService): void
-    {
+    public function handle(
+        EmailNotificationService $emailNotificationService,
+        WhatsAppReminderService $whatsAppReminderService,
+    ): void {
         $user = User::find($this->userId);
 
         if (! $user || ! $user->receivesOperationalComms()) {
@@ -30,6 +33,12 @@ class SendUserPaymentRemindersJob implements ShouldQueue
 
         $emailNotificationService->dispatchPaymentReminders(
             $user,
+            includeOverdue: $this->includeOverdue
+        );
+
+        $whatsAppReminderService->sendForMerchant(
+            $user,
+            includeDueSoon: true,
             includeOverdue: $this->includeOverdue
         );
     }

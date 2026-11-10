@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\SubscriptionTrialController;
 use App\Http\Controllers\Api\SystemSettingsController;
 use App\Http\Controllers\Api\UnifiedAuthController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\AdminLimitsController;
 use App\Http\Controllers\Api\UserLimitController;
 use App\Http\Controllers\Api\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -124,6 +125,7 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
 
     Route::prefix('limits')->controller(UserLimitController::class)->group(function () {
         Route::get('current', 'current');
+        Route::get('gifts', 'myGifts');
         Route::get('can-create/{resourceType}', 'canCreate');
         Route::post('refresh', 'refreshUsage');
         Route::get('feature/{feature}', 'feature');
@@ -256,12 +258,22 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::put('subscriptions-update/{subscription}', 'update');
             Route::delete('subscriptions-delete/{subscription}', 'destroy');
             Route::post('subscriptions/{subscription}/assign', 'assign');
+            Route::post('subscriptions/{subscription}/bulk-assign', 'bulkAssign');
         });
 
         Route::prefix('admin/subscription-purchase-requests')->controller(SubscriptionPurchaseRequestController::class)->group(function () {
             Route::get('/', 'index');
             Route::post('{purchaseRequest}/approve', 'approve');
             Route::post('{purchaseRequest}/reject', 'reject');
+        });
+
+        Route::controller(AdminLimitsController::class)->group(function () {
+            Route::get('admin/user-subscriptions', 'subscriptions');
+            Route::get('admin/messaging-limits', 'messagingLimits');
+            Route::get('admin/platform-whatsapp', 'platformWhatsApp');
+            Route::put('admin/platform-whatsapp', 'platformWhatsApp');
+            Route::get('admin/gifts', 'giftsIndex');
+            Route::post('admin/gifts/bulk', 'giftsBulk');
         });
 
         Route::controller(UserLimitController::class)->group(function () {

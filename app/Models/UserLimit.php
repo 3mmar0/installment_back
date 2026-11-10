@@ -289,7 +289,7 @@ class UserLimit extends Model
     /**
      * Effective cap including gift bonus for monthly messaging resources.
      */
-    protected function getEffectiveCap(string $resourceType): ?int
+    public function getEffectiveCap(string $resourceType): ?int
     {
         $base = $this->getLimitCap($resourceType);
 

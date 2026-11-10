@@ -64,7 +64,7 @@ class AssistantOrchestrator
             );
         }
 
-        if (! $this->sessions->consumeMonthlyMessage($user->id)) {
+        if (! $this->sessions->hasMonthlyQuota($user->id)) {
             $this->logFail('monthly_limit_reached', $user, $sessionId, [
                 'remaining' => $this->sessions->remainingMonthlyMessages($user->id),
             ]);
@@ -89,6 +89,7 @@ class AssistantOrchestrator
         $navigation = null;
         $reply = '';
         $sawFailedTool = false;
+        $billableReadSuccess = false;
 
         try {
             for ($i = 0; $i < 6; $i++) {
@@ -155,6 +156,8 @@ class AssistantOrchestrator
                             'tool' => $name,
                             'error' => $toolResult['error'] ?? 'unknown',
                         ]);
+                    } elseif ($this->isBillableReadTool($name)) {
+                        $billableReadSuccess = true;
                     }
 
                     $context = $this->sessions->mergeContext(
@@ -230,6 +233,12 @@ class AssistantOrchestrator
             $reply = 'ما قدرتش أنفّذ الطلب بالكامل. راجع البيانات وحاول تاني.';
         }
 
+        // Charge once for a successful read/nav outcome in this turn.
+        // Pending mutations charge later on successful confirm only.
+        if ($pendingAction === null && $billableReadSuccess) {
+            $this->sessions->consumeMonthlyMessage($user->id);
+        }
+
         $turns[] = ['role' => 'assistant', 'text' => $reply];
         $this->sessions->save($user->id, $sessionId, $turns, $context);
 
@@ -254,6 +263,20 @@ class AssistantOrchestrator
      */
     public function confirmAction(User $user, string $pendingActionId, bool $confirmed, ?string $sessionId = null): array
     {
+        if ($confirmed && ! $this->sessions->hasMonthlyQuota($user->id)) {
+            $this->logFail('monthly_limit_reached_on_confirm', $user, $sessionId, [
+                'pending_action_id' => $pendingActionId,
+            ]);
+
+            return $this->confirmResponse(
+                $user,
+                'وصلت للحد الشهري لرسائل المساعد في خطتك.',
+                $sessionId,
+                null,
+                null
+            );
+        }
+
         $claimed = $this->pendingActions->claim($user->id, $pendingActionId);
         if (! $claimed) {
             $this->logFail('pending_action_expired', $user, $sessionId, [
@@ -355,6 +378,9 @@ class AssistantOrchestrator
 
             return $this->confirmResponse($user, $error, $linkedSessionId, null, null);
         }
+
+        // Successful confirmed mutation counts as one assistant message.
+        $this->sessions->consumeMonthlyMessage($user->id);
 
         $type = (string) ($pending['type'] ?? '');
         $reply = $this->successReplyForType($type);
@@ -668,6 +694,19 @@ PROMPT;
             'result' => $result,
             'remaining_today' => $this->sessions->remainingMonthlyMessages($user->id),
         ];
+    }
+
+    private function isBillableReadTool(string $name): bool
+    {
+        return in_array($name, [
+            'search_customers',
+            'list_customers',
+            'get_customer',
+            'summarize_customer_installments',
+            'get_installment',
+            'find_open_installment_item',
+            'open_screen',
+        ], true);
     }
 
     /**

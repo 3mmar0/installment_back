@@ -27,6 +27,7 @@ class Customer extends Model
         'guarantor_name',
         'guarantor_national_id',
         'guarantor_phone',
+        'whatsapp_auto_reminders',
         'current_credit_score_id',
         'credit_score_dirty_at',
     ];
@@ -34,6 +35,7 @@ class Customer extends Model
     protected $casts = [
         'credit_score_dirty_at' => 'datetime',
         'monthly_salary' => 'decimal:2',
+        'whatsapp_auto_reminders' => 'boolean',
     ];
 
     public function user()

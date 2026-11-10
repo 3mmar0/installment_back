@@ -214,6 +214,23 @@ class AssistantSessionStore
         return LimitsHelper::getRemainingCount($userId, 'assistant_messages');
     }
 
+    /**
+     * Check monthly assistant quota without consuming.
+     */
+    public function hasMonthlyQuota(int $userId): bool
+    {
+        $user = User::query()->find($userId);
+        if ($user && $user->isOwner()) {
+            return true;
+        }
+
+        if (! $this->isFeatureEnabled($userId)) {
+            return false;
+        }
+
+        return LimitsHelper::canCreate($userId, 'assistant_messages');
+    }
+
     public function consumeMonthlyMessage(int $userId): bool
     {
         $user = User::query()->find($userId);
