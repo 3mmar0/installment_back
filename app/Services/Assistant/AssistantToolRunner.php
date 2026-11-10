@@ -151,7 +151,11 @@ class AssistantToolRunner
                         'customer_query' => ['type' => 'string'],
                         'total_amount' => ['type' => 'number'],
                         'months' => ['type' => 'integer'],
-                        'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD; default today if omitted'],
+                        'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD absolute date; omit when using start_months_ago'],
+                        'start_months_ago' => [
+                            'type' => 'integer',
+                            'description' => 'Relative start: N months before today. Use for Arabic phrases like من ثلاث شهور / قبل شهرين. Do NOT convert to years.',
+                        ],
                         'name' => ['type' => 'string'],
                         'notes' => ['type' => 'string'],
                         'prepaid_months' => [
@@ -179,7 +183,11 @@ class AssistantToolRunner
                         'job' => ['type' => 'string'],
                         'total_amount' => ['type' => 'number'],
                         'months' => ['type' => 'integer'],
-                        'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
+                        'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD absolute date; omit when using start_months_ago'],
+                        'start_months_ago' => [
+                            'type' => 'integer',
+                            'description' => 'Relative start: N months before today. Use for من N شهور. Not years.',
+                        ],
                         'installment_name' => ['type' => 'string'],
                         'installment_notes' => ['type' => 'string'],
                         'prepaid_months' => [
@@ -778,6 +786,7 @@ class AssistantToolRunner
             'total_amount' => $args['total_amount'] ?? null,
             'months' => $args['months'] ?? null,
             'start_date' => $args['start_date'] ?? null,
+            'start_months_ago' => $args['start_months_ago'] ?? null,
             'name' => $args['installment_name'] ?? null,
             'notes' => $args['installment_notes'] ?? ($args['notes'] ?? null),
             'prepaid_months' => $args['prepaid_months'] ?? [],
@@ -1141,12 +1150,45 @@ class AssistantToolRunner
     }
 
     /**
+     * Prefer relative months-ago from Arabic phrases; fall back to absolute date or today.
+     *
+     * @param  array<string, mixed>  $args
+     */
+    private function resolveStartDate(array $args): string
+    {
+        $monthsAgo = $args['start_months_ago'] ?? null;
+        if ($monthsAgo !== null && $monthsAgo !== '') {
+            $n = (int) $monthsAgo;
+            if ($n < 0) {
+                $n = abs($n);
+            }
+            if ($n > 120) {
+                // Guard against mistaking months for years (e.g. 36 years).
+                $n = min($n, 120);
+            }
+
+            return now()->startOfDay()->subMonthsNoOverflow($n)->toDateString();
+        }
+
+        $absolute = $this->nullableString($args['start_date'] ?? null);
+        if ($absolute) {
+            try {
+                return \Carbon\Carbon::parse($absolute)->toDateString();
+            } catch (\Throwable) {
+                // fall through to today
+            }
+        }
+
+        return now()->toDateString();
+    }
+
+    /**
      * @param  array<string, mixed>  $args
      * @return array{ok: bool, payload?: array<string, mixed>, error?: string}
      */
     private function buildInstallmentPayload(array $args, int $customerId, bool $requireCustomer = true): array
     {
-        $startDate = $this->nullableString($args['start_date'] ?? null) ?: now()->toDateString();
+        $startDate = $this->resolveStartDate($args);
         $months = (int) ($args['months'] ?? 0);
         $prepaid = $this->normalizePrepaidMonths($args['prepaid_months'] ?? [], $months);
         if ($prepaid['error'] ?? null) {
