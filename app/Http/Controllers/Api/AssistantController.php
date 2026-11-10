@@ -52,6 +52,7 @@ class AssistantController extends Controller
         $validated = $request->validate([
             'pending_action_id' => ['required', 'uuid'],
             'confirmed' => ['required', 'boolean'],
+            'session_id' => ['nullable', 'uuid'],
         ]);
 
         /** @var User $user */
@@ -60,7 +61,8 @@ class AssistantController extends Controller
         $result = $this->orchestrator->confirmAction(
             $user,
             $validated['pending_action_id'],
-            filter_var($validated['confirmed'], FILTER_VALIDATE_BOOLEAN)
+            filter_var($validated['confirmed'], FILTER_VALIDATE_BOOLEAN),
+            $validated['session_id'] ?? null
         );
 
         return $this->successResponse($result, 'نتيجة التأكيد');

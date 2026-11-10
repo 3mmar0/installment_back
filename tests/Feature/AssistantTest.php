@@ -280,6 +280,157 @@ it('rejects invalid national id with a clear arabic message', function () {
         ->and($result['error'] ?? '')->toContain('14');
 });
 
+it('resolves relative start dates with Carbon subMonthsNoOverflow in app timezone', function () {
+    config(['app.timezone' => 'Africa/Cairo']);
+    Carbon\Carbon::setTestNow(Carbon\Carbon::parse('2026-03-31 12:00:00', 'Africa/Cairo'));
+
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create(['name' => 'تاريخ']);
+    $runner = app(AssistantToolRunner::class);
+
+    $proposed = $runner->run('propose_create_installment', [
+        'customer_id' => $customer->id,
+        'total_amount' => 900,
+        'months' => 3,
+        'start_months_ago' => 3,
+    ], $merchant);
+
+    expect($proposed['ok'])->toBeTrue()
+        ->and($proposed['pending_action']['payload_preview']['start_date'] ?? null)
+        ->toBe('2025-12-31');
+
+    Carbon\Carbon::setTestNow();
+});
+
+it('keeps structured session context beyond raw chat turns', function () {
+    $merchant = actingAsMerchant();
+    $store = app(App\Services\Assistant\AssistantSessionStore::class);
+    $sessionId = (string) Illuminate\Support\Str::uuid();
+
+    $store->save($merchant->id, $sessionId, [
+        ['role' => 'user', 'text' => 'دور على محمد'],
+        ['role' => 'assistant', 'text' => 'لقيت عميل'],
+    ], [
+        'selected_customer' => ['id' => 55, 'name' => 'محمد', 'phone' => '0100'],
+        'draft' => [
+            'intent' => 'create_installment',
+            'fields' => ['total_amount' => 1000, 'months' => 4],
+        ],
+    ]);
+
+    $loaded = $store->load($merchant->id, $sessionId);
+    $block = $store->contextPromptBlock($loaded['context']);
+
+    expect($loaded['context']['selected_customer']['id'] ?? null)->toBe(55)
+        ->and($loaded['context']['draft']['fields']['months'] ?? null)->toBe(4)
+        ->and($block)->toContain('العميل المختار حالياً')
+        ->and($block)->toContain('مسودة العملية الجارية')
+        ->and($block)->toContain('المنطقة الزمنية');
+});
+
+it('asks for missing installment fields with needs_input instead of inventing success', function () {
+    $merchant = actingAsMerchant();
+    $runner = app(AssistantToolRunner::class);
+
+    $result = $runner->run('propose_create_installment', [
+        'customer_query' => 'أي حد',
+    ], $merchant);
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['result']['status'] ?? null)->toBe('needs_input')
+        ->and($result['result']['missing'] ?? [])->toContain('total_amount')
+        ->and($result['pending_action'] ?? null)->toBeNull();
+});
+
+it('isolates customer tools to the owning merchant', function () {
+    $merchantA = actingAsMerchant();
+    $merchantB = merchantWithPlan();
+
+    $foreign = Customer::factory()->forMerchant($merchantB)->create(['name' => 'عميل تاني']);
+    $runner = app(AssistantToolRunner::class);
+
+    $result = $runner->run('get_customer', [
+        'customer_id' => $foreign->id,
+    ], $merchantA);
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['error'] ?? '')->not->toBeEmpty();
+
+    $pay = $runner->run('propose_pay_installment_item', [
+        'customer_id' => $foreign->id,
+        'paid_amount' => 50,
+    ], $merchantA);
+
+    expect($pay['ok'])->toBeFalse();
+});
+
+it('links confirm results back to the conversation session and is idempotent', function () {
+    $merchant = actingAsMerchant();
+    $runner = app(AssistantToolRunner::class);
+    $orchestrator = app(App\Services\Assistant\AssistantOrchestrator::class);
+    $sessionId = (string) Illuminate\Support\Str::uuid();
+
+    $proposed = $runner->run('propose_create_customer', [
+        'name' => 'عميل جلسة',
+        'phone' => '01002223344',
+    ], $merchant, $sessionId);
+
+    $pendingId = $proposed['pending_action']['id'];
+
+    $first = $orchestrator->confirmAction($merchant, $pendingId, true, $sessionId);
+    expect($first['ok'] ?? true)->toBeTrue()
+        ->and($first['session_id'])->toBe($sessionId)
+        ->and($first['reply'])->toContain('نجاح')
+        ->and(Customer::query()->where('name', 'عميل جلسة')->count())->toBe(1);
+
+    $second = $orchestrator->confirmAction($merchant, $pendingId, true, $sessionId);
+    expect($second['reply'])->toContain('نجاح')
+        ->and(Customer::query()->where('name', 'عميل جلسة')->count())->toBe(1);
+
+    $session = app(App\Services\Assistant\AssistantSessionStore::class)->load($merchant->id, $sessionId);
+    expect(collect($session['turns'])->pluck('text')->implode(' '))->toContain('تم إضافة العميل')
+        ->and($session['context']['last_action_result']['ok'] ?? false)->toBeTrue();
+});
+
+it('exposes egyptian dialect guidance and timezone in the system prompt memory', function () {
+    $orchestrator = app(App\Services\Assistant\AssistantOrchestrator::class);
+    $ref = new ReflectionClass($orchestrator);
+    $method = $ref->getMethod('systemPrompt');
+    $method->setAccessible(true);
+
+    $prompt = $method->invoke($orchestrator, [
+        'timezone' => 'Africa/Cairo',
+        'today' => '2026-11-10',
+        'selected_customer' => ['id' => 9, 'name' => 'سارة', 'phone' => '011'],
+        'draft' => [
+            'intent' => 'create_installment',
+            'fields' => ['months' => 6, 'total_amount' => 1200],
+        ],
+    ]);
+
+    expect($prompt)->toContain('اللهجة المصرية')
+        ->and($prompt)->toContain('ورّيني العملاء')
+        ->and($prompt)->toContain('Africa/Cairo')
+        ->and($prompt)->toContain('start_months_ago')
+        ->and($prompt)->toContain('ممنوع تقول')
+        ->and($prompt)->toContain('العميل المختار حالياً');
+});
+
+it('never disables gemini tls verification in production', function () {
+    $client = app(App\Services\Assistant\GeminiClient::class);
+    $ref = new ReflectionClass($client);
+    $method = $ref->getMethod('shouldDisableSslVerify');
+    $method->setAccessible(true);
+
+    $previous = app()->environment();
+    app()['env'] = 'production';
+    config(['assistant.gemini.http_verify' => false]);
+
+    expect($method->invoke($client))->toBeFalse();
+
+    app()['env'] = $previous;
+});
+
 it('enforces the monthly assistant message limit from the plan', function () {
     config([
         'assistant.enabled' => true,

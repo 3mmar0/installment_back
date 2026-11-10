@@ -17,6 +17,7 @@ class GeminiClient
      */
     public const DEFAULT_FALLBACK_MODELS = [
         'gemini-3.1-flash-lite',
+        'gemini-3.8-flash',
         'gemini-3.6-flash',
         'gemini-3.5-flash-lite',
     ];
@@ -54,68 +55,86 @@ class GeminiClient
         $models = $this->models();
         $attempts = [];
         $lastError = 'Gemini request failed';
+        $maxRetries = max(0, (int) config('assistant.gemini.retries', 1));
 
         foreach ($models as $index => $model) {
-            try {
-                $response = $this->request($apiKey, $model, $payload);
-            } catch (Throwable $e) {
-                $safeError = $this->redactSecrets($e->getMessage());
-                $attempts[] = [
-                    'model' => $model,
-                    'status' => null,
-                    'error' => $safeError,
-                ];
-                $this->logWarning('Gemini HTTP/transport failure, trying next model', [
-                    'model' => $model,
-                    'attempt' => $index + 1,
-                    'total_models' => count($models),
-                    'error' => $safeError,
-                ]);
-                $lastError = $safeError;
-                continue;
-            }
-
-            if ($response->successful()) {
-                if ($attempts !== []) {
-                    $this->logInfo('Gemini succeeded after fallbacks', [
+            for ($retry = 0; $retry <= $maxRetries; $retry++) {
+                try {
+                    $response = $this->request($apiKey, $model, $payload);
+                } catch (Throwable $e) {
+                    $safeError = $this->redactSecrets($e->getMessage());
+                    $attempts[] = [
                         'model' => $model,
-                        'failed_attempts' => $attempts,
+                        'status' => null,
+                        'retry' => $retry,
+                        'error' => $safeError,
+                    ];
+                    $this->logWarning('Gemini HTTP/transport failure', [
+                        'model' => $model,
+                        'attempt' => $index + 1,
+                        'retry' => $retry,
+                        'total_models' => count($models),
+                        'error' => $safeError,
                     ]);
+                    $lastError = $safeError;
+
+                    if ($retry < $maxRetries && $this->isTransientTransportError($safeError)) {
+                        usleep(250000 * ($retry + 1));
+                        continue;
+                    }
+
+                    break;
                 }
 
-                /** @var array<string, mixed> $json */
-                $json = $response->json() ?? [];
+                if ($response->successful()) {
+                    if ($attempts !== []) {
+                        $this->logInfo('Gemini succeeded after fallbacks/retries', [
+                            'model' => $model,
+                            'failed_attempts' => $attempts,
+                        ]);
+                    }
 
-                return $json;
-            }
+                    /** @var array<string, mixed> $json */
+                    $json = $response->json() ?? [];
 
-            $message = data_get($response->json(), 'error.message')
-                ?: data_get($response->json(), 'error.status')
-                ?: 'HTTP '.$response->status();
-            $message = $this->redactSecrets((string) $message);
-            $lastError = $message;
-            $attempt = [
-                'model' => $model,
-                'status' => $response->status(),
-                'error' => $message,
-            ];
-            $attempts[] = $attempt;
+                    return $json;
+                }
 
-            if ($this->shouldTryNextModel($response->status(), $message)) {
-                $this->logWarning('Gemini model failed, trying next fallback', [
+                $message = data_get($response->json(), 'error.message')
+                    ?: data_get($response->json(), 'error.status')
+                    ?: 'HTTP '.$response->status();
+                $message = $this->redactSecrets((string) $message);
+                $lastError = $message;
+                $attempt = [
+                    'model' => $model,
+                    'status' => $response->status(),
+                    'retry' => $retry,
+                    'error' => $message,
+                ];
+                $attempts[] = $attempt;
+
+                if ($retry < $maxRetries && $this->shouldRetrySameModel($response->status(), $message)) {
+                    $this->logWarning('Gemini transient failure, retrying same model', $attempt);
+                    usleep(300000 * ($retry + 1));
+                    continue;
+                }
+
+                if ($this->shouldTryNextModel($response->status(), $message)) {
+                    $this->logWarning('Gemini model failed, trying next fallback', [
+                        ...$attempt,
+                        'attempt' => $index + 1,
+                        'total_models' => count($models),
+                    ]);
+                    break;
+                }
+
+                $this->logError('Gemini hard failure (no more fallbacks for this error)', [
                     ...$attempt,
-                    'attempt' => $index + 1,
-                    'total_models' => count($models),
+                    'attempts' => $attempts,
                 ]);
-                continue;
+
+                throw new RuntimeException('Gemini request failed: '.$message);
             }
-
-            $this->logError('Gemini hard failure (no more fallbacks for this error)', [
-                ...$attempt,
-                'attempts' => $attempts,
-            ]);
-
-            throw new RuntimeException('Gemini request failed: '.$message);
         }
 
         $this->logError('Gemini exhausted all models', [
@@ -170,13 +189,17 @@ class GeminiClient
 
     private function shouldDisableSslVerify(): bool
     {
+        // Never disable TLS verification in production.
+        if (app()->environment('production')) {
+            return false;
+        }
+
         $configured = config('assistant.gemini.http_verify');
         if ($configured !== null && filter_var($configured, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === false) {
             return true;
         }
 
-        // Windows PHP builds frequently ship without a CA bundle. Even when
-        // APP_ENV=production for local runs, OpenSSL then fails with cURL 60.
+        // Local Windows PHP builds frequently ship without a CA bundle.
         if (PHP_OS_FAMILY === 'Windows') {
             $ca = (string) (ini_get('curl.cainfo') ?: ini_get('openssl.cafile') ?: '');
 
@@ -204,6 +227,32 @@ class GeminiClient
             || str_contains($haystack, 'ssl certificate')
             || str_contains($haystack, 'curl error 60')
             || str_contains($haystack, 'thought_signature');
+    }
+
+    private function shouldRetrySameModel(int $status, string $message): bool
+    {
+        if (in_array($status, [429, 500, 502, 503, 504], true)) {
+            return true;
+        }
+
+        $haystack = strtolower($message);
+
+        return str_contains($haystack, 'resource_exhausted')
+            || str_contains($haystack, 'rate limit')
+            || str_contains($haystack, 'unavailable')
+            || str_contains($haystack, 'timeout')
+            || str_contains($haystack, 'temporarily');
+    }
+
+    private function isTransientTransportError(string $message): bool
+    {
+        $haystack = strtolower($message);
+
+        return str_contains($haystack, 'timed out')
+            || str_contains($haystack, 'timeout')
+            || str_contains($haystack, 'connection reset')
+            || str_contains($haystack, 'could not resolve host')
+            || str_contains($haystack, 'failed to connect');
     }
 
     private function redactSecrets(string $value): string

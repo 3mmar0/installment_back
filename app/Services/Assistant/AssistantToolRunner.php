@@ -17,6 +17,8 @@ use Illuminate\Validation\ValidationException;
 
 class AssistantToolRunner
 {
+    private ?string $sessionId = null;
+
     public function __construct(
         private readonly CustomerService $customerService,
         private readonly InstallmentService $installmentService,
@@ -31,7 +33,7 @@ class AssistantToolRunner
         return [
             [
                 'name' => 'search_customers',
-                'description' => 'Search vendor customers by name, phone, national id, or id.',
+                'description' => 'Search this merchant\'s customers only by name/phone/national id/id. If count=0 ask to clarify. If count>1 return status=ambiguous and ask user to pick by id. Never invent customers.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -45,7 +47,7 @@ class AssistantToolRunner
             ],
             [
                 'name' => 'list_customers',
-                'description' => 'List recent vendor customers, optionally filtered by search text. Use when the user asks to show customers.',
+                'description' => 'List this merchant\'s recent customers only. Use for «ورّيني العملاء». Empty list means no customers — say so honestly.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -62,7 +64,7 @@ class AssistantToolRunner
             ],
             [
                 'name' => 'get_customer',
-                'description' => 'Get one customer by id and prepare navigation to customer details.',
+                'description' => 'Get one owned customer by id. Returns error if missing or not owned. Sets selected customer context.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -73,7 +75,7 @@ class AssistantToolRunner
             ],
             [
                 'name' => 'summarize_customer_installments',
-                'description' => 'Summarize installments for a customer: totals, paid, remaining, overdue, and short item list.',
+                'description' => 'Summarize installments for one owned customer. If multiple name matches, returns status=ambiguous instead of guessing.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -201,7 +203,7 @@ class AssistantToolRunner
             ],
             [
                 'name' => 'propose_pay_installment_item',
-                'description' => 'Propose paying an installment item (full or partial). Does not save until confirm.',
+                'description' => 'Propose paying an owned installment item (full or partial). Never marks paid until explicit app confirmation. If customer is ambiguous return status=ambiguous.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -224,8 +226,10 @@ class AssistantToolRunner
      * @param  array<string, mixed>  $args
      * @return array{ok: bool, result?: array<string, mixed>, error?: string, pending_action?: array<string, mixed>|null, navigation?: array<string, mixed>|null}
      */
-    public function run(string $name, array $args, User $user): array
+    public function run(string $name, array $args, User $user, ?string $sessionId = null): array
     {
+        $this->sessionId = $sessionId;
+
         return match ($name) {
             'search_customers' => $this->searchCustomers($args, $user),
             'list_customers' => $this->listCustomers($args, $user),
@@ -305,11 +309,19 @@ class AssistantToolRunner
             ->values()
             ->all();
 
+        $status = match (true) {
+            count($rows) === 0 => 'empty',
+            count($rows) > 1 => 'ambiguous',
+            default => 'ok',
+        };
+
         return [
             'ok' => true,
             'result' => [
+                'status' => $status,
                 'count' => count($rows),
                 'customers' => $rows,
+                'ambiguous' => $status === 'ambiguous',
             ],
         ];
     }
@@ -333,6 +345,7 @@ class AssistantToolRunner
         return [
             'ok' => true,
             'result' => [
+                'status' => count($rows) === 0 ? 'empty' : 'ok',
                 'count' => count($rows),
                 'customers' => $rows,
             ],
@@ -649,7 +662,7 @@ class AssistantToolRunner
             $summary .= ' — '.GovernorateHelper::label($payload['governorate']);
         }
 
-        $id = $this->pendingActionStore->put($user->id, [
+        $id = $this->storePending($user->id, [
             'type' => 'create_customer',
             'summary_ar' => $summary,
             'payload' => $payload,
@@ -658,7 +671,7 @@ class AssistantToolRunner
 
         return [
             'ok' => true,
-            'result' => ['pending' => true, 'pending_action_id' => $id],
+            'result' => ['status' => 'awaiting_confirmation', 'pending' => true, 'pending_action_id' => $id],
             'pending_action' => [
                 'id' => $id,
                 'type' => 'create_customer',
@@ -677,10 +690,11 @@ class AssistantToolRunner
         $missing = $this->missingInstallmentFields($args, requireCustomer: true);
         if ($missing !== []) {
             return [
-                'ok' => false,
-                'error' => 'لسه ناقص: '.implode('، ', $missing).'. اسأل المستخدم عن الحقل التالي فقط ثم كمّل.',
+                'ok' => true,
                 'result' => [
+                    'status' => 'needs_input',
                     'interactive' => true,
+                    'missing' => $missing,
                     'missing_fields' => $missing,
                     'next_question_ar' => $this->nextInstallmentQuestion($missing),
                 ],
@@ -694,19 +708,29 @@ class AssistantToolRunner
                 ->take(5)
                 ->values();
             if ($matches->count() === 0) {
-                return ['ok' => false, 'error' => 'مفيش عميل مطابق. حدّد الاسم أو أنشئ العميل أولاً.'];
+                return [
+                    'ok' => true,
+                    'result' => [
+                        'status' => 'empty',
+                        'count' => 0,
+                        'customers' => [],
+                        'next_question_ar' => 'مفيش عميل مطابق. حدّد الاسم أكتر أو أنشئ العميل أولاً.',
+                    ],
+                ];
             }
             if ($matches->count() > 1) {
                 return [
                     'ok' => true,
                     'result' => [
+                        'status' => 'ambiguous',
                         'ambiguous' => true,
+                        'count' => $matches->count(),
                         'customers' => $matches->map(fn (Customer $c) => [
                             'id' => $c->id,
                             'name' => $c->name,
                             'phone' => $c->phone,
                         ])->all(),
-                        'next_question_ar' => 'في أكتر من عميل بنفس الاسم. أنهي واحد تقصد؟ اذكر الرقم أو الاسم بالكامل.',
+                        'next_question_ar' => 'في أكتر من عميل بنفس الاسم. أنهي واحد تقصد؟ اذكر الـ id أو الاسم بالكامل.',
                     ],
                 ];
             }
@@ -716,10 +740,11 @@ class AssistantToolRunner
         $customer = $this->ownedCustomer($customerId, $user);
         if (! $customer) {
             return [
-                'ok' => false,
-                'error' => 'لازم تحدد عميل صالح قبل إنشاء القسط.',
+                'ok' => true,
                 'result' => [
+                    'status' => 'needs_input',
                     'interactive' => true,
+                    'missing' => ['customer'],
                     'missing_fields' => ['customer'],
                     'next_question_ar' => 'أنهي عميل؟ قول الاسم أو اختار من قائمة العملاء.',
                 ],
@@ -749,7 +774,7 @@ class AssistantToolRunner
             'prepaid_months_label' => $prepaid !== [] ? implode('، ', $prepaid) : null,
         ]);
 
-        $id = $this->pendingActionStore->put($user->id, [
+        $id = $this->storePending($user->id, [
             'type' => 'create_installment',
             'summary_ar' => $summary,
             'payload' => $payload,
@@ -758,7 +783,7 @@ class AssistantToolRunner
 
         return [
             'ok' => true,
-            'result' => ['pending' => true, 'pending_action_id' => $id],
+            'result' => ['status' => 'awaiting_confirmation', 'pending' => true, 'pending_action_id' => $id],
             'pending_action' => [
                 'id' => $id,
                 'type' => 'create_installment',
@@ -829,7 +854,7 @@ class AssistantToolRunner
             ]
         );
 
-        $id = $this->pendingActionStore->put($user->id, [
+        $id = $this->storePending($user->id, [
             'type' => 'create_customer_with_installment',
             'summary_ar' => $summary,
             'payload' => $payload,
@@ -838,7 +863,7 @@ class AssistantToolRunner
 
         return [
             'ok' => true,
-            'result' => ['pending' => true, 'pending_action_id' => $id],
+            'result' => ['status' => 'awaiting_confirmation', 'pending' => true, 'pending_action_id' => $id],
             'pending_action' => [
                 'id' => $id,
                 'type' => 'create_customer_with_installment',
@@ -918,7 +943,7 @@ class AssistantToolRunner
             'carry_remainder' => $carry,
         ];
 
-        $id = $this->pendingActionStore->put($user->id, [
+        $id = $this->storePending($user->id, [
             'type' => 'pay_installment_item',
             'summary_ar' => $summary,
             'payload' => $payload,
@@ -927,7 +952,7 @@ class AssistantToolRunner
 
         return [
             'ok' => true,
-            'result' => ['pending' => true, 'pending_action_id' => $id],
+            'result' => ['status' => 'awaiting_confirmation', 'pending' => true, 'pending_action_id' => $id],
             'pending_action' => [
                 'id' => $id,
                 'type' => 'pay_installment_item',
@@ -943,7 +968,7 @@ class AssistantToolRunner
      */
     private function executeCreateCustomer(array $payload, User $user): array
     {
-        $customer = $this->customerService->createCustomer($payload, $user);
+        $customer = DB::transaction(fn () => $this->customerService->createCustomer($payload, $user));
 
         return [
             'ok' => true,
@@ -964,7 +989,12 @@ class AssistantToolRunner
      */
     private function executeCreateInstallment(array $payload, User $user): array
     {
-        $installment = $this->installmentService->createInstallment($payload, $user);
+        $customer = $this->ownedCustomer((int) ($payload['customer_id'] ?? 0), $user);
+        if (! $customer) {
+            return ['ok' => false, 'error' => 'العميل غير موجود أو مش تابع لحسابك.'];
+        }
+
+        $installment = DB::transaction(fn () => $this->installmentService->createInstallment($payload, $user));
 
         return [
             'ok' => true,
@@ -1029,25 +1059,35 @@ class AssistantToolRunner
      */
     private function executePay(array $payload, User $user): array
     {
-        $item = InstallmentItem::query()->with('installment')->find((int) ($payload['item_id'] ?? 0));
-        if (! $item || ! $this->ownsInstallment($item->installment, $user)) {
-            return ['ok' => false, 'error' => 'قسط الشهر غير موجود.'];
-        }
+        return DB::transaction(function () use ($payload, $user) {
+            $item = InstallmentItem::query()
+                ->with('installment')
+                ->lockForUpdate()
+                ->find((int) ($payload['item_id'] ?? 0));
 
-        $updated = $this->installmentService->markItemPaid($item, $payload, $user);
+            if (! $item || ! $this->ownsInstallment($item->installment, $user)) {
+                return ['ok' => false, 'error' => 'قسط الشهر غير موجود.'];
+            }
 
-        return [
-            'ok' => true,
-            'result' => [
-                'item_id' => $updated->id,
-                'status' => $updated->status,
-                'paid_amount' => (float) ($updated->paid_amount ?? 0),
-            ],
-            'navigation' => [
-                'screen' => 'InstallmentDetail',
-                'params' => ['id' => $updated->installment_id],
-            ],
-        ];
+            if ($item->status === 'paid') {
+                return ['ok' => false, 'error' => 'القسط ده متسدد بالفعل.'];
+            }
+
+            $updated = $this->installmentService->markItemPaid($item, $payload, $user);
+
+            return [
+                'ok' => true,
+                'result' => [
+                    'item_id' => $updated->id,
+                    'status' => $updated->status,
+                    'paid_amount' => (float) ($updated->paid_amount ?? 0),
+                ],
+                'navigation' => [
+                    'screen' => 'InstallmentDetail',
+                    'params' => ['id' => $updated->installment_id],
+                ],
+            ];
+        });
     }
 
     /**
@@ -1156,6 +1196,9 @@ class AssistantToolRunner
      */
     private function resolveStartDate(array $args): string
     {
+        $tz = (string) (config('app.timezone') ?: 'UTC');
+        $today = now($tz)->startOfDay();
+
         $monthsAgo = $args['start_months_ago'] ?? null;
         if ($monthsAgo !== null && $monthsAgo !== '') {
             $n = (int) $monthsAgo;
@@ -1167,19 +1210,19 @@ class AssistantToolRunner
                 $n = min($n, 120);
             }
 
-            return now()->startOfDay()->subMonthsNoOverflow($n)->toDateString();
+            return $today->copy()->subMonthsNoOverflow($n)->toDateString();
         }
 
         $absolute = $this->nullableString($args['start_date'] ?? null);
         if ($absolute) {
             try {
-                return \Carbon\Carbon::parse($absolute)->toDateString();
+                return \Carbon\Carbon::parse($absolute, $tz)->timezone($tz)->toDateString();
             } catch (\Throwable) {
                 // fall through to today
             }
         }
 
-        return now()->toDateString();
+        return $today->toDateString();
     }
 
     /**
@@ -1311,7 +1354,9 @@ class AssistantToolRunner
                 return [
                     'ok' => true,
                     'result' => [
+                        'status' => 'ambiguous',
                         'ambiguous' => true,
+                        'count' => $matches->count(),
                         'customers' => $matches->map(fn (Customer $c) => [
                             'id' => $c->id,
                             'name' => $c->name,
@@ -1329,6 +1374,18 @@ class AssistantToolRunner
         }
 
         return ['ok' => true, 'customer' => $customer];
+    }
+
+    /**
+     * @param  array<string, mixed>  $action
+     */
+    private function storePending(int $userId, array $action): string
+    {
+        if ($this->sessionId) {
+            $action['session_id'] = $this->sessionId;
+        }
+
+        return $this->pendingActionStore->put($userId, $action);
     }
 
     /**
@@ -1352,7 +1409,9 @@ class AssistantToolRunner
                 return [
                     'ok' => true,
                     'result' => [
+                        'status' => 'ambiguous',
                         'ambiguous' => true,
+                        'count' => $matches->count(),
                         'customers' => $matches->map(fn (Customer $c) => [
                             'id' => $c->id,
                             'name' => $c->name,
