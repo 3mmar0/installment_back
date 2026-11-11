@@ -156,7 +156,7 @@ class AssistantToolRunner
                         'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD absolute date; omit when using start_months_ago'],
                         'start_months_ago' => [
                             'type' => 'integer',
-                            'description' => 'Relative start: N months before today. Use for Arabic phrases like من ثلاث شهور / قبل شهرين. Do NOT convert to years.',
+                            'description' => 'Relative start: N months before today. REQUIRED for من تلت/ثلاث شهور / قبل شهرين. Never invent YYYY-MM-DD for those phrases. Do NOT treat months as years.',
                         ],
                         'name' => ['type' => 'string'],
                         'notes' => ['type' => 'string'],
@@ -760,12 +760,15 @@ class AssistantToolRunner
         $payload = $built['payload'];
         $prepaid = $payload['prepaid_months'];
 
+        $startLabel = \Carbon\Carbon::parse((string) $payload['start_date'])
+            ->timezone((string) (config('app.timezone') ?: 'UTC'))
+            ->format('d-m-Y');
         $summary = sprintf(
             'قسط لـ %s بمبلغ %s على %d شهر (بداية %s)%s',
             $customer->name,
             number_format($payload['total_amount'], 2),
             $payload['months'],
-            $payload['start_date'],
+            $startLabel,
             $prepaid !== [] ? ' — مدفوع مسبقاً: أشهر '.implode('، ', $prepaid) : ''
         );
 

@@ -148,6 +148,9 @@ class AssistantOrchestrator
                 foreach ($functionCalls as $call) {
                     $name = (string) ($call['name'] ?? '');
                     $args = is_array($call['args'] ?? null) ? $call['args'] : [];
+                    if (in_array($name, ['propose_create_installment', 'propose_create_customer_with_installment'], true)) {
+                        $args = $this->overrideRelativeStartDateArgs($args, $turns);
+                    }
                     $toolResult = $this->tools->run($name, $args, $user, $sessionId);
 
                     if (! ($toolResult['ok'] ?? false)) {
@@ -198,9 +201,9 @@ class AssistantOrchestrator
                 ];
 
                 if ($pendingAction) {
-                    $reply = $textBits !== []
-                        ? implode("\n", $textBits)
-                        : ('جاهز للتنفيذ: '.$pendingAction['summary_ar'].'. أكّد عشان أنفّذ.');
+                    // Always prefer server-computed summary (correct start_date) over
+                    // model free-text, which often invents wrong absolute years.
+                    $reply = 'راجعت البيانات: '.$pendingAction['summary_ar'].'. جاهز تبعت الطلب للمراجعة؟';
                     break;
                 }
             }
@@ -486,8 +489,10 @@ class AssistantOrchestrator
 - لو status=needs_input اسأل عن الناقص فقط.
 - لو status=ambiguous أو أكتر من عميل، اعرض الاختيارات واسأل بالـ id.
 - عمليات الإضافة/السداد تمر عبر propose_* فقط، ومتتنفذش غير بعد تأكيد صريح في التطبيق.
-- تاريخ البداية: لو قال «من N شهر/شهور/قبل شهرين» استخدم start_months_ago=N (مش سنين). الحساب على السيرفر من {$today} في {$tz}.
-- شهور ≠ سنين.
+- تاريخ البداية النسبي: «من تلت/ثلاث/٣ شهور» أو «قبل شهرين» => start_months_ago فقط (3 أو 2). ممنوع تكتب start_date بنفسك، وممنوع تحويل الشهور لسنين أو تواريخ قديمة زي 2024.
+- مثال صحيح: من تلت شهور => start_months_ago=3 (السيرفر يحسب من {$today}). مثال غلط: start_date=2024-11-28.
+- شهور ≠ سنين. لو قال «سنين» صراحة استخدم مضاعف 12 في start_months_ago.
+- بعد propose_* استخدم start_date الراجع من الأداة في الملخص فقط — متخمنش تاريخ تاني.
 - الردود قصيرة بالعربي المصري فقط (بدون إنجليزي)، سؤال واحد قدر الإمكان.
 - احتفظ بالعميل المختار والمسودة؛ لو المستخدم صحّح حقل، حدّثه ومتعيدش الباقي.
 - المحافظة بالعربي أو الإنجليزي؛ الأداة هتظبطها.
@@ -602,6 +607,103 @@ PROMPT;
         }
 
         return $patch;
+    }
+
+    /**
+     * Force relative Arabic start phrases onto start_months_ago so Gemini cannot
+     * invent an absolute year (e.g. «من تلت شهور» → 2024-11-28).
+     *
+     * @param  array<string, mixed>  $args
+     * @param  array<int, array{role: string, text: string}>  $turns
+     * @return array<string, mixed>
+     */
+    private function overrideRelativeStartDateArgs(array $args, array $turns): array
+    {
+        $blob = '';
+        foreach ($turns as $turn) {
+            if (($turn['role'] ?? '') === 'user' && is_string($turn['text'] ?? null)) {
+                $blob .= "\n".$turn['text'];
+            }
+        }
+
+        $monthsAgo = $this->parseStartMonthsAgoFromArabic($blob);
+        if ($monthsAgo === null) {
+            return $args;
+        }
+
+        $args['start_months_ago'] = $monthsAgo;
+        unset($args['start_date']);
+
+        return $args;
+    }
+
+    /**
+     * Parse «من تلت/ثلاث شهور»، «قبل شهرين»، «منذ 3 أشهر» → months count.
+     * Ignores year phrases («سنين») so we do not silently convert years to months.
+     */
+    private function parseStartMonthsAgoFromArabic(string $text): ?int
+    {
+        if (trim($text) === '') {
+            return null;
+        }
+
+        $normalized = strtr($text, [
+            'أ' => 'ا', 'إ' => 'ا', 'آ' => 'ا', 'ٱ' => 'ا',
+            'ة' => 'ه', 'ى' => 'ي',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ]);
+        $normalized = mb_strtolower($normalized);
+
+        // Explicit years — convert to months only when the user said years.
+        if (preg_match('/(?:من|قبل|منذ)\s+(\d+)\s*(?:سنه|سنة|سنين|سنوات)/u', $normalized, $yearMatch)) {
+            $years = (int) $yearMatch[1];
+
+            return $years > 0 ? min($years * 12, 120) : null;
+        }
+
+        $wordNumbers = [
+            'واحد' => 1, 'واحده' => 1, 'شهر' => 1,
+            'اتنين' => 2, 'اثنين' => 2, 'شهرين' => 2, 'شهران' => 2,
+            'تلت' => 3, 'ثلاث' => 3, 'تلات' => 3, 'ثلاثه' => 3, 'تلاته' => 3,
+            'اربع' => 4, 'اربعه' => 4, 'اربعة' => 4,
+            'خمس' => 5, 'خمسه' => 5, 'خمسة' => 5,
+            'ست' => 6, 'سته' => 6, 'ستة' => 6,
+            'سبع' => 7, 'سبعه' => 7, 'سبعة' => 7,
+            'ثمان' => 8, 'ثمانيه' => 8, 'تمانيه' => 8, 'تمن' => 8,
+            'تسع' => 9, 'تسعه' => 9, 'تسعة' => 9,
+            'عشر' => 10, 'عشره' => 10, 'عشرة' => 10,
+        ];
+
+        if (preg_match('/(?:من|قبل|منذ)\s*(شهرين|شهران)\b/u', $normalized)) {
+            return 2;
+        }
+
+        if (preg_match('/(?:من|قبل|منذ)\s*شهر(?:ا|ً)?(?!\s*(?:ين|ان))\b/u', $normalized)
+            && ! preg_match('/(?:من|قبل|منذ)\s*\d+\s*شهر/u', $normalized)
+            && ! preg_match('/(?:من|قبل|منذ)\s*(?:تلت|ثلاث|تلات|اتنين|اثنين|اربع|خمس|ست|سبع|ثمان|تمن|تسع|عشر)/u', $normalized)) {
+            return 1;
+        }
+
+        if (preg_match('/(?:من|قبل|منذ)\s+(\d+)\s*(?:شهر|شهور|اشهر|أشهر)/u', $normalized, $digitMatch)) {
+            $n = (int) $digitMatch[1];
+
+            return $n > 0 ? min($n, 120) : null;
+        }
+
+        $wordPattern = implode('|', array_map(
+            static fn (string $word): string => preg_quote($word, '/'),
+            array_keys($wordNumbers)
+        ));
+
+        if (preg_match('/(?:من|قبل|منذ)\s+('.$wordPattern.')\s*(?:شهر|شهور|اشهر|أشهر)?/u', $normalized, $wordMatch)) {
+            $key = $wordMatch[1];
+            $n = $wordNumbers[$key] ?? null;
+
+            return $n !== null && $n > 0 ? min($n, 120) : null;
+        }
+
+        return null;
     }
 
     private function looksLikeFalseSuccess(string $reply): bool

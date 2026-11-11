@@ -92,6 +92,7 @@ class SystemSettingsController extends Controller
             'message' => ['required', 'string', 'max:5000'],
             'type' => ['required', 'string', 'in:system_announcement,mobile_app_update'],
             'action_url' => ['nullable', 'url', 'max:2048'],
+            'video' => ['nullable', 'file', 'mimetypes:video/mp4,video/webm,video/ogg,video/quicktime', 'max:30720'],
             'video_url' => ['nullable', 'url', 'max:2048'],
             'image' => ['nullable', 'image', 'max:5120'],
             'image_url' => ['nullable', 'url', 'max:2048'],
@@ -111,7 +112,10 @@ class SystemSettingsController extends Controller
             $payload['action_url'] = $data['action_url'];
         }
 
-        if (! empty($data['video_url'])) {
+        if ($request->hasFile('video')) {
+            $path = $request->file('video')->store('announcements', 'public');
+            $payload['video_url'] = asset('storage/'.$path);
+        } elseif (! empty($data['video_url'])) {
             $payload['video_url'] = $data['video_url'];
         }
 

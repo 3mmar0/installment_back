@@ -3,6 +3,8 @@
 use App\Enums\UserRole;
 use App\Models\Notification;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 it('broadcasts a system announcement to every regular user when no user_ids are sent', function () {
     actingAsPlatformAdmin();
@@ -64,23 +66,29 @@ it('gives platform admins one broadcast summary instead of a copy per recipient'
         ->and($adminNotes->first()->message)->toContain('نزل النسخة الجديدة');
 });
 
-it('stores video_url on broadcast notification payload', function () {
+it('stores an uploaded video on broadcast notification payload', function () {
+    Storage::fake('public');
     actingAsPlatformAdmin();
     $merchant = merchantWithPlan();
 
-    $this->postJson('/api/admin/system/broadcast-notification', [
+    $video = UploadedFile::fake()->create('announce.mp4', 1024, 'video/mp4');
+
+    $this->post('/api/admin/system/broadcast-notification', [
         'title' => 'إعلان بفيديو',
         'message' => 'شاهد الفيديو',
         'type' => 'system_announcement',
-        'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        'video' => $video,
         'user_ids' => [$merchant->id],
     ])->assertOk();
 
     $notification = Notification::query()->where('user_id', $merchant->id)->first();
+    $videoUrl = $notification?->data['video_url'] ?? null;
 
     expect($notification)->not->toBeNull()
-        ->and($notification->data['video_url'] ?? null)->toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
-        ->and($notification->data['display_as'] ?? null)->toBe('modal');
+        ->and($videoUrl)->toBeString()
+        ->and($videoUrl)->toContain('/storage/announcements/')
+        ->and($notification->data['display_as'] ?? null)->toBe('modal')
+        ->and(Storage::disk('public')->allFiles('announcements'))->not->toBeEmpty();
 });
 
 it('rejects targeted announcements that include users who are not regular users', function () {

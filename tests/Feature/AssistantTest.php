@@ -302,6 +302,41 @@ it('resolves relative start dates with Carbon subMonthsNoOverflow in app timezon
     Carbon\Carbon::setTestNow();
 });
 
+it('overrides invented absolute start_date when user said من تلت شهور', function () {
+    config(['app.timezone' => 'Africa/Cairo']);
+    Carbon\Carbon::setTestNow(Carbon\Carbon::parse('2026-11-10 12:00:00', 'Africa/Cairo'));
+
+    $orchestrator = app(App\Services\Assistant\AssistantOrchestrator::class);
+    $ref = new ReflectionClass($orchestrator);
+    $method = $ref->getMethod('overrideRelativeStartDateArgs');
+    $method->setAccessible(true);
+
+    $args = $method->invoke($orchestrator, [
+        'start_date' => '2024-11-28',
+        'start_months_ago' => 36,
+        'total_amount' => 15000,
+        'months' => 6,
+    ], [
+        ['role' => 'user', 'text' => 'اسم القسط تليفون نوكيا السعر 15000 التاريخ من تلت شهور على ست شهور اول شهرين مدفوعين'],
+    ]);
+
+    expect($args['start_months_ago'] ?? null)->toBe(3)
+        ->and($args)->not->toHaveKey('start_date');
+
+    $runner = app(AssistantToolRunner::class);
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create(['name' => 'عمار']);
+    $proposed = $runner->run('propose_create_installment', array_merge($args, [
+        'customer_id' => $customer->id,
+    ]), $merchant);
+
+    expect($proposed['ok'])->toBeTrue()
+        ->and($proposed['pending_action']['payload_preview']['start_date'] ?? null)
+        ->toBe('2026-08-10');
+
+    Carbon\Carbon::setTestNow();
+});
+
 it('keeps structured session context beyond raw chat turns', function () {
     $merchant = actingAsMerchant();
     $store = app(App\Services\Assistant\AssistantSessionStore::class);
