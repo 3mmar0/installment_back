@@ -584,16 +584,18 @@ class NotificationService
                 ? 'إشعار تحديث التطبيق'
                 : 'إعلان عام';
 
+            // Keep admin digests out of the user-facing announcement modal:
+            // no display_as/modal media — those belong only to recipient copies.
             $this->createForPlatformAdmins(
                 $type,
                 $typeLabel,
                 "تم إرسال «{$title}» إلى {$count} مستخدم.\n{$message}",
-                array_merge($data, [
+                [
                     'is_platform_admin_digest' => true,
                     'is_broadcast_summary' => true,
                     'recipient_count' => $count,
                     'original_title' => $title,
-                ])
+                ]
             );
         }
 
