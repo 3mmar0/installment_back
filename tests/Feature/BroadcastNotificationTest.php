@@ -105,3 +105,39 @@ it('rejects targeted announcements that include users who are not regular users'
 
     expect(Notification::query()->count())->toBe(0);
 });
+
+it('lists broadcast announcements with recipient and viewed counts', function () {
+    actingAsPlatformAdmin();
+
+    $first = merchantWithPlan();
+    $second = merchantWithPlan();
+
+    $this->postJson('/api/admin/system/broadcast-notification', [
+        'title' => 'إعلان بالمشاهدات',
+        'message' => 'نص المشاهدات',
+        'type' => 'system_announcement',
+        'user_ids' => [$first->id, $second->id],
+    ])->assertOk();
+
+    $firstNotification = Notification::query()->where('user_id', $first->id)->firstOrFail();
+    $firstNotification->update(['read_at' => now()]);
+
+    $this->getJson('/api/admin/system/announcements')
+        ->assertOk()
+        ->assertJsonPath('data.0.title', 'إعلان بالمشاهدات')
+        ->assertJsonPath('data.0.recipients_count', 2)
+        ->assertJsonPath('data.0.viewed_count', 1)
+        ->assertJsonPath('data.0.unseen_count', 1);
+
+    $broadcastId = Notification::query()
+        ->where('user_id', $first->id)
+        ->first()
+        ?->data['broadcast_id'] ?? null;
+
+    expect($broadcastId)->toBeString();
+
+    $this->getJson("/api/admin/system/announcements/{$broadcastId}/viewers")
+        ->assertOk()
+        ->assertJsonPath('data.viewed_count', 1)
+        ->assertJsonPath('data.viewers.0.user_id', $first->id);
+});

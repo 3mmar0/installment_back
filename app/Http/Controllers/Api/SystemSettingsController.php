@@ -7,10 +7,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Http\Traits\ApiResponse;
 use App\Jobs\BroadcastNotificationJob;
+use App\Models\Notification;
 use App\Models\User;
 use App\Services\QueueManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class SystemSettingsController extends Controller
@@ -85,6 +88,95 @@ class SystemSettingsController extends Controller
         );
     }
 
+    public function announcements(): JsonResponse
+    {
+        $rows = Notification::query()
+            ->whereIn('type', ['system_announcement', 'mobile_app_update'])
+            ->whereNotNull('user_id')
+            ->latest('id')
+            ->limit(3000)
+            ->get(['id', 'user_id', 'type', 'title', 'message', 'data', 'read_at', 'created_at']);
+
+        $recipientRows = $rows->filter(function (Notification $notification) {
+            $data = is_array($notification->data) ? $notification->data : [];
+
+            return empty($data['is_broadcast_summary'])
+                && empty($data['is_platform_admin_digest'])
+                && empty($data['is_platform_admin_copy']);
+        });
+
+        $announcements = $recipientRows
+            ->groupBy(fn (Notification $notification) => $this->broadcastGroupKey($notification))
+            ->map(function (Collection $group, string $broadcastId) {
+                /** @var Notification $first */
+                $first = $group->sortBy('id')->first();
+                $data = is_array($first->data) ? $first->data : [];
+                $recipients = $group->count();
+                $viewed = $group->filter(fn (Notification $item) => $item->read_at !== null)->count();
+
+                return [
+                    'broadcast_id' => $broadcastId,
+                    'type' => $first->type,
+                    'title' => $first->title,
+                    'message' => $first->message,
+                    'action_url' => is_string($data['action_url'] ?? null) ? $data['action_url'] : null,
+                    'image_url' => is_string($data['image_url'] ?? null) ? $data['image_url'] : null,
+                    'video_url' => is_string($data['video_url'] ?? null) ? $data['video_url'] : null,
+                    'recipients_count' => $recipients,
+                    'viewed_count' => $viewed,
+                    'unseen_count' => max(0, $recipients - $viewed),
+                    'created_at' => optional($group->min('created_at'))?->toIso8601String(),
+                ];
+            })
+            ->sortByDesc('created_at')
+            ->values();
+
+        return $this->successResponse(
+            $announcements,
+            'تم جلب الإعلانات بنجاح'
+        );
+    }
+
+    public function announcementViewers(string $broadcastId): JsonResponse
+    {
+        $rows = Notification::query()
+            ->with(['user:id,name,email'])
+            ->whereIn('type', ['system_announcement', 'mobile_app_update'])
+            ->whereNotNull('user_id')
+            ->latest('id')
+            ->limit(5000)
+            ->get(['id', 'user_id', 'type', 'title', 'message', 'data', 'read_at', 'created_at']);
+
+        $matched = $rows->filter(function (Notification $notification) use ($broadcastId) {
+            $data = is_array($notification->data) ? $notification->data : [];
+            if (! empty($data['is_broadcast_summary']) || ! empty($data['is_platform_admin_digest'])) {
+                return false;
+            }
+
+            return $this->broadcastGroupKey($notification) === $broadcastId;
+        });
+
+        $viewers = $matched
+            ->filter(fn (Notification $notification) => $notification->read_at !== null)
+            ->map(fn (Notification $notification) => [
+                'user_id' => $notification->user_id,
+                'name' => $notification->user?->name,
+                'email' => $notification->user?->email,
+                'read_at' => optional($notification->read_at)?->toIso8601String(),
+            ])
+            ->values();
+
+        return $this->successResponse(
+            [
+                'broadcast_id' => $broadcastId,
+                'recipients_count' => $matched->count(),
+                'viewed_count' => $viewers->count(),
+                'viewers' => $viewers,
+            ],
+            'تم جلب مشاهدات الإعلان بنجاح'
+        );
+    }
+
     public function broadcastNotification(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -104,8 +196,10 @@ class SystemSettingsController extends Controller
             ],
         ]);
 
+        $broadcastId = (string) Str::uuid();
         $payload = [
             'display_as' => 'modal',
+            'broadcast_id' => $broadcastId,
         ];
 
         if (! empty($data['action_url'])) {
@@ -152,9 +246,29 @@ class SystemSettingsController extends Controller
                 'queued' => true,
                 'type' => $data['type'],
                 'recipient_count' => $recipientCount,
+                'broadcast_id' => $broadcastId,
             ],
             "تمت جدولة {$typeLabel} {$audienceLabel}"
         );
+    }
+
+    private function broadcastGroupKey(Notification $notification): string
+    {
+        $data = is_array($notification->data) ? $notification->data : [];
+        $broadcastId = $data['broadcast_id'] ?? null;
+
+        if (is_string($broadcastId) && $broadcastId !== '') {
+            return $broadcastId;
+        }
+
+        $createdAt = optional($notification->created_at)?->format('Y-m-d H:i') ?? 'unknown';
+
+        return 'legacy-'.md5(implode('|', [
+            (string) $notification->type,
+            (string) $notification->title,
+            (string) $notification->message,
+            $createdAt,
+        ]));
     }
 
     public function syncFreePlan(): JsonResponse

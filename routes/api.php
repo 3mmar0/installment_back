@@ -155,6 +155,8 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
         Route::post('admin/system/queue-run', 'runQueue');
         Route::post('admin/system/cache-clear', 'clearCache');
         Route::get('admin/system/users', 'users');
+        Route::get('admin/system/announcements', 'announcements');
+        Route::get('admin/system/announcements/{broadcastId}/viewers', 'announcementViewers');
         Route::post('admin/system/broadcast-notification', 'broadcastNotification');
         Route::post('admin/system/sync-free-plan', 'syncFreePlan');
     });

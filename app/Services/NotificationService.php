@@ -595,6 +595,9 @@ class NotificationService
                     'is_broadcast_summary' => true,
                     'recipient_count' => $count,
                     'original_title' => $title,
+                    'broadcast_id' => is_string($data['broadcast_id'] ?? null)
+                        ? $data['broadcast_id']
+                        : null,
                 ]
             );
         }
