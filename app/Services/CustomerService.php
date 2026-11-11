@@ -147,6 +147,9 @@ class CustomerService implements CustomerServiceInterface
 
             CustomerIdentity::assertAvailable($user->id, $nationalId, $phone);
 
+            $whatsappAutoReminders = (bool) ($data['whatsapp_auto_reminders'] ?? false);
+            $this->assertCanEnableWhatsAppAutoReminders($user, $whatsappAutoReminders);
+
             $customer = Customer::create([
                 'user_id' => $user->id,
                 'name' => $data['name'],
@@ -164,6 +167,7 @@ class CustomerService implements CustomerServiceInterface
                 'guarantor_name' => $data['guarantor_name'] ?? null,
                 'guarantor_national_id' => NationalIdHelper::normalize($data['guarantor_national_id'] ?? null),
                 'guarantor_phone' => $data['guarantor_phone'] ?? null,
+                'whatsapp_auto_reminders' => $whatsappAutoReminders,
             ]);
 
             if (! $user->isOwner()) {
@@ -210,12 +214,36 @@ class CustomerService implements CustomerServiceInterface
             $customer->id
         );
 
+        if (array_key_exists('whatsapp_auto_reminders', $data)) {
+            $enabled = (bool) $data['whatsapp_auto_reminders'];
+            $data['whatsapp_auto_reminders'] = $enabled;
+
+            if ($enabled && ! $customer->whatsapp_auto_reminders) {
+                $this->assertCanEnableWhatsAppAutoReminders($user, true);
+            }
+        }
+
         $customer->update($data);
         $customer = $customer->fresh();
 
         $this->clientLinkService->linkForCustomer($customer);
 
         return $customer;
+    }
+
+    /**
+     * Opt-in for automatic WhatsApp reminders requires the seller WhatsApp feature.
+     * Message quota is enforced at send time (once per customer/day).
+     */
+    private function assertCanEnableWhatsAppAutoReminders(User $user, bool $enabled): void
+    {
+        if (! $enabled || $user->isOwner()) {
+            return;
+        }
+
+        if (! LimitsHelper::canAccessFeature($user->id, 'whatsapp')) {
+            abort(403, LimitsHelper::getLimitExceededMessage('whatsapp'));
+        }
     }
 
     public function deleteCustomer(int $id, User $user): bool

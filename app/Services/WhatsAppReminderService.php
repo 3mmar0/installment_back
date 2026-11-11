@@ -100,7 +100,8 @@ class WhatsAppReminderService
                     'customer_id' => $customer->id,
                 ]);
 
-                continue;
+                // Seller monthly quota exhausted — stop; later customers cannot send either.
+                break;
             }
 
             if (! PlatformWhatsAppQuota::hasRemaining()) {
@@ -110,7 +111,7 @@ class WhatsAppReminderService
                     'customer_id' => $customer->id,
                 ]);
 
-                continue;
+                break;
             }
 
             $sent = 0;
