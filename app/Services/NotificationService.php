@@ -660,16 +660,24 @@ class NotificationService
 
     /**
      * Get user notifications.
+     *
+     * Always capped — unbounded lists (thousands of rows for platform admins)
+     * inflate /api/notification-list enough to stall the SPA and exhaust PHP-FPM.
      */
-    public function getUserNotifications(User $user, bool $unreadOnly = false): Collection
-    {
+    public function getUserNotifications(
+        User $user,
+        bool $unreadOnly = false,
+        int $limit = 50
+    ): Collection {
+        $limit = max(1, min($limit, 100));
+
         $query = $user->notifications()->orderBy('created_at', 'desc');
 
         if ($unreadOnly) {
             $query->whereNull('read_at');
         }
 
-        return $query->get();
+        return $query->limit($limit)->get();
     }
 
     /**
