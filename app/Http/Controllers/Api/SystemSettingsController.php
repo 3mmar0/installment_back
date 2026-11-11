@@ -92,7 +92,7 @@ class SystemSettingsController extends Controller
             'message' => ['required', 'string', 'max:5000'],
             'type' => ['required', 'string', 'in:system_announcement,mobile_app_update'],
             'action_url' => ['nullable', 'url', 'max:2048'],
-            'video' => ['nullable', 'file', 'mimetypes:video/mp4,video/webm,video/ogg,video/quicktime', 'max:30720'],
+            'video' => ['nullable', 'file', 'mimes:mp4,webm,ogg,mov,m4v', 'max:30720'],
             'video_url' => ['nullable', 'url', 'max:2048'],
             'image' => ['nullable', 'image', 'max:5120'],
             'image_url' => ['nullable', 'url', 'max:2048'],
