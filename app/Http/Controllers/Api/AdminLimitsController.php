@@ -24,7 +24,7 @@ class AdminLimitsController extends Controller
      */
     public function subscriptions(Request $request): JsonResponse
     {
-        $perPage = min(100, max(1, (int) $request->query('per_page', 20)));
+        $perPage = min(100, max(1, (int) $request->query('per_page', 100)));
         $search = trim((string) $request->query('search', ''));
         $status = $request->query('status');
 
@@ -63,7 +63,7 @@ class AdminLimitsController extends Controller
      */
     public function messagingLimits(Request $request): JsonResponse
     {
-        $perPage = min(100, max(1, (int) $request->query('per_page', 20)));
+        $perPage = min(100, max(1, (int) $request->query('per_page', 100)));
         $search = trim((string) $request->query('search', ''));
 
         $query = UserLimit::query()
@@ -160,7 +160,7 @@ class AdminLimitsController extends Controller
 
     public function giftsIndex(Request $request): JsonResponse
     {
-        $perPage = min(100, max(1, (int) $request->query('per_page', 20)));
+        $perPage = min(100, max(1, (int) $request->query('per_page', 100)));
         $resource = $request->query('resource');
         $userId = $request->query('user_id');
 
