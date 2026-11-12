@@ -5,25 +5,25 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
         /**
          * Comma-separated fallbacks used on rate-limit / quota / unavailable.
-         * Defaults cover current Flash / Flash-Lite text models (not Live/TTS).
+         * Keep this short — long lists make every failure feel extremely slow.
          */
         'fallback_models' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env(
                 'GEMINI_FALLBACK_MODELS',
-                'gemini-3.1-flash-lite,gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash-lite'
+                'gemini-2.5-flash-lite,gemini-2.0-flash,gemini-flash-latest'
             ))
         ))),
         'base_url' => env(
             'GEMINI_BASE_URL',
             'https://generativelanguage.googleapis.com/v1beta'
         ),
-        'timeout' => (int) env('GEMINI_TIMEOUT', 30),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 20),
         /** Extra attempts on the same model for transient 429/5xx before fallback. */
-        'retries' => (int) env('GEMINI_RETRIES', 1),
+        'retries' => (int) env('GEMINI_RETRIES', 0),
         /**
          * Set GEMINI_HTTP_VERIFY=false only for local broken CA bundles.
          * Production always verifies TLS regardless of this flag.

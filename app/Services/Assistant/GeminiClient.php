@@ -16,10 +16,10 @@ class GeminiClient
      * @var list<string>
      */
     public const DEFAULT_FALLBACK_MODELS = [
-        'gemini-3.1-flash-lite',
-        'gemini-3.8-flash',
-        'gemini-3.6-flash',
-        'gemini-3.5-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash',
+        'gemini-flash-latest',
     ];
 
     /**
@@ -78,6 +78,11 @@ class GeminiClient
                     ]);
                     $lastError = $safeError;
 
+                    // SSL / CA failures will hit every model the same way — fail fast.
+                    if ($this->isSslError($safeError)) {
+                        throw new RuntimeException('Gemini request failed: '.$safeError);
+                    }
+
                     if ($retry < $maxRetries && $this->isTransientTransportError($safeError)) {
                         usleep(250000 * ($retry + 1));
                         continue;
@@ -119,8 +124,18 @@ class GeminiClient
                     continue;
                 }
 
-                if ($this->shouldTryNextModel($response->status(), $message)) {
+                        if ($this->shouldTryNextModel($response->status(), $message)) {
                     $this->logWarning('Gemini model failed, trying next fallback', [
+                        ...$attempt,
+                        'attempt' => $index + 1,
+                        'total_models' => count($models),
+                    ]);
+                    break;
+                }
+
+                // Thought-signature / tool-protocol mismatches: try a simpler Flash model next.
+                if (str_contains(strtolower($message), 'thought_signature')) {
+                    $this->logWarning('Gemini thought_signature failure, trying next fallback', [
                         ...$attempt,
                         'attempt' => $index + 1,
                         'total_models' => count($models),
@@ -151,7 +166,7 @@ class GeminiClient
      */
     private function models(): array
     {
-        $primary = (string) config('assistant.gemini.model', 'gemini-3.5-flash-lite');
+        $primary = (string) config('assistant.gemini.model', 'gemini-2.5-flash');
         $fallbacks = config('assistant.gemini.fallback_models', self::DEFAULT_FALLBACK_MODELS);
         if (! is_array($fallbacks) || $fallbacks === []) {
             $fallbacks = self::DEFAULT_FALLBACK_MODELS;
@@ -253,6 +268,16 @@ class GeminiClient
             || str_contains($haystack, 'connection reset')
             || str_contains($haystack, 'could not resolve host')
             || str_contains($haystack, 'failed to connect');
+    }
+
+    private function isSslError(string $message): bool
+    {
+        $haystack = strtolower($message);
+
+        return str_contains($haystack, 'ssl certificate')
+            || str_contains($haystack, 'curl error 60')
+            || str_contains($haystack, 'unable to get local issuer certificate')
+            || str_contains($haystack, 'certificate verify failed');
     }
 
     private function redactSecrets(string $value): string
