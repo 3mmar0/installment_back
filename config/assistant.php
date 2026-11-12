@@ -5,7 +5,7 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
         /**
          * Comma-separated fallbacks used on rate-limit / quota / unavailable.
          * Keep this short — long lists make every failure feel extremely slow.
@@ -14,14 +14,14 @@ return [
             'trim',
             explode(',', (string) env(
                 'GEMINI_FALLBACK_MODELS',
-                'gemini-2.5-flash-lite,gemini-2.0-flash,gemini-flash-latest'
+                'gemini-3.5-flash-lite,gemini-3.6-flash,gemini-flash-latest'
             ))
         ))),
         'base_url' => env(
             'GEMINI_BASE_URL',
             'https://generativelanguage.googleapis.com/v1beta'
         ),
-        'timeout' => (int) env('GEMINI_TIMEOUT', 20),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 35),
         /** Extra attempts on the same model for transient 429/5xx before fallback. */
         'retries' => (int) env('GEMINI_RETRIES', 0),
         /**
