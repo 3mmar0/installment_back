@@ -16,7 +16,8 @@ it('rejects assistant message from unauthenticated callers', function () {
 it('returns assistant status for a merchant', function () {
     config([
         'assistant.enabled' => true,
-        'assistant.gemini.api_key' => 'test-key',
+        'assistant.provider' => 'deepseek',
+        'assistant.deepseek.api_key' => 'test-key',
     ]);
 
     actingAsMerchant([
@@ -469,14 +470,16 @@ it('never disables gemini tls verification in production', function () {
 it('does not charge interactive chat turns without a billable outcome', function () {
     config([
         'assistant.enabled' => true,
-        'assistant.gemini.api_key' => 'test-key',
+        'assistant.provider' => 'deepseek',
+        'assistant.deepseek.api_key' => 'test-key',
     ]);
 
     Http::fake([
-        '*generativelanguage.googleapis.com/*' => Http::response([
-            'candidates' => [[
-                'content' => [
-                    'parts' => [['text' => 'أهلاً']],
+        '*api.deepseek.com/*' => Http::response([
+            'choices' => [[
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => 'أهلاً',
                 ],
             ]],
         ], 200),
@@ -503,45 +506,56 @@ it('does not charge interactive chat turns without a billable outcome', function
 it('charges once for a successful billable read tool and enforces the monthly limit', function () {
     config([
         'assistant.enabled' => true,
-        'assistant.gemini.api_key' => 'test-key',
+        'assistant.provider' => 'deepseek',
+        'assistant.deepseek.api_key' => 'test-key',
     ]);
 
     Http::fakeSequence()
         ->push([
-            'candidates' => [[
-                'content' => [
-                    'parts' => [[
-                        'functionCall' => [
+            'choices' => [[
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => null,
+                    'tool_calls' => [[
+                        'id' => 'call_list_1',
+                        'type' => 'function',
+                        'function' => [
                             'name' => 'list_customers',
-                            'args' => ['limit' => 5],
+                            'arguments' => json_encode(['limit' => 5]),
                         ],
                     ]],
                 ],
             ]],
         ], 200)
         ->push([
-            'candidates' => [[
-                'content' => [
-                    'parts' => [['text' => 'دي قائمة العملاء.']],
+            'choices' => [[
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => 'دي قائمة العملاء.',
                 ],
             ]],
         ], 200)
         ->push([
-            'candidates' => [[
-                'content' => [
-                    'parts' => [[
-                        'functionCall' => [
+            'choices' => [[
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => null,
+                    'tool_calls' => [[
+                        'id' => 'call_list_2',
+                        'type' => 'function',
+                        'function' => [
                             'name' => 'list_customers',
-                            'args' => ['limit' => 5],
+                            'arguments' => json_encode(['limit' => 5]),
                         ],
                     ]],
                 ],
             ]],
         ], 200)
         ->push([
-            'candidates' => [[
-                'content' => [
-                    'parts' => [['text' => 'تاني.']],
+            'choices' => [[
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => 'تاني.',
                 ],
             ]],
         ], 200);
@@ -564,4 +578,37 @@ it('charges once for a successful billable read tool and enforces the monthly li
 
     expect($this->postJson('/api/assistant/message', ['message' => 'تاني'])->json('data.reply'))
         ->toContain('وصلت للحد الشهري');
+});
+
+it('still supports the gemini provider path via ASSISTANT_PROVIDER', function () {
+    config([
+        'assistant.enabled' => true,
+        'assistant.provider' => 'gemini',
+        'assistant.gemini.api_key' => 'test-key',
+    ]);
+
+    Http::fake([
+        '*generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [['text' => 'من Gemini']],
+                ],
+            ]],
+        ], 200),
+    ]);
+
+    actingAsMerchant([
+        'features' => [
+            'assistant' => true,
+        ],
+        'assistant_messages' => ['from' => 0, 'to' => 30],
+    ]);
+
+    $this->getJson('/api/assistant/status')
+        ->assertOk()
+        ->assertJsonPath('data.configured', true);
+
+    $this->postJson('/api/assistant/message', ['message' => 'مساعدة'])
+        ->assertOk()
+        ->assertJsonPath('data.reply', 'من Gemini');
 });

@@ -3,6 +3,19 @@
 return [
     'enabled' => env('ASSISTANT_ENABLED', true),
 
+    /**
+     * Active LLM provider: deepseek (default) or gemini.
+     */
+    'provider' => env('ASSISTANT_PROVIDER', 'deepseek'),
+
+    'deepseek' => [
+        'api_key' => env('DEEPSEEK_API_KEY'),
+        'model' => env('DEEPSEEK_MODEL', 'deepseek-chat'),
+        'base_url' => env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com'),
+        'timeout' => (int) env('DEEPSEEK_TIMEOUT', 35),
+        'retries' => (int) env('DEEPSEEK_RETRIES', 0),
+    ],
+
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),

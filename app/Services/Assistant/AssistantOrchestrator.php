@@ -9,7 +9,7 @@ use Throwable;
 class AssistantOrchestrator
 {
     public function __construct(
-        private readonly GeminiClient $gemini,
+        private readonly AssistantLlmClient $llm,
         private readonly AssistantToolRunner $tools,
         private readonly AssistantSessionStore $sessions,
         private readonly PendingActionStore $pendingActions,
@@ -40,11 +40,13 @@ class AssistantOrchestrator
             );
         }
 
-        if (! config('assistant.gemini.api_key')) {
-            $this->logFail('gemini_api_key_missing', $user, $sessionId);
+        if (! $this->llm->isConfigured()) {
+            $this->logFail('llm_api_key_missing', $user, $sessionId, [
+                'provider' => (string) config('assistant.provider', 'deepseek'),
+            ]);
 
             return $this->response(
-                'المساعد غير مُعد بعد. أضف مفتاح Gemini من لوحة السيرفر.',
+                'المساعد غير مُعد بعد. أضف مفتاح خدمة الذكاء الاصطناعي من لوحة السيرفر.',
                 $sessionId ?: '',
                 null,
                 null,
@@ -84,7 +86,7 @@ class AssistantOrchestrator
         $context = $session['context'];
         $turns[] = ['role' => 'user', 'text' => $message];
 
-        $contents = $this->toGeminiContents($turns);
+        $messages = $this->toLlmMessages($turns);
         $pendingAction = null;
         $navigation = null;
         $reply = '';
@@ -93,59 +95,45 @@ class AssistantOrchestrator
 
         try {
             for ($i = 0; $i < 6; $i++) {
-                $raw = $this->gemini->generateContent(
-                    $contents,
+                $result = $this->llm->complete(
+                    $messages,
                     $this->tools->declarations(),
                     $this->systemPrompt($context)
                 );
 
-                $candidate = $raw['candidates'][0]['content'] ?? null;
-                if (! is_array($candidate)) {
-                    $this->logFail('empty_gemini_candidate', $user, $sessionId, [
-                        'loop' => $i,
-                        'message_preview' => mb_substr($message, 0, 120),
-                    ]);
-                    $reply = 'ما قدرتش أفهم الطلب. حاول بصيغة أوضح.';
-                    break;
-                }
+                $toolCalls = is_array($result['tool_calls'] ?? null) ? $result['tool_calls'] : [];
+                $text = is_string($result['text'] ?? null) ? trim((string) $result['text']) : '';
 
-                $parts = $candidate['parts'] ?? [];
-                $functionCalls = [];
-                $textBits = [];
+                if ($toolCalls === []) {
+                    if ($text === '' && $result['text'] === null && $i === 0) {
+                        $this->logFail('empty_llm_response', $user, $sessionId, [
+                            'loop' => $i,
+                            'provider' => (string) config('assistant.provider', 'deepseek'),
+                            'message_preview' => mb_substr($message, 0, 120),
+                        ]);
+                        $reply = 'ما قدرتش أفهم الطلب. حاول بصيغة أوضح.';
+                        break;
+                    }
 
-                foreach ($parts as $part) {
-                    if (! is_array($part)) {
-                        continue;
-                    }
-                    if (isset($part['functionCall']['name'])) {
-                        $functionCalls[] = $part['functionCall'];
-                    }
-                    if (isset($part['text']) && is_string($part['text']) && trim($part['text']) !== '') {
-                        $textBits[] = trim($part['text']);
-                    }
-                }
-
-                if ($functionCalls === []) {
-                    $reply = $textBits !== []
-                        ? implode("\n", $textBits)
+                    $reply = $text !== ''
+                        ? $text
                         : ($sawFailedTool
                             ? 'ما قدرتش أنفّذ الطلب بالكامل. راجع البيانات وحاول تاني.'
                             : 'تم.');
                     break;
                 }
 
-                // Echo the model parts verbatim so Gemini thought signatures
-                // attached to functionCall parts are preserved on the next turn.
-                $contents[] = [
-                    'role' => 'model',
-                    'parts' => array_values(array_filter(
-                        $parts,
-                        static fn ($part) => is_array($part)
-                    )),
+                $messages[] = [
+                    'role' => 'assistant',
+                    'content' => $text !== '' ? $text : null,
+                    'tool_calls' => $toolCalls,
+                    'provider_meta' => is_array($result['provider_meta'] ?? null) ? $result['provider_meta'] : [],
                 ];
 
-                $functionResponses = [];
-                foreach ($functionCalls as $call) {
+                foreach ($toolCalls as $call) {
+                    if (! is_array($call)) {
+                        continue;
+                    }
                     $name = (string) ($call['name'] ?? '');
                     $args = is_array($call['args'] ?? null) ? $call['args'] : [];
                     if (in_array($name, ['propose_create_installment', 'propose_create_customer_with_installment'], true)) {
@@ -175,18 +163,20 @@ class AssistantOrchestrator
                         $navigation = $toolResult['navigation'];
                     }
 
-                    $functionResponses[] = [
-                        'functionResponse' => [
-                            'name' => $name,
-                            'response' => [
-                                'ok' => (bool) ($toolResult['ok'] ?? false),
-                                'error' => $toolResult['error'] ?? null,
-                                'status' => $toolResult['result']['status'] ?? null,
-                                'data' => $toolResult['result'] ?? null,
-                                'pending_action' => $toolResult['pending_action'] ?? null,
-                                'navigation' => $toolResult['navigation'] ?? null,
-                            ],
-                        ],
+                    $responsePayload = [
+                        'ok' => (bool) ($toolResult['ok'] ?? false),
+                        'error' => $toolResult['error'] ?? null,
+                        'status' => $toolResult['result']['status'] ?? null,
+                        'data' => $toolResult['result'] ?? null,
+                        'pending_action' => $toolResult['pending_action'] ?? null,
+                        'navigation' => $toolResult['navigation'] ?? null,
+                    ];
+
+                    $messages[] = [
+                        'role' => 'tool',
+                        'tool_call_id' => (string) ($call['id'] ?? ''),
+                        'name' => $name,
+                        'content' => json_encode($responsePayload, JSON_UNESCAPED_UNICODE),
                     ];
 
                     // Stop looping once we have a mutation proposal — ask user to confirm.
@@ -194,11 +184,6 @@ class AssistantOrchestrator
                         break;
                     }
                 }
-
-                $contents[] = [
-                    'role' => 'user',
-                    'parts' => $functionResponses,
-                ];
 
                 if ($pendingAction) {
                     // Always prefer server-computed summary (correct start_date) over
@@ -210,12 +195,14 @@ class AssistantOrchestrator
         } catch (Throwable $e) {
             $error = $e->getMessage();
             $safeError = preg_replace('/([?&]key=)[^&\s]+/i', '$1[REDACTED]', $error) ?? $error;
+            $safeError = preg_replace('/(Bearer\s+)(\S+)/i', '$1[REDACTED]', $safeError) ?? $safeError;
             $reply = str_contains(strtolower($safeError), 'ssl') || str_contains(strtolower($safeError), 'curl error 60')
                 ? 'المساعد مش قادر يتصل بخدمة الذكاء الاصطناعي حالياً (مشكلة شهادة SSL على السيرفر). حاول تاني بعد شوية.'
                 : 'حصل خطأ في المساعد. حاول تاني بعد شوية.';
             $this->logFail('assistant_exception', $user, $sessionId, [
                 'exception' => $e::class,
                 'error' => $safeError,
+                'provider' => (string) config('assistant.provider', 'deepseek'),
                 'message_preview' => mb_substr($message, 0, 120),
             ]);
             report($e);
@@ -439,7 +426,7 @@ class AssistantOrchestrator
 
         return [
             'enabled' => (bool) config('assistant.enabled', true) && $featureEnabled,
-            'configured' => (string) config('assistant.gemini.api_key') !== '',
+            'configured' => $this->llm->isConfigured(),
             'feature_enabled' => $featureEnabled,
             'remaining_today' => $remaining === PHP_INT_MAX ? 999999 : $remaining,
             'daily_limit' => $limit === PHP_INT_MAX ? 999999 : $limit,
@@ -502,19 +489,20 @@ PROMPT;
 
     /**
      * @param  array<int, array{role: string, text: string}>  $turns
-     * @return array<int, array<string, mixed>>
+     * @return list<array<string, mixed>>
      */
-    private function toGeminiContents(array $turns): array
+    private function toLlmMessages(array $turns): array
     {
-        $contents = [];
+        $messages = [];
         foreach ($turns as $turn) {
-            $contents[] = [
-                'role' => $turn['role'] === 'assistant' ? 'model' : 'user',
-                'parts' => [['text' => $turn['text']]],
+            $role = ($turn['role'] ?? '') === 'assistant' ? 'assistant' : 'user';
+            $messages[] = [
+                'role' => $role,
+                'content' => (string) ($turn['text'] ?? ''),
             ];
         }
 
-        return $contents;
+        return $messages;
     }
 
     /**

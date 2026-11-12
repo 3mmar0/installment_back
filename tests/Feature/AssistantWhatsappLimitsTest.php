@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Http;
 it('blocks assistant when the feature flag is off', function () {
     config([
         'assistant.enabled' => true,
-        'assistant.gemini.api_key' => 'test-key',
+        'assistant.provider' => 'deepseek',
+        'assistant.deepseek.api_key' => 'test-key',
     ]);
 
     $merchant = actingAsMerchant([

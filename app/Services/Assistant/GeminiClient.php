@@ -4,10 +4,11 @@ namespace App\Services\Assistant;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
-class GeminiClient
+class GeminiClient implements AssistantLlmClient
 {
     /**
      * Text/Flash-Lite models suitable for chat + tool calling.
@@ -21,6 +22,64 @@ class GeminiClient
         'gemini-3.6-flash',
         'gemini-flash-latest',
     ];
+
+    public function isConfigured(): bool
+    {
+        return (string) config('assistant.gemini.api_key') !== '';
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function complete(array $messages, array $tools, string $systemInstruction): array
+    {
+        $contents = $this->toGeminiContents($messages);
+        $raw = $this->generateContent($contents, $tools, $systemInstruction);
+
+        $candidate = $raw['candidates'][0]['content'] ?? null;
+        if (! is_array($candidate)) {
+            return [
+                'text' => null,
+                'tool_calls' => [],
+                'provider_meta' => [],
+            ];
+        }
+
+        $parts = $candidate['parts'] ?? [];
+        if (! is_array($parts)) {
+            $parts = [];
+        }
+
+        $textBits = [];
+        $toolCalls = [];
+        foreach ($parts as $index => $part) {
+            if (! is_array($part)) {
+                continue;
+            }
+            if (isset($part['text']) && is_string($part['text']) && trim($part['text']) !== '') {
+                $textBits[] = trim($part['text']);
+            }
+            if (isset($part['functionCall']['name'])) {
+                $call = $part['functionCall'];
+                $toolCalls[] = [
+                    'id' => 'gemini_'.$index.'_'.Str::uuid()->toString(),
+                    'name' => (string) ($call['name'] ?? ''),
+                    'args' => is_array($call['args'] ?? null) ? $call['args'] : [],
+                ];
+            }
+        }
+
+        return [
+            'text' => $textBits !== [] ? implode("\n", $textBits) : null,
+            'tool_calls' => $toolCalls,
+            'provider_meta' => [
+                'gemini_parts' => array_values(array_filter(
+                    $parts,
+                    static fn ($part) => is_array($part)
+                )),
+            ],
+        ];
+    }
 
     /**
      * @param  array<int, array<string, mixed>>  $contents
@@ -124,7 +183,7 @@ class GeminiClient
                     continue;
                 }
 
-                        if ($this->shouldTryNextModel($response->status(), $message)) {
+                if ($this->shouldTryNextModel($response->status(), $message)) {
                     $this->logWarning('Gemini model failed, trying next fallback', [
                         ...$attempt,
                         'attempt' => $index + 1,
@@ -159,6 +218,112 @@ class GeminiClient
         ]);
 
         throw new RuntimeException('Gemini request failed: '.$lastError);
+    }
+
+    /**
+     * Convert normalized assistant messages into Gemini contents.
+     * Echoes gemini_parts from provider_meta so thought signatures survive tool turns.
+     *
+     * @param  list<array<string, mixed>>  $messages
+     * @return list<array<string, mixed>>
+     */
+    private function toGeminiContents(array $messages): array
+    {
+        $contents = [];
+        $pendingToolResponses = [];
+
+        $flushToolResponses = function () use (&$contents, &$pendingToolResponses): void {
+            if ($pendingToolResponses === []) {
+                return;
+            }
+            $contents[] = [
+                'role' => 'user',
+                'parts' => $pendingToolResponses,
+            ];
+            $pendingToolResponses = [];
+        };
+
+        foreach ($messages as $message) {
+            if (! is_array($message)) {
+                continue;
+            }
+
+            $role = (string) ($message['role'] ?? '');
+
+            if ($role === 'user') {
+                $flushToolResponses();
+                $contents[] = [
+                    'role' => 'user',
+                    'parts' => [['text' => (string) ($message['content'] ?? '')]],
+                ];
+                continue;
+            }
+
+            if ($role === 'assistant') {
+                $flushToolResponses();
+                $meta = is_array($message['provider_meta'] ?? null) ? $message['provider_meta'] : [];
+                $rawParts = $meta['gemini_parts'] ?? null;
+                if (is_array($rawParts) && $rawParts !== []) {
+                    $contents[] = [
+                        'role' => 'model',
+                        'parts' => array_values(array_filter(
+                            $rawParts,
+                            static fn ($part) => is_array($part)
+                        )),
+                    ];
+                    continue;
+                }
+
+                $parts = [];
+                $text = $message['content'] ?? null;
+                if (is_string($text) && trim($text) !== '') {
+                    $parts[] = ['text' => $text];
+                }
+                $toolCalls = $message['tool_calls'] ?? [];
+                if (is_array($toolCalls)) {
+                    foreach ($toolCalls as $call) {
+                        if (! is_array($call) || ! isset($call['name'])) {
+                            continue;
+                        }
+                        $parts[] = [
+                            'functionCall' => [
+                                'name' => (string) $call['name'],
+                                'args' => is_array($call['args'] ?? null) ? $call['args'] : new \stdClass,
+                            ],
+                        ];
+                    }
+                }
+                if ($parts !== []) {
+                    $contents[] = [
+                        'role' => 'model',
+                        'parts' => $parts,
+                    ];
+                }
+                continue;
+            }
+
+            if ($role === 'tool') {
+                $name = (string) ($message['name'] ?? '');
+                $payload = $message['content'] ?? [];
+                if (is_string($payload)) {
+                    $decoded = json_decode($payload, true);
+                    $payload = is_array($decoded) ? $decoded : ['raw' => $payload];
+                }
+                if (! is_array($payload)) {
+                    $payload = ['ok' => false];
+                }
+                $pendingToolResponses[] = [
+                    'functionResponse' => [
+                        'name' => $name,
+                        'response' => $payload,
+                    ],
+                ];
+            }
+        }
+
+        $flushToolResponses();
+
+        return $contents;
     }
 
     /**
