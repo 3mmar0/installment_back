@@ -68,6 +68,7 @@ Route::get('import/template', [ImportController::class, 'template']);
 
 // Public trial settings & legal pages
 Route::get('settings/trial', [SettingsController::class, 'trialPublic']);
+Route::get('settings/onboarding', [SettingsController::class, 'onboardingPublic']);
 Route::get('legal/privacy', [LegalController::class, 'privacy']);
 Route::get('legal/terms', [LegalController::class, 'terms']);
 
@@ -148,17 +149,22 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
         Route::post('complaint-message/{id}', 'message')->middleware('throttle:60,1');
     });
 
-    Route::middleware('platform_admin')->controller(SystemSettingsController::class)->group(function () {
-        Route::get('admin/system/queue-status', 'queueStatus');
-        Route::post('admin/system/queue-start', 'startQueue');
-        Route::post('admin/system/queue-stop', 'stopQueue');
-        Route::post('admin/system/queue-run', 'runQueue');
-        Route::post('admin/system/cache-clear', 'clearCache');
-        Route::get('admin/system/users', 'users');
-        Route::get('admin/system/announcements', 'announcements');
-        Route::get('admin/system/announcements/{broadcastId}/viewers', 'announcementViewers');
-        Route::post('admin/system/broadcast-notification', 'broadcastNotification');
-        Route::post('admin/system/sync-free-plan', 'syncFreePlan');
+    Route::middleware('platform_admin')->group(function () {
+        Route::controller(SystemSettingsController::class)->group(function () {
+            Route::get('admin/system/queue-status', 'queueStatus');
+            Route::post('admin/system/queue-start', 'startQueue');
+            Route::post('admin/system/queue-stop', 'stopQueue');
+            Route::post('admin/system/queue-run', 'runQueue');
+            Route::post('admin/system/cache-clear', 'clearCache');
+            Route::get('admin/system/users', 'users');
+            Route::get('admin/system/announcements', 'announcements');
+            Route::get('admin/system/announcements/{broadcastId}/viewers', 'announcementViewers');
+            Route::post('admin/system/broadcast-notification', 'broadcastNotification');
+            Route::post('admin/system/sync-free-plan', 'syncFreePlan');
+        });
+
+        Route::get('settings/onboarding-admin', [SettingsController::class, 'onboardingAdmin']);
+        Route::post('settings/onboarding', [SettingsController::class, 'updateOnboarding']);
     });
 
     // Routes below require an active subscription
@@ -252,6 +258,8 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
 
     Route::middleware('owner')->group(function () {
         Route::put('settings/trial', [SettingsController::class, 'updateTrial']);
+        Route::get('settings/onboarding-admin', [SettingsController::class, 'onboardingAdmin']);
+        Route::post('settings/onboarding', [SettingsController::class, 'updateOnboarding']);
 
         Route::controller(SubscriptionController::class)->group(function () {
             Route::get('subscriptions-admin', 'index');
