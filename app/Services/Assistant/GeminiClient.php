@@ -16,8 +16,8 @@ class GeminiClient
      * @var list<string>
      */
     public const DEFAULT_FALLBACK_MODELS = [
-        'gemini-3.8-flash',
         'gemini-3.5-flash-lite',
+        'gemini-3.8-flash',
         'gemini-3.6-flash',
         'gemini-flash-latest',
     ];
@@ -166,7 +166,7 @@ class GeminiClient
      */
     private function models(): array
     {
-        $primary = (string) config('assistant.gemini.model', 'gemini-3.8-flash');
+        $primary = (string) config('assistant.gemini.model', 'gemini-3.5-flash-lite');
         $fallbacks = config('assistant.gemini.fallback_models', self::DEFAULT_FALLBACK_MODELS);
         if (! is_array($fallbacks) || $fallbacks === []) {
             $fallbacks = self::DEFAULT_FALLBACK_MODELS;

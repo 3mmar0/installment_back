@@ -5,7 +5,7 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
         /**
          * Comma-separated fallbacks used on rate-limit / quota / unavailable.
          * Keep this short — long lists make every failure feel extremely slow.
@@ -14,7 +14,7 @@ return [
             'trim',
             explode(',', (string) env(
                 'GEMINI_FALLBACK_MODELS',
-                'gemini-3.5-flash-lite,gemini-3.6-flash,gemini-flash-latest'
+                'gemini-3.8-flash,gemini-3.6-flash,gemini-flash-latest'
             ))
         ))),
         'base_url' => env(
