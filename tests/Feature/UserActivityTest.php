@@ -54,4 +54,15 @@ it('shows last_active_at and is_active to owners on the user list', function () 
         ->and($activeRow['last_active_at'])->not->toBeNull()
         ->and($inactiveRow['is_active'])->toBeFalse()
         ->and($inactiveRow['last_active_at'])->not->toBeNull();
+
+    $sellerIds = $rows
+        ->where('role', 'user')
+        ->pluck('id')
+        ->values();
+    $activeIndex = $sellerIds->search($activeUser->id);
+    $inactiveIndex = $sellerIds->search($inactiveUser->id);
+
+    expect($activeIndex)->not->toBeFalse()
+        ->and($inactiveIndex)->not->toBeFalse()
+        ->and($activeIndex)->toBeLessThan($inactiveIndex);
 });

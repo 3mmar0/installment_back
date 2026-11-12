@@ -25,7 +25,12 @@ class UserService implements UserServiceInterface
      */
     public function getAllUsers(): Collection
     {
-        return User::with('userLimit')->latest()->get();
+        // Active app users first so important merchants stay visible.
+        return User::with('userLimit')
+            ->orderByRaw('last_active_at is null')
+            ->orderByDesc('last_active_at')
+            ->orderByDesc('id')
+            ->get();
     }
 
     /**
@@ -139,7 +144,9 @@ class UserService implements UserServiceInterface
     {
         return User::where('role', UserRole::User)
             ->with('userLimit')
-            ->latest()
+            ->orderByRaw('last_active_at is null')
+            ->orderByDesc('last_active_at')
+            ->orderByDesc('id')
             ->paginate(20);
     }
 

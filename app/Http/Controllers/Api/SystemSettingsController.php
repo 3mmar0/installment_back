@@ -79,7 +79,9 @@ class SystemSettingsController extends Controller
         $users = User::query()
             ->with('userLimit')
             ->where('role', UserRole::User)
-            ->latest()
+            ->orderByRaw('last_active_at is null')
+            ->orderByDesc('last_active_at')
+            ->orderByDesc('id')
             ->get();
 
         return $this->successResponse(

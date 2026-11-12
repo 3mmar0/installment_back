@@ -29,22 +29,24 @@ class AdminLimitsController extends Controller
         $status = $request->query('status');
 
         $query = UserLimit::query()
-            ->with(['user:id,name,email,phone,role'])
-            ->whereHas('user', fn ($q) => $q->where('role', UserRole::User))
-            ->orderByDesc('id');
+            ->select('user_limits.*')
+            ->join('users', 'users.id', '=', 'user_limits.user_id')
+            ->with(['user:id,name,email,phone,role,last_active_at'])
+            ->where('users.role', UserRole::User)
+            ->orderByRaw('users.last_active_at is null')
+            ->orderByDesc('users.last_active_at')
+            ->orderByDesc('user_limits.id');
 
         if (is_string($status) && $status !== '') {
-            $query->where('status', $status);
+            $query->where('user_limits.status', $status);
         }
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
-                $q->where('subscription_name', 'like', "%{$search}%")
-                    ->orWhere('subscription_slug', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($userQuery) use ($search) {
-                        $userQuery->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    });
+                $q->where('user_limits.subscription_name', 'like', "%{$search}%")
+                    ->orWhere('user_limits.subscription_slug', 'like', "%{$search}%")
+                    ->orWhere('users.name', 'like', "%{$search}%")
+                    ->orWhere('users.email', 'like', "%{$search}%");
             });
         }
 
@@ -65,14 +67,18 @@ class AdminLimitsController extends Controller
         $search = trim((string) $request->query('search', ''));
 
         $query = UserLimit::query()
-            ->with(['user:id,name,email,phone,role'])
-            ->whereHas('user', fn ($q) => $q->where('role', UserRole::User))
-            ->orderByDesc('id');
+            ->select('user_limits.*')
+            ->join('users', 'users.id', '=', 'user_limits.user_id')
+            ->with(['user:id,name,email,phone,role,last_active_at'])
+            ->where('users.role', UserRole::User)
+            ->orderByRaw('users.last_active_at is null')
+            ->orderByDesc('users.last_active_at')
+            ->orderByDesc('user_limits.id');
 
         if ($search !== '') {
-            $query->whereHas('user', function ($userQuery) use ($search) {
-                $userQuery->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('users.name', 'like', "%{$search}%")
+                    ->orWhere('users.email', 'like', "%{$search}%");
             });
         }
 
