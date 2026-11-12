@@ -450,9 +450,11 @@ class AssistantToolRunner
             $totalAmount += $planTotal;
             $totalPaid += $planPaid;
 
+            $planName = trim((string) ($installment->name ?: 'قسط'));
             $plans[] = [
-                'id' => $installment->id,
+                'id' => $installment->id, // internal tool use only — never show in chat
                 'name' => $installment->name,
+                'label' => $planName.' — إجمالي '.number_format($planTotal, 0).' / متبقي '.number_format(round($planRemaining, 2), 0),
                 'status' => $installment->status,
                 'total_amount' => $planTotal,
                 'paid_amount' => round($planPaid, 2),
@@ -725,12 +727,8 @@ class AssistantToolRunner
                         'status' => 'ambiguous',
                         'ambiguous' => true,
                         'count' => $matches->count(),
-                        'customers' => $matches->map(fn (Customer $c) => [
-                            'id' => $c->id,
-                            'name' => $c->name,
-                            'phone' => $c->phone,
-                        ])->all(),
-                        'next_question_ar' => 'في أكتر من عميل بنفس الاسم. أنهي واحد تقصد؟ اذكر الـ id أو الاسم بالكامل.',
+                        'customers' => $matches->map(fn (Customer $c) => $this->customerListRow($c))->all(),
+                        'next_question_ar' => 'في أكتر من عميل بنفس الاسم. مين فيهم؟ قول الاسم مع رقم التليفون.',
                     ],
                 ];
             }
@@ -1329,10 +1327,16 @@ class AssistantToolRunner
      */
     private function customerListRow(Customer $c): array
     {
+        $phone = trim((string) ($c->phone ?? ''));
+        $label = $phone !== ''
+            ? trim((string) $c->name).' — '.$phone
+            : trim((string) $c->name);
+
         return [
-            'id' => $c->id,
+            'id' => $c->id, // internal tool use only — never show to the user in chat
             'name' => $c->name,
             'phone' => $c->phone,
+            'label' => $label,
             'governorate' => $c->governorate,
             'governorate_label' => GovernorateHelper::label($c->governorate),
         ];
@@ -1360,11 +1364,7 @@ class AssistantToolRunner
                         'status' => 'ambiguous',
                         'ambiguous' => true,
                         'count' => $matches->count(),
-                        'customers' => $matches->map(fn (Customer $c) => [
-                            'id' => $c->id,
-                            'name' => $c->name,
-                            'phone' => $c->phone,
-                        ])->all(),
+                        'customers' => $matches->map(fn (Customer $c) => $this->customerListRow($c))->all(),
                     ],
                 ];
             }
@@ -1415,11 +1415,7 @@ class AssistantToolRunner
                         'status' => 'ambiguous',
                         'ambiguous' => true,
                         'count' => $matches->count(),
-                        'customers' => $matches->map(fn (Customer $c) => [
-                            'id' => $c->id,
-                            'name' => $c->name,
-                            'phone' => $c->phone,
-                        ])->all(),
+                        'customers' => $matches->map(fn (Customer $c) => $this->customerListRow($c))->all(),
                     ],
                 ];
             }

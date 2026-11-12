@@ -449,6 +449,8 @@ it('exposes egyptian dialect guidance and timezone in the system prompt memory',
         ->and($prompt)->toContain('Africa/Cairo')
         ->and($prompt)->toContain('start_months_ago')
         ->and($prompt)->toContain('ممنوع تقول')
+        ->and($prompt)->toContain('ممنوع تعرض أي id رقمي')
+        ->and($prompt)->toContain('الاسم + رقم التليفون')
         ->and($prompt)->toContain('العميل المختار حالياً');
 });
 
