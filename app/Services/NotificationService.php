@@ -8,6 +8,7 @@ use App\Jobs\SendPushNotificationJob;
 use App\Models\ClientAccount;
 use App\Models\Installment;
 use App\Models\InstallmentItem;
+use App\Models\MerchantGift;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -167,7 +168,7 @@ class NotificationService
         array $data = [],
         ?User $actor = null
     ): void {
-        if (in_array($type, ['payment_due', 'payment_overdue', 'system_announcement', 'mobile_app_update'], true)) {
+        if (in_array($type, ['payment_due', 'payment_overdue', 'system_announcement', 'mobile_app_update', 'merchant_gift'], true)) {
             return;
         }
 
@@ -699,6 +700,55 @@ class NotificationService
         }
 
         return false;
+    }
+
+    /**
+     * Welcome modal + push when an admin grants a gift. Always delivered
+     * (no plan quota / no admin mirror) so the merchant sees it immediately.
+     */
+    public function notifyGiftReceived(User $user, MerchantGift $gift): ?Notification
+    {
+        $resourceLabel = match ($gift->resource) {
+            'whatsapp_messages' => 'رسائل الواتس',
+            'assistant_messages' => 'رسائل المساعد الذكي',
+            default => 'رصيد إضافي',
+        };
+
+        $amount = max(1, (int) $gift->amount);
+        $title = 'وصلك هدية 🎁';
+        $message = "تمت إضافة {$amount} من {$resourceLabel} لحسابك.";
+        if (is_string($gift->note) && trim($gift->note) !== '') {
+            $message .= "\n".trim($gift->note);
+        }
+
+        try {
+            $notification = Notification::create([
+                'user_id' => $user->id,
+                'type' => 'merchant_gift',
+                'title' => $title,
+                'message' => $message,
+                'data' => [
+                    'display_as' => 'modal',
+                    'gift_id' => $gift->id,
+                    'resource' => $gift->resource,
+                    'amount' => $amount,
+                    'note' => $gift->note,
+                    'source' => $gift->source,
+                ],
+            ]);
+
+            $this->queuePushNotification($notification);
+
+            return $notification;
+        } catch (\Throwable $e) {
+            Log::warning('Failed to notify merchant about gift', [
+                'user_id' => $user->id,
+                'gift_id' => $gift->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**

@@ -11,8 +11,10 @@ use App\Models\Subscription;
 use App\Models\SubscriptionAssignment;
 use App\Models\User;
 use App\Models\UserLimit;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class LimitsHelper
@@ -505,7 +507,7 @@ class LimitsHelper
 
         $userLimit->addBonus($resource, $amount);
 
-        return MerchantGift::query()->create([
+        $gift = MerchantGift::query()->create([
             'user_id' => $userId,
             'granted_by' => $grantedBy,
             'resource' => $resource,
@@ -513,6 +515,21 @@ class LimitsHelper
             'source' => $source,
             'note' => $note,
         ]);
+
+        $user = User::query()->find($userId);
+        if ($user) {
+            try {
+                app(NotificationService::class)->notifyGiftReceived($user, $gift);
+            } catch (\Throwable $e) {
+                Log::warning('Gift granted but welcome notification failed', [
+                    'user_id' => $userId,
+                    'gift_id' => $gift->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $gift;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 use App\Helpers\LimitsHelper;
 use App\Models\MerchantGift;
+use App\Models\Notification;
 use App\Models\UserLimit;
 use App\Services\WhatsAppCloudApiService;
 use Illuminate\Support\Facades\Http;
@@ -44,6 +45,17 @@ it('lets admin gifts raise the assistant monthly allowance', function () {
     expect(LimitsHelper::canCreate($merchant->id, 'assistant_messages'))->toBeTrue()
         ->and(MerchantGift::query()->where('user_id', $merchant->id)->count())->toBe(1)
         ->and((int) UserLimit::query()->where('user_id', $merchant->id)->value('assistant_messages_bonus'))->toBe(2);
+
+    $giftNotification = Notification::query()
+        ->where('user_id', $merchant->id)
+        ->where('type', 'merchant_gift')
+        ->latest('id')
+        ->first();
+
+    expect($giftNotification)->not->toBeNull()
+        ->and($giftNotification?->data['display_as'] ?? null)->toBe('modal')
+        ->and((int) ($giftNotification?->data['amount'] ?? 0))->toBe(2)
+        ->and($giftNotification?->data['resource'] ?? null)->toBe('assistant_messages');
 });
 
 it('resets monthly messaging usage while keeping gifts by default', function () {
