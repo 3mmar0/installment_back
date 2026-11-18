@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\ComplaintController;
 use App\Http\Controllers\Api\CreditScoreController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DeviceTokenController;
+use App\Http\Controllers\Api\CustomerStatementController;
 use App\Http\Controllers\Api\ExportReportController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\InstallmentController;
@@ -177,6 +178,10 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
         Route::post('export/excel', [ExportReportController::class, 'excel']);
         Route::post('export/csv', [ExportReportController::class, 'csv']);
 
+        // Customer account statement
+        Route::post('customer-statement/{customerId}/pdf', [CustomerStatementController::class, 'pdf']);
+        Route::post('customer-statement/{customerId}/excel', [CustomerStatementController::class, 'excel']);
+
         Route::controller(ReportsHubController::class)->group(function () {
             Route::get('reports/catalog', 'catalog');
             Route::get('reports/overview', 'overview');
@@ -233,6 +238,7 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::get('installment-stats/{id}', 'stats');
             Route::get('installment-all-stats', 'allStats');
             Route::post('installment-item-pay/{item}', 'markItemPaid');
+            Route::post('installment-item-adjust/{item}', 'adjustPayment');
             Route::post('installment-remind/{id}', 'sendReminders');
         });
 

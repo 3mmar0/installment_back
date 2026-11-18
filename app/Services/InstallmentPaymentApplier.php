@@ -85,6 +85,62 @@ class InstallmentPaymentApplier
         return $locked->refresh();
     }
 
+    /**
+     * Adjust a previously recorded payment to a new amount.
+     */
+    public function adjust(
+        InstallmentItem $locked,
+        float $newPaidAmount,
+        ?string $note
+    ): InstallmentItem {
+        $newPaidAmount = round($newPaidAmount, 2);
+        $scheduled = round((float) $locked->amount, 2);
+        $oldPaid = round((float) ($locked->paid_amount ?? 0), 2);
+
+        if ($newPaidAmount > $scheduled + 0.001) {
+            throw PaymentException::amountMismatch($scheduled);
+        }
+
+        $adjustNote = sprintf(
+            'تعديل الدفعة من %s ج.م إلى %s ج.م.',
+            number_format($oldPaid, 2),
+            number_format($newPaidAmount, 2)
+        );
+        $paymentNote = $this->mergeNote($locked->note, $this->mergeNote($note, $adjustNote));
+
+        if ($newPaidAmount <= 0.001) {
+            $locked->update([
+                'paid_at' => null,
+                'paid_amount' => 0,
+                'status' => 'pending',
+                'note' => $paymentNote,
+            ]);
+        } elseif ($newPaidAmount >= $scheduled - 0.001) {
+            $locked->update([
+                'paid_at' => $locked->paid_at ?? now(),
+                'paid_amount' => $newPaidAmount,
+                'status' => 'paid',
+                'note' => $paymentNote,
+            ]);
+        } else {
+            $locked->update([
+                'paid_amount' => $newPaidAmount,
+                'status' => 'partial',
+                'note' => $paymentNote,
+            ]);
+        }
+
+        $installment = $locked->installment;
+        if ($installment) {
+            $allPaid = $installment->items()->where('status', '!=', 'paid')->count() === 0;
+            $installment->update([
+                'status' => $allPaid ? 'completed' : 'active',
+            ]);
+        }
+
+        return $locked->refresh();
+    }
+
     private function carryRemainder(InstallmentItem $locked, float $remainder): void
     {
         $next = InstallmentItem::query()

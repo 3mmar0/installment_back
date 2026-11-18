@@ -45,6 +45,11 @@ interface InstallmentServiceInterface
     public function markItemPaid(InstallmentItem $item, array $data, User $user): InstallmentItem;
 
     /**
+     * Adjust a previously recorded payment amount.
+     */
+    public function adjustPayment(InstallmentItem $item, array $data, User $user): InstallmentItem;
+
+    /**
      * Get dashboard analytics for a user.
      */
     public function getDashboardAnalytics(User $user): array;

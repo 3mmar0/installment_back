@@ -322,6 +322,25 @@ class InstallmentService implements InstallmentServiceInterface
         return $item;
     }
 
+    public function adjustPayment(InstallmentItem $item, array $data, User $user): InstallmentItem
+    {
+        $newPaidAmount = round((float) $data['new_paid_amount'], 2);
+
+        $item = DB::transaction(function () use ($item, $data, $newPaidAmount) {
+            $locked = InstallmentItem::whereKey($item->getKey())->lockForUpdate()->firstOrFail();
+
+            return app(InstallmentPaymentApplier::class)->adjust(
+                $locked,
+                $newPaidAmount,
+                isset($data['note']) ? trim((string) $data['note']) : null
+            );
+        });
+
+        app(CreditScoreRecalculationDispatcher::class)->dispatchForInstallmentItem($item);
+
+        return $item;
+    }
+
     /**
      * Payment references are minted server-side so they can be relied on as an
      * identifier; the clients previously generated `PAY-<timestamp>` locally.

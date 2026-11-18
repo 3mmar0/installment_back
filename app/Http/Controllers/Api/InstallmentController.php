@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Contracts\Services\InstallmentServiceInterface;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdjustPaymentRequest;
 use App\Http\Requests\MarkItemPaidRequest;
 use App\Http\Requests\StoreInstallmentRequest;
 use App\Http\Requests\UpdateInstallmentRequest;
@@ -136,6 +137,22 @@ class InstallmentController extends Controller
         return $this->successResponse(
             new InstallmentItemResource($updatedItem),
             'تم تسجيل الدفعة بنجاح'
+        );
+    }
+
+    public function adjustPayment(InstallmentItem $item, AdjustPaymentRequest $request): JsonResponse
+    {
+        $this->authorize('update', $item);
+
+        $updatedItem = $this->installmentService->adjustPayment(
+            $item,
+            $request->validated(),
+            $request->user()
+        );
+
+        return $this->successResponse(
+            new InstallmentItemResource($updatedItem),
+            'تم تعديل الدفعة بنجاح'
         );
     }
 
