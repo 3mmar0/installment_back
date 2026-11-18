@@ -50,6 +50,7 @@ class UpdateSubscriptionRequest extends FormRequest
             'reports' => ['sometimes', 'nullable', 'boolean'],
             'features' => ['sometimes', 'nullable', 'array'],
             'is_active' => ['sometimes', 'nullable', 'boolean'],
+            'apply_to' => ['sometimes', 'nullable', 'in:new_only,all_subscribers'],
         ];
     }
 

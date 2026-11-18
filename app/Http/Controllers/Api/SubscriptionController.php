@@ -89,6 +89,8 @@ class SubscriptionController extends Controller
     public function update(UpdateSubscriptionRequest $request, Subscription $subscription): JsonResponse
     {
         $data = $request->validated();
+        $applyTo = $data['apply_to'] ?? 'new_only';
+        unset($data['apply_to']);
 
         if (isset($data['slug'])) {
             $data['slug'] = $this->generateUniqueSlug($data['slug'], $subscription->id);
@@ -97,14 +99,20 @@ class SubscriptionController extends Controller
         $subscription->update($data);
         $subscription = $subscription->fresh();
 
-        $synced = LimitsHelper::syncSubscriptionLimitsToSubscribers($subscription);
+        $synced = 0;
+        if ($applyTo === 'all_subscribers') {
+            $synced = LimitsHelper::syncSubscriptionLimitsToSubscribers($subscription);
+        }
+
         $payload = (new SubscriptionResource($subscription))->resolve();
         $payload['subscribers_synced'] = $synced;
+        $payload['apply_to'] = $applyTo;
 
-        return $this->successResponse(
-            $payload,
-            'تم تحديث خطة الاشتراك وتطبيقها على المشتركين بنجاح'
-        );
+        $message = $applyTo === 'all_subscribers'
+            ? "تم تحديث خطة الاشتراك وتطبيقها على {$synced} مشترك حالي"
+            : 'تم تحديث خطة الاشتراك وستُطبَّق على الاشتراكات الجديدة فقط';
+
+        return $this->successResponse($payload, $message);
     }
 
     /**
