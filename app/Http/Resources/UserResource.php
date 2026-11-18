@@ -23,6 +23,7 @@ class UserResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'phone' => $this->phone,
+            'logo' => $this->logo ? \Illuminate\Support\Facades\Storage::url($this->logo) : null,
             'country' => $this->country ?? 'EG',
             'governorate' => $this->governorate,
             'currency' => $this->currency ?? 'EGP',

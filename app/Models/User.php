@@ -26,6 +26,7 @@ class User extends Authenticatable
         'name',
         'email',
         'phone',
+        'logo',
         'country',
         'governorate',
         'currency',

@@ -35,7 +35,7 @@ class CustomerStatementController extends Controller
             'date_to'        => ['sometimes', 'nullable', 'date'],
         ]);
 
-        $customer = Customer::find($customerId);
+        $customer = Customer::with('user')->find($customerId);
         if (! $customer) {
             return $this->notFoundResponse('العميل غير موجود');
         }
@@ -175,6 +175,13 @@ class CustomerStatementController extends Controller
         $e    = [RtlPdfDocument::class, 'e'];
         $now  = now()->format('Y-m-d H:i');
 
+        // Vendor info (from the authenticated user who owns this customer)
+        /** @var \App\Models\User|null $vendor */
+        $vendor     = $customer->user ?? null;
+        $vendorName = $vendor?->name ?? '';
+        $vendorPhone = $vendor?->phone ?? '';
+        $vendorLogoPath = $vendor?->logo ?? null;
+
         // Totals
         $totalAmount    = 0.0;
         $paidAmount     = 0.0;
@@ -208,6 +215,35 @@ class CustomerStatementController extends Controller
         }
 
         $subtitle = "تاريخ الإصدار: {$now}" . ($filterNote ? " · نطاق: {$filterNote}" : '');
+
+        // Vendor branding bar (shown above summary)
+        $vendorBar = '';
+        if ($vendorName || $vendorPhone) {
+            $logoHtml = '';
+            if ($vendorLogoPath) {
+                $logoAbsPath = storage_path('app/public/' . ltrim($vendorLogoPath, '/'));
+                if (file_exists($logoAbsPath)) {
+                    $ext      = strtolower(pathinfo($logoAbsPath, PATHINFO_EXTENSION));
+                    $mime     = match ($ext) {
+                        'png'  => 'image/png',
+                        'webp' => 'image/webp',
+                        default => 'image/jpeg',
+                    };
+                    $b64     = base64_encode((string) file_get_contents($logoAbsPath));
+                    $logoHtml = "<img src=\"data:{$mime};base64,{$b64}\" style=\"height:48px;max-width:120px;object-fit:contain;vertical-align:middle;margin-left:12px\" />";
+                }
+            }
+            $nameHtml  = $vendorName  ? '<span style="font-size:12pt;font-weight:bold;color:#0f172a">' . $e($vendorName) . '</span>' : '';
+            $phoneHtml = $vendorPhone ? '<span style="font-size:9.5pt;color:#475569;margin-right:10px">' . $e($vendorPhone) . '</span>' : '';
+            $vendorBar = <<<HTML
+<div style="display:flex;flex-direction:row-reverse;align-items:center;justify-content:space-between;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:14px;background:#f8fafc">
+  <div style="display:flex;flex-direction:row-reverse;align-items:center;gap:10px">
+    {$logoHtml}
+    <div style="text-align:right">{$nameHtml}<br/>{$phoneHtml}</div>
+  </div>
+</div>
+HTML;
+        }
 
         // Summary cards
         $summary = <<<HTML
@@ -327,7 +363,7 @@ BLOCK;
             }
         }
 
-        $body = $summary . $customerSection . $installmentsSection
+        $body = $vendorBar . $summary . $customerSection . $installmentsSection
             . '<p class="footer-note">كشف حساب داخلي من نظام «اقساطي» · للاستخدام التشغيلي فقط.</p>';
 
         return RtlPdfDocument::documentShell('كشف حساب العميل', $subtitle, $body);

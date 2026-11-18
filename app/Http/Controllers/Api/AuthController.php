@@ -15,6 +15,7 @@ use App\Enums\UserRole;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -129,6 +130,7 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
+            'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
             'country' => ['sometimes', 'required', 'string', 'size:2', 'in:'.implode(',', LocaleHelper::countryCodes())],
             'governorate' => \App\Helpers\GovernorateHelper::rule(),
             'currency' => ['sometimes', 'required', 'string', 'size:3', 'in:'.implode(',', array_values(LocaleHelper::CURRENCIES_BY_COUNTRY))],
@@ -140,6 +142,20 @@ class AuthController extends Controller
 
         if (array_key_exists('governorate', $data)) {
             $data['governorate'] = \App\Helpers\GovernorateHelper::normalize($data['governorate']);
+        }
+
+        if ($request->hasFile('logo')) {
+            if ($user->logo) {
+                Storage::disk('public')->delete($user->logo);
+            }
+            $data['logo'] = $request->file('logo')->store('logos', 'public');
+        } elseif (array_key_exists('logo', $data) && $data['logo'] === null) {
+            if ($user->logo) {
+                Storage::disk('public')->delete($user->logo);
+            }
+            $data['logo'] = null;
+        } else {
+            unset($data['logo']);
         }
 
         $user->fill($data);
