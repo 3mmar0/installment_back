@@ -14,8 +14,10 @@ class Subscription extends Model
     protected $fillable = [
         'name',
         'slug',
+        'group_name',
         'currency',
         'price',
+        'original_price',
         'duration',
         'description',
         'customers',
@@ -39,6 +41,7 @@ class Subscription extends Model
         'reports' => 'boolean',
         'is_active' => 'boolean',
         'price' => 'float',
+        'original_price' => 'float',
     ];
 
     public function creator(): BelongsTo
@@ -54,5 +57,10 @@ class Subscription extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    public function scopeByGroup($query, string $groupName)
+    {
+        return $query->where('group_name', $groupName);
     }
 }

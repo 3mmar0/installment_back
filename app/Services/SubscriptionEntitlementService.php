@@ -77,9 +77,23 @@ class SubscriptionEntitlementService
         });
     }
 
-    private function endDateFor(array $snapshot, Carbon $startsAt): ?Carbon
+    private function endDateFor(array $snapshot, Carbon $startsAt): Carbon
     {
-        if ((float) ($snapshot['price'] ?? 0) <= 0) return null;
-        return ($snapshot['duration'] ?? 'monthly') === 'yearly' ? $startsAt->copy()->addYear() : $startsAt->copy()->addMonth();
+        $price = (float) ($snapshot['price'] ?? 0);
+        $duration = $snapshot['duration'] ?? 'monthly';
+
+        if ($price <= 0) {
+            $duration = \Illuminate\Support\Facades\DB::table('app_settings')
+                ->where('key', 'free_plan_duration')
+                ->value('value') ?? 'semi_annual';
+        }
+
+        return match ($duration) {
+            'monthly' => $startsAt->copy()->addMonth(),
+            'quarterly' => $startsAt->copy()->addMonths(3),
+            'semi_annual' => $startsAt->copy()->addMonths(6),
+            'yearly' => $startsAt->copy()->addYear(),
+            default => $startsAt->copy()->addMonths(6),
+        };
     }
 }

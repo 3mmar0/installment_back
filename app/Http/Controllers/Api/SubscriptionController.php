@@ -202,6 +202,29 @@ class SubscriptionController extends Controller
         return $this->errorResponse('تم إيقاف التغيير المباشر للخطة. استخدم طلب شراء أو اختيار الباقة المجانية.', 410);
     }
 
+    public function getFreePlanSettings(): JsonResponse
+    {
+        $duration = \Illuminate\Support\Facades\DB::table('app_settings')
+            ->where('key', 'free_plan_duration')
+            ->value('value') ?? 'semi_annual';
+
+        return $this->successResponse(['free_plan_duration' => $duration], 'تم جلب إعدادات الباقة المجانية');
+    }
+
+    public function updateFreePlanSettings(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'free_plan_duration' => ['required', 'in:monthly,quarterly,semi_annual,yearly'],
+        ]);
+
+        \Illuminate\Support\Facades\DB::table('app_settings')->updateOrInsert(
+            ['key' => 'free_plan_duration'],
+            ['value' => $data['free_plan_duration'], 'updated_at' => now()]
+        );
+
+        return $this->successResponse(['free_plan_duration' => $data['free_plan_duration']], 'تم تحديث مدة الباقة المجانية');
+    }
+
     public function selectFree(Request $request, Subscription $subscription, SubscriptionEntitlementService $entitlements): JsonResponse
     {
         if (! $subscription->is_active || (float) $subscription->price !== 0.0) {

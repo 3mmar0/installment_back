@@ -69,6 +69,7 @@ Route::get('import/template', [ImportController::class, 'template']);
 
 // Public trial settings & legal pages
 Route::get('settings/trial', [SettingsController::class, 'trialPublic']);
+Route::get('settings/free-plan', [SubscriptionController::class, 'getFreePlanSettings']);
 Route::get('settings/onboarding', [SettingsController::class, 'onboardingPublic']);
 Route::get('legal/privacy', [LegalController::class, 'privacy']);
 Route::get('legal/terms', [LegalController::class, 'terms']);
@@ -276,6 +277,8 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::delete('subscriptions-delete/{subscription}', 'destroy');
             Route::post('subscriptions/{subscription}/assign', 'assign');
             Route::post('subscriptions/{subscription}/bulk-assign', 'bulkAssign');
+            Route::get('settings/free-plan', 'getFreePlanSettings');
+            Route::put('settings/free-plan', 'updateFreePlanSettings');
         });
 
         Route::prefix('admin/subscription-purchase-requests')->controller(SubscriptionPurchaseRequestController::class)->group(function () {

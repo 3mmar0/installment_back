@@ -48,7 +48,7 @@ class LimitsHelper
             'name' => 'الخطه المجانية',
             'currency' => 'EGP',
             'price' => 0,
-            'duration' => 'monthly',
+            'duration' => 'semi_annual',
             'description' => 'الخطة المجانية الحالية لجميع المستخدمين.',
             'customers' => self::DEFAULT_LIMITS['customers'],
             'installments' => self::DEFAULT_LIMITS['installments'],
@@ -734,6 +734,7 @@ class LimitsHelper
 
     /**
      * Calculate subscription end date based on duration.
+     * Free plans (price <= 0) use the admin-configured free_plan_duration setting.
      */
     protected static function calculateEndDate(
         string $duration,
@@ -746,13 +747,18 @@ class LimitsHelper
         }
 
         if ($price !== null && $price <= 0) {
-            return null;
+            $freeDuration = \Illuminate\Support\Facades\DB::table('app_settings')
+                ->where('key', 'free_plan_duration')
+                ->value('value') ?? 'semi_annual';
+            $duration = $freeDuration;
         }
 
         return match ($duration) {
             'monthly' => (clone $startDate)->addMonth(),
+            'quarterly' => (clone $startDate)->addMonths(3),
+            'semi_annual' => (clone $startDate)->addMonths(6),
             'yearly' => (clone $startDate)->addYear(),
-            default => null,
+            default => (clone $startDate)->addMonths(6),
         };
     }
 }
