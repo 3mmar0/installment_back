@@ -48,7 +48,7 @@ class InstallmentService implements InstallmentServiceInterface
         }
 
         if ($search !== '') {
-            $query->where(function ($builder) use ($search) {
+            $query->where(function ($builder) use ($search, $user) {
                 if (ctype_digit($search)) {
                     $builder->where('installments.id', (int) $search);
                 }
