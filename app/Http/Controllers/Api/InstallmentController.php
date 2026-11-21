@@ -11,9 +11,11 @@ use App\Http\Requests\UpdateInstallmentRequest;
 use App\Http\Resources\InstallmentItemResource;
 use App\Http\Resources\InstallmentResource;
 use App\Http\Traits\ApiResponse;
+use App\Models\Installment;
 use App\Models\InstallmentItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class InstallmentController extends Controller
 {
@@ -57,10 +59,14 @@ class InstallmentController extends Controller
         // @phpstan-ignore-next-line
         $authUser = auth()->user();
 
+        $data = collect($request->validated())->except('attachment')->all();
+
         $installment = $this->installmentService->createInstallment(
-            $request->validated(),
+            $data,
             $authUser
         );
+
+        $this->storeInstallmentAttachment($request, $installment);
 
         return $this->createdResponse(
             new InstallmentResource($installment),
@@ -97,16 +103,34 @@ class InstallmentController extends Controller
 
         $this->authorize('update', $installment);
 
+        $data = collect($request->validated())->except('attachment')->all();
+
         $installment = $this->installmentService->updateInstallment(
             $id,
-            $request->validated(),
+            $data,
             $request->user()
         );
+
+        $this->storeInstallmentAttachment($request, $installment);
 
         return $this->successResponse(
             new InstallmentResource($installment),
             'تم تحديث القسط بنجاح'
         );
+    }
+
+    private function storeInstallmentAttachment(Request $request, Installment $installment): void
+    {
+        if (! $request->hasFile('attachment')) {
+            return;
+        }
+
+        if ($installment->attachment_path) {
+            Storage::disk('public')->delete($installment->attachment_path);
+        }
+
+        $path = $request->file('attachment')->store("installment_attachments/{$installment->user_id}", 'public');
+        $installment->update(['attachment_path' => $path]);
     }
 
     public function destroy(int $id, Request $request): JsonResponse

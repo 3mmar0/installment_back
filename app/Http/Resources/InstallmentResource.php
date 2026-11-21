@@ -21,6 +21,8 @@ class InstallmentResource extends JsonResource
             'customer' => new CustomerResource($this->whenLoaded('customer')),
             'user' => new UserResource($this->whenLoaded('user')),
             'total_amount' => (float) $this->total_amount,
+            'invoice_price' => $this->invoice_price !== null ? (float) $this->invoice_price : null,
+            'down_payment' => $this->down_payment !== null ? (float) $this->down_payment : null,
             'products' => $this->products ?? [],
             'start_date' => $this->start_date instanceof \DateTimeInterface
                 ? $this->start_date->format('Y-m-d')
@@ -31,6 +33,9 @@ class InstallmentResource extends JsonResource
             'months' => $this->months,
             'status' => $this->status,
             'notes' => $this->notes,
+            'attachment_path' => $this->attachment_path
+                ? asset('storage/'.$this->attachment_path)
+                : null,
             'items' => InstallmentItemResource::collection($this->whenLoaded('items')),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),

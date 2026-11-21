@@ -14,7 +14,11 @@ class UpdateInstallmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['nullable', 'string', 'max:255'],
+            'name'          => ['sometimes', 'nullable', 'string', 'max:255'],
+            'notes'         => ['sometimes', 'nullable', 'string'],
+            'invoice_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'down_payment'  => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'attachment'    => ['sometimes', 'nullable', 'file', 'max:20480', 'mimes:jpg,jpeg,png,pdf,webp'],
         ];
     }
 }

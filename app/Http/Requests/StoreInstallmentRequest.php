@@ -32,8 +32,11 @@ class StoreInstallmentRequest extends FormRequest
             'products.*.name' => ['required', 'string', 'max:255'],
             'products.*.qty' => ['required', 'integer', 'min:1'],
             'products.*.price' => ['required', 'numeric', 'min:0'],
-            'notes' => ['nullable', 'string'],
-            'prepaid_months' => ['nullable', 'array'],
+            'invoice_price'   => ['nullable', 'numeric', 'min:0'],
+            'down_payment'    => ['nullable', 'numeric', 'min:0'],
+            'notes'           => ['nullable', 'string'],
+            'attachment'      => ['nullable', 'file', 'max:20480', 'mimes:jpg,jpeg,png,pdf,webp'],
+            'prepaid_months'  => ['nullable', 'array'],
             'prepaid_months.*' => ['integer', 'distinct', 'min:1', 'max:120'],
         ];
     }
