@@ -7,7 +7,6 @@ use App\Models\Customer;
 use App\Models\InstallmentItem;
 use App\Models\User;
 use App\Models\WhatsAppDailyCharge;
-use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -120,8 +119,24 @@ class WhatsAppReminderService
                 $this->paceBeforeNextSend($sent > 0 || $stats['messages_sent'] > 0);
 
                 try {
-                    $body = $this->buildMessage($customer, $item);
-                    $this->whatsApp->sendText($phone, $body, $user, consumeMerchantQuota: false);
+                    $this->whatsApp->sendTemplate(
+                        $phone,
+                        'installment_reminder',
+                        'ar',
+                        [[
+                            'type' => 'body',
+                            'parameters' => [
+                                ['type' => 'text', 'text' => $customer->name],
+                                ['type' => 'text', 'text' => $user->name],
+                                ['type' => 'text', 'text' => $item->installment->name ?? '-'],
+                                ['type' => 'text', 'text' => number_format((float) $item->amount, 2)],
+                                ['type' => 'text', 'text' => $item->due_date instanceof \DateTimeInterface ? $item->due_date->format('Y-m-d') : (string) $item->due_date],
+                                ['type' => 'text', 'text' => (string) $item->installment_id],
+                            ],
+                        ]],
+                        $user,
+                        consumeMerchantQuota: false
+                    );
                     $sent++;
                 } catch (Throwable $e) {
                     Log::error('whatsapp_reminder_send_failed', [
@@ -191,31 +206,6 @@ class WhatsAppReminderService
         LimitsHelper::incrementUsage($user->id, 'whatsapp_messages');
 
         return true;
-    }
-
-    private function buildMessage(Customer $customer, InstallmentItem $item): string
-    {
-        $amount = number_format((float) $item->amount, 2);
-        $due = $item->due_date instanceof \DateTimeInterface
-            ? $item->due_date->format('Y-m-d')
-            : (string) $item->due_date;
-
-        $dueDate = $item->due_date instanceof Carbon
-            ? $item->due_date
-            : Carbon::parse($item->due_date);
-
-        $diffDays = (int) now()->startOfDay()->diffInDays($dueDate->copy()->startOfDay(), false);
-
-        if ($diffDays > 0) {
-            $prefix = "تذكير: قسط مستحق بعد {$diffDays} " . ($diffDays === 1 ? 'يوم' : 'يومين');
-        } elseif ($diffDays === 0) {
-            $prefix = 'تذكير: قسط مستحق اليوم';
-        } else {
-            $daysPast = abs($diffDays);
-            $prefix = "تذكير: قسط متأخر منذ {$daysPast} " . ($daysPast === 1 ? 'يوم' : 'يومين');
-        }
-
-        return "{$prefix} للعميل {$customer->name}. المبلغ {$amount} ج.م، تاريخ الاستحقاق {$due}.";
     }
 
     /**
