@@ -172,7 +172,7 @@ class CustomerStatementController extends Controller
      */
     private function buildStatementHtml(Customer $customer, \Illuminate\Database\Eloquent\Collection $installments, array $filters): string
     {
-        $e     = [RtlPdfDocument::class, 'e'];
+        $e     = fn (mixed $v): string => htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $now   = now()->format('Y-m-d H:i');
         $today = now()->startOfDay();
 
@@ -182,39 +182,7 @@ class CustomerStatementController extends Controller
         $vendorPhone    = $vendor?->phone ?? '';
         $vendorLogoPath = $vendor?->logo ?? null;
 
-        // ── Overall totals ───────────────────────────────────────────────────
-        $totalAmount   = 0.0;
-        $paidAmount    = 0.0;
-        $pendingAmount = 0.0;
-        $overdueAmount = 0.0;
-
-        foreach ($installments as $inst) {
-            foreach ($inst->items as $item) {
-                $totalAmount += (float) $item->amount;
-                if ($item->status === 'paid') {
-                    $paidAmount += (float) ($item->paid_amount ?: $item->amount);
-                } else {
-                    $due = \Carbon\Carbon::parse($item->due_date)->startOfDay();
-                    if ($due->lt($today)) {
-                        $overdueAmount += (float) $item->amount;
-                    } else {
-                        $pendingAmount += (float) $item->amount;
-                    }
-                }
-            }
-        }
-        $remaining = $totalAmount - $paidAmount;
-
-        // ── Subtitle ─────────────────────────────────────────────────────────
-        $filterNote = '';
-        if (! empty($filters['date_from']) || ! empty($filters['date_to'])) {
-            $from       = $filters['date_from'] ?? '—';
-            $to         = $filters['date_to']   ?? '—';
-            $filterNote = "نطاق: {$from} إلى {$to}";
-        }
-        $subtitle = "تاريخ الإصدار: {$now}" . ($filterNote ? " · {$filterNote}" : '');
-
-        // ── Vendor bar ───────────────────────────────────────────────────────
+        // ── Vendor logo ──────────────────────────────────────────────────────
         $logoHtml = '';
         if ($vendorLogoPath) {
             $logoAbsPath = storage_path('app/public/' . ltrim($vendorLogoPath, '/'));
@@ -222,245 +190,138 @@ class CustomerStatementController extends Controller
                 $ext      = strtolower(pathinfo($logoAbsPath, PATHINFO_EXTENSION));
                 $mime     = match ($ext) { 'png' => 'image/png', 'webp' => 'image/webp', default => 'image/jpeg' };
                 $b64      = base64_encode((string) file_get_contents($logoAbsPath));
-                $logoHtml = "<img src=\"data:{$mime};base64,{$b64}\" style=\"height:52px;max-width:130px;object-fit:contain;vertical-align:middle\" />";
+                $logoHtml = "<img src=\"data:{$mime};base64,{$b64}\" style=\"height:56px;max-width:140px;object-fit:contain;vertical-align:middle\" />";
             }
         }
 
-        $vendorBar = '';
-        if ($vendorName || $vendorPhone || $logoHtml) {
-            $nameHtml  = $vendorName  ? '<div class="vendor-name">' . $e($vendorName) . '</div>' : '';
-            $phoneHtml = $vendorPhone ? '<div class="vendor-phone">&#128222; ' . $e($vendorPhone) . '</div>' : '';
-            $logoCell  = $logoHtml ? "<td style=\"text-align:left;width:140px;vertical-align:middle\">{$logoHtml}</td>" : '';
-            $vendorBar = <<<HTML
-<div class="vendor-bar">
-  <table style="width:100%;border-collapse:collapse">
-    <tr>
-      <td style="text-align:right;vertical-align:middle">{$nameHtml}{$phoneHtml}</td>
-      {$logoCell}
-    </tr>
-  </table>
+        // ── Page header (vendor card + customer subtitle) ────────────────────
+        $vendorNameHtml  = $vendorName  ? '<div style="font-size:14pt;font-weight:bold;color:#0f172a">' . $e($vendorName) . '</div>' : '';
+        $vendorPhoneHtml = $vendorPhone ? '<div style="font-size:10.5pt;color:#475569;margin-top:3px">&#128222; ' . $e($vendorPhone) . '</div>' : '';
+        $logoCell        = $logoHtml    ? "<td style=\"text-align:left;width:150px;vertical-align:middle\">{$logoHtml}</td>" : '';
+
+        $customerLine = $e($customer->name);
+        if ($customer->phone) {
+            $customerLine .= ' &nbsp;&middot;&nbsp; ' . $e($customer->phone);
+        }
+
+        $filterNote = '';
+        if (! empty($filters['date_from']) || ! empty($filters['date_to'])) {
+            $from       = $filters['date_from'] ?? '';
+            $to         = $filters['date_to']   ?? '';
+            $filterNote = " &nbsp;&middot;&nbsp; " . $e($from) . " \u{2013} " . $e($to);
+        }
+
+        $pageHeader = <<<HTML
+<table style="width:100%;border-collapse:collapse;border:1.5px solid #e2e8f0;border-radius:10px;margin-bottom:16px;background:#f8fafc">
+  <tr>
+    <td style="padding:14px 16px;text-align:right;vertical-align:middle">
+      {$vendorNameHtml}
+      {$vendorPhoneHtml}
+    </td>
+    {$logoCell}
+  </tr>
+</table>
+<div style="background:#1e3a8a;color:#fff;border-radius:8px;padding:12px 16px;margin-bottom:18px">
+  <div style="font-size:11pt;font-weight:bold">&#1603;&#1588;&#1601; &#1581;&#1587;&#1575;&#1576;</div>
+  <div style="font-size:10pt;color:#bfdbfe;margin-top:4px">&#1604;&#1604;&#1593;&#1605;&#1610;&#1604;: {$customerLine}{$filterNote}</div>
+  <div style="font-size:9pt;color:#93c5fd;margin-top:2px">&#1578;&#1575;&#1585;&#1610;&#1582; &#1575;&#1604;&#1573;&#1589;&#1583;&#1575;&#1585;: {$now}</div>
 </div>
 HTML;
-        }
 
-        // ── Overall summary cards ────────────────────────────────────────────
-        $instCount = $installments->count();
-        $summary   = <<<HTML
-<h2 class="section-title">الملخص الإجمالي</h2>
-<table class="card-grid">
-  <tr>
-    <td><div class="k">إجمالي المبلغ</div><div class="v">{$this->fmt($totalAmount)}</div></td>
-    <td><div class="k">المدفوع</div><div class="v paid">{$this->fmt($paidAmount)}</div></td>
-    <td><div class="k">المتبقي</div><div class="v remaining">{$this->fmt($remaining)}</div></td>
-  </tr>
-  <tr>
-    <td><div class="k">قيد الانتظار</div><div class="v pending">{$this->fmt($pendingAmount)}</div></td>
-    <td><div class="k">متأخر</div><div class="v overdue">{$this->fmt($overdueAmount)}</div></td>
-    <td><div class="k">عدد الأقساط</div><div class="v">{$instCount}</div></td>
-  </tr>
-</table>
-HTML;
-
-        // ── Customer info (2-column card grid) ───────────────────────────────
-        $fields = [
-            'الاسم'             => $customer->name,
-            'الهاتف'            => $customer->phone,
-            'البريد الإلكتروني' => $customer->email,
-            'الرقم القومي'      => $customer->national_id,
-            'المحافظة'          => $customer->governorate,
-            'العنوان'           => $customer->address,
-            'الوظيفة'           => $customer->job,
-            'الملاحظات'         => $customer->notes,
-        ];
-
-        $infoCells = '';
-        $col       = 0;
-        foreach ($fields as $label => $value) {
-            if ($value === null || $value === '') {
-                continue;
-            }
-            if ($col > 0 && $col % 2 === 0) {
-                $infoCells .= '</tr><tr>';
-            }
-            $infoCells .= '<td class="info-cell"><div class="info-label">' . $e($label) . '</div><div class="info-value">' . $e($value) . '</div></td>';
-            $col++;
-        }
-        // pad to even columns
-        if ($col % 2 === 1) {
-            $infoCells .= '<td class="info-cell" style="background:transparent;border:none"></td>';
-        }
-
-        $customerSection = <<<HTML
-<h2 class="section-title">بيانات العميل</h2>
-<table class="info-grid">
-  <tbody><tr>{$infoCells}</tr></tbody>
-</table>
-HTML;
-
-        // ── Installments (each on its own page when multiple) ────────────────
-        $installmentsHtml = '';
+        // ── Installments ─────────────────────────────────────────────────────
+        $multipleInstallments = $installments->count() > 1;
+        $installmentsHtml     = '';
 
         if ($installments->isEmpty()) {
-            $installmentsHtml = '<p style="color:#64748b;text-align:center;padding:20px">لا توجد بيانات بالفترة المحددة</p>';
+            $installmentsHtml = '<p style="color:#64748b;text-align:center;padding:20px">&#1604;&#1575; &#1578;&#1608;&#1580;&#1583; &#1576;&#1610;&#1575;&#1606;&#1575;&#1578; &#1576;&#1575;&#1604;&#1601;&#1578;&#1585;&#1577; &#1575;&#1604;&#1605;&#1581;&#1583;&#1583;&#1577;</p>';
         } else {
-            $isFirst = true;
             foreach ($installments as $inst) {
-                $pageBreakStyle = $isFirst ? '' : 'page-break-before:always;';
-                $isFirst        = false;
+                $items = $inst->items->sortBy('due_date');
 
-                $instName  = $e($inst->name ?: ('قسط #' . $inst->id));
-                $startFmt  = \Carbon\Carbon::parse($inst->start_date)->format('Y-m-d');
-                $endFmt    = \Carbon\Carbon::parse($inst->end_date)->format('Y-m-d');
-                $instTotal = (float) $inst->total_amount;
-
-                // Per-installment buckets
-                $instPaid    = 0.0;
-                $instOverdue = 0.0;
-                $instPending = 0.0;
-                $paidItems    = [];
-                $overdueItems = [];
-                $pendingItems = [];
-
-                foreach ($inst->items as $item) {
-                    $due    = \Carbon\Carbon::parse($item->due_date)->startOfDay();
-                    $isOver = $item->status !== 'paid' && $due->lt($today);
-
-                    if ($item->status === 'paid') {
-                        $instPaid += (float) ($item->paid_amount ?: $item->amount);
-                        $paidItems[] = $item;
-                    } elseif ($item->status === 'overdue' || $isOver) {
-                        $instOverdue += (float) $item->amount;
-                        $overdueItems[] = $item;
-                    } else {
-                        $instPending += (float) $item->amount;
-                        $pendingItems[] = $item;
-                    }
-                }
-
-                $instRemaining = $instTotal - $instPaid;
-                $pct           = $instTotal > 0 ? round(($instPaid / $instTotal) * 100) : 0;
-                $barWidth      = min(100, max(0, $pct));
-
-                // Status badge
-                [$statusAr, $statusColor, $statusBg, $barColor] = match ($inst->status) {
-                    'active'    => ['نشط',    '#1d4ed8', '#eff6ff', '#2563eb'],
-                    'completed' => ['مكتمل',  '#166534', '#f0fdf4', '#16a34a'],
-                    'overdue'   => ['متأخر',  '#991b1b', '#fef2f2', '#dc2626'],
-                    'cancelled' => ['ملغي',   '#475569', '#f1f5f9', '#94a3b8'],
-                    default     => ['—',       '#475569', '#f8fafc', '#94a3b8'],
-                };
-
-                // Build table rows helper
-                $buildRow = function (object $item, int $num) use ($e, $today): string {
-                    $due        = \Carbon\Carbon::parse($item->due_date);
-                    $isOver     = $item->status !== 'paid' && $due->startOfDay()->lt($today);
-                    $statusText = match ($item->status) {
-                        'paid'    => '&#10003; مدفوع',
-                        'partial' => '&#9681; جزئي',
-                        'overdue' => '&#10007; متأخر',
-                        default   => $isOver ? '&#10007; متأخر' : '&#9203; معلق',
-                    };
-                    $paidAt = $item->paid_at ? \Carbon\Carbon::parse($item->paid_at)->format('Y-m-d') : '—';
-
-                    return <<<TR
-<tr>
-  <td style="text-align:center;width:28px">{$num}</td>
-  <td>{$e($due->format('Y-m-d'))}</td>
-  <td class="ltr">{$this->fmt((float)$item->amount)}</td>
-  <td class="ltr">{$this->fmt((float)($item->paid_amount ?? 0))}</td>
-  <td>{$e($paidAt)}</td>
-  <td>{$e($item->reference ?? '—')}</td>
-  <td style="text-align:center"><strong>{$statusText}</strong></td>
-</tr>
-TR;
-                };
-
-                // Grouped table body
                 $tbody  = '';
                 $serial = 1;
 
-                if (! empty($paidItems)) {
-                    $cnt = count($paidItems);
-                    $tbody .= "<tr class=\"group-hdr group-paid\"><td colspan=\"7\">&#10003; مدفوعة &mdash; {$cnt} " . ($cnt === 1 ? 'دفعة' : 'دفعات') . " &middot; {$this->fmt($instPaid)}</td></tr>";
-                    foreach ($paidItems as $item) {
-                        $tbody .= str_replace('<tr>', '<tr style="background:#f0fdf4">', $buildRow($item, $serial++));
-                    }
-                }
-                if (! empty($overdueItems)) {
-                    $cnt = count($overdueItems);
-                    $tbody .= "<tr class=\"group-hdr group-overdue\"><td colspan=\"7\">&#10007; متأخرة &mdash; {$cnt} " . ($cnt === 1 ? 'دفعة' : 'دفعات') . " &middot; {$this->fmt($instOverdue)}</td></tr>";
-                    foreach ($overdueItems as $item) {
-                        $tbody .= str_replace('<tr>', '<tr style="background:#fef2f2">', $buildRow($item, $serial++));
-                    }
-                }
-                if (! empty($pendingItems)) {
-                    $cnt = count($pendingItems);
-                    $tbody .= "<tr class=\"group-hdr group-pending\"><td colspan=\"7\">&#9203; قادمة &mdash; {$cnt} " . ($cnt === 1 ? 'دفعة' : 'دفعات') . " &middot; {$this->fmt($instPending)}</td></tr>";
-                    foreach ($pendingItems as $item) {
-                        $tbody .= str_replace('<tr>', '<tr style="background:#fefce8">', $buildRow($item, $serial++));
-                    }
+                foreach ($items as $item) {
+                    $due    = \Carbon\Carbon::parse($item->due_date);
+                    $isOver = $item->status !== 'paid' && $due->startOfDay()->lt($today);
+
+                    [$statusText, $rowBg] = match (true) {
+                        $item->status === 'paid'               => ["\u{2713} \u{0645}\u{062F}\u{0641}\u{0648}\u{0639}", '#f0fdf4'],
+                        $item->status === 'partial'            => ["\u{25D1} \u{062C}\u{0632}\u{0626}\u{064A}", '#fff7ed'],
+                        $item->status === 'overdue' || $isOver => ["\u{2717} \u{0645}\u{062A}\u{0623}\u{062E}\u{0631}", '#fef2f2'],
+                        default                                => ["\u{23F3} \u{0645}\u{0639}\u{0644}\u{0642}", '#fefce8'],
+                    };
+
+                    $paidAt    = $item->paid_at ? \Carbon\Carbon::parse($item->paid_at)->format('Y-m-d') : '&mdash;';
+                    $dueFmt    = $e($due->format('Y-m-d'));
+                    $amtFmt    = $this->fmt((float) $item->amount);
+                    $paidFmt   = $this->fmt((float) ($item->paid_amount ?? 0));
+
+                    $tbody .= <<<TR
+<tr style="background:{$rowBg}">
+  <td style="text-align:center;width:26px;color:#64748b">{$serial}</td>
+  <td>{$dueFmt}</td>
+  <td class="ltr" style="color:#166534">{$amtFmt}</td>
+  <td class="ltr" style="color:#1d4ed8">{$paidFmt}</td>
+  <td style="color:#475569">{$paidAt}</td>
+  <td style="text-align:center;font-weight:bold">{$statusText}</td>
+</tr>
+TR;
+                    $serial++;
                 }
 
                 if ($tbody === '') {
-                    $tbody = '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:14px">لا توجد دفعات في الفترة المحددة</td></tr>';
+                    $tbody = '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:14px">&#1604;&#1575; &#1578;&#1608;&#1580;&#1583; &#1583;&#1601;&#1593;&#1575;&#1578; &#1601;&#1610; &#1575;&#1604;&#1601;&#1578;&#1585;&#1577; &#1575;&#1604;&#1605;&#1581;&#1583;&#1583;&#1577;</td></tr>';
                 }
 
-                $installmentsHtml .= <<<BLOCK
-<div style="{$pageBreakStyle}">
-  <!-- Installment header card -->
-  <div class="inst-header">
-    <table class="inst-title-row" style="width:100%;border-collapse:collapse">
-      <tr>
-        <td style="text-align:right;vertical-align:middle">
-          <strong class="inst-name">{$instName}</strong>
-        </td>
-        <td style="text-align:left;vertical-align:middle;width:80px">
-          <span class="inst-badge" style="background:{$statusBg};color:{$statusColor}">{$e($statusAr)}</span>
-        </td>
-      </tr>
-    </table>
-    <div class="inst-meta">من {$e($startFmt)} إلى {$e($endFmt)} &nbsp;&middot;&nbsp; {$e($inst->months)} شهر &nbsp;&middot;&nbsp; الإجمالي: {$this->fmt($instTotal)}</div>
-    <div class="progress-wrap"><div class="progress-fill" style="width:{$barWidth}%;background:{$barColor}"></div></div>
-    <div class="progress-pct">{$pct}% تم سداده</div>
-  </div>
-
-  <!-- Per-installment summary -->
-  <table class="card-grid inst-cards">
-    <tr>
-      <td><div class="k">إجمالي القسط</div><div class="v">{$this->fmt($instTotal)}</div></td>
-      <td><div class="k">المدفوع</div><div class="v paid">{$this->fmt($instPaid)}</div></td>
-      <td><div class="k">المتبقي</div><div class="v remaining">{$this->fmt($instRemaining)}</div></td>
-    </tr>
-  </table>
-
-  <h3 class="detail-title">تفاصيل حركة السداد</h3>
-  <table class="data">
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>تاريخ الاستحقاق</th>
-        <th>المبلغ</th>
-        <th>المدفوع</th>
-        <th>تاريخ السداد</th>
-        <th>المرجع</th>
-        <th>الحالة</th>
-      </tr>
-    </thead>
-    <tbody>{$tbody}</tbody>
-  </table>
+                // Installment name subheader (only when multiple)
+                $instHeader = '';
+                if ($multipleInstallments) {
+                    $instName   = $e($inst->name ?: ('&#1602;&#1587;&#1591; #' . $inst->id));
+                    $instHeader = <<<HEAD
+<div style="margin-top:16px;margin-bottom:6px;border-right:4px solid #2563eb;padding:7px 12px;background:#eff6ff;border-radius:0 8px 8px 0">
+  <strong style="font-size:11.5pt;color:#1e3a8a">{$instName}</strong>
 </div>
-BLOCK;
+HEAD;
+                }
+
+                $installmentsHtml .= $instHeader . <<<TABLE
+<table class="data">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>&#1578;&#1575;&#1585;&#1610;&#1582; &#1575;&#1604;&#1575;&#1587;&#1578;&#1581;&#1602;&#1575;&#1602;</th>
+      <th>&#1575;&#1604;&#1605;&#1576;&#1604;&#1594;</th>
+      <th>&#1575;&#1604;&#1605;&#1583;&#1601;&#1608;&#1593;</th>
+      <th>&#1578;&#1575;&#1585;&#1610;&#1582; &#1575;&#1604;&#1587;&#1583;&#1575;&#1583;</th>
+      <th>&#1575;&#1604;&#1581;&#1575;&#1604;&#1577;</th>
+    </tr>
+  </thead>
+  <tbody>{$tbody}</tbody>
+</table>
+TABLE;
             }
         }
 
-        $body = $vendorBar
-            . $summary
-            . $customerSection
-            . '<h2 class="section-title">تفاصيل الأقساط</h2>'
-            . $installmentsHtml
-            . '<p class="footer-note">كشف حساب داخلي من نظام «اقساطي» · للاستخدام التشغيلي فقط.</p>';
+        $styles = RtlPdfDocument::baseStyles();
 
-        return RtlPdfDocument::documentShell('كشف حساب العميل', $subtitle, $body);
+        return <<<HTML
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>&#1603;&#1588;&#1601; &#1581;&#1587;&#1575;&#1576;</title>
+<style>
+{$styles}
+</style>
+</head>
+<body>
+{$pageHeader}
+{$installmentsHtml}
+<p class="footer-note">&#1603;&#1588;&#1601; &#1581;&#1587;&#1575;&#1576; &#1583;&#1575;&#1582;&#1604;&#1610; &#1605;&#1606; &#1606;&#1592;&#1575;&#1605; &#171;&#1575;&#1602;&#1587;&#1575;&#1591;&#1610;&#187; &middot; &#1604;&#1604;&#1575;&#1587;&#1578;&#1582;&#1583;&#1575;&#1605; &#1575;&#1604;&#1578;&#1588;&#1594;&#1610;&#1604;&#1610; &#1601;&#1602;&#1591;.</p>
+</body>
+</html>
+HTML;
     }
 
     /**
