@@ -30,6 +30,8 @@ class Customer extends Model
         'whatsapp_auto_reminders',
         'current_credit_score_id',
         'credit_score_dirty_at',
+        'national_id_front_path',
+        'national_id_back_path',
     ];
 
     protected $casts = [

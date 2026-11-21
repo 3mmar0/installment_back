@@ -27,7 +27,7 @@ class EmailNotificationService
      */
     protected function isEnabled(): bool
     {
-        return (bool) config('mail.notifications_enabled', false);
+        return false;
     }
 
     /**

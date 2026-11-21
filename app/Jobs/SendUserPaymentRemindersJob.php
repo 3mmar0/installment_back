@@ -36,10 +36,6 @@ class SendUserPaymentRemindersJob implements ShouldQueue
             includeOverdue: $this->includeOverdue
         );
 
-        $whatsAppReminderService->sendForMerchant(
-            $user,
-            includeDueSoon: true,
-            includeOverdue: $this->includeOverdue
-        );
+        $whatsAppReminderService->sendForMerchant($user);
     }
 }

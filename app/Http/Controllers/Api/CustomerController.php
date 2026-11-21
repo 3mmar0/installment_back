@@ -13,6 +13,7 @@ use App\Models\Installment;
 use App\Services\EmailNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class CustomerController extends Controller
 {
@@ -59,10 +60,14 @@ class CustomerController extends Controller
         // @phpstan-ignore-next-line
         $authUser = auth()->user();
 
+        $customerData = collect($request->validated())->except(['national_id_front', 'national_id_back'])->all();
+
         $customer = $this->customerService->createCustomer(
-            $request->validated(),
+            $customerData,
             $authUser
         );
+
+        $this->storeNationalIdImages($request, $customer);
 
         return $this->createdResponse(
             new CustomerResource($customer),
@@ -115,11 +120,15 @@ class CustomerController extends Controller
 
         $this->authorize('update', $customer);
 
+        $customerData = collect($request->validated())->except(['national_id_front', 'national_id_back'])->all();
+
         $customer = $this->customerService->updateCustomer(
             $id,
-            $request->validated(),
+            $customerData,
             $request->user()
         );
+
+        $this->storeNationalIdImages($request, $customer);
 
         return $this->successResponse(
             new CustomerResource($customer),
@@ -190,6 +199,31 @@ class CustomerController extends Controller
             $result,
             "تمت جدولة {$result['total_emails']} بريد إلكتروني للعميل"
         );
+    }
+
+    private function storeNationalIdImages(Request $request, Customer $customer): void
+    {
+        $updates = [];
+
+        if ($request->hasFile('national_id_front')) {
+            if ($customer->national_id_front_path) {
+                Storage::disk('public')->delete($customer->national_id_front_path);
+            }
+            $updates['national_id_front_path'] = $request->file('national_id_front')
+                ->store("national_ids/{$customer->user_id}", 'public');
+        }
+
+        if ($request->hasFile('national_id_back')) {
+            if ($customer->national_id_back_path) {
+                Storage::disk('public')->delete($customer->national_id_back_path);
+            }
+            $updates['national_id_back_path'] = $request->file('national_id_back')
+                ->store("national_ids/{$customer->user_id}", 'public');
+        }
+
+        if ($updates !== []) {
+            $customer->update($updates);
+        }
     }
 
     public function forSelect(Request $request): JsonResponse

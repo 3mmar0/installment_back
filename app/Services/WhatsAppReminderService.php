@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\InstallmentItem;
 use App\Models\User;
 use App\Models\WhatsAppDailyCharge;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -18,12 +19,16 @@ class WhatsAppReminderService
     ) {}
 
     /**
-     * Send WhatsApp due/overdue reminders for a merchant.
-     * One Meta message per installment item; merchant quota increments once per customer/day.
+     * Send WhatsApp reminders for a merchant following a 3-touch sequence:
+     *   • Day -2: items due exactly 2 days from now  → "بعد يومين"
+     *   • Day  0: items due today (unpaid)            → "اليوم"
+     *   • Day +2: items overdue by exactly 2 days     → "متأخر منذ يومين"
+     *
+     * Only customers with whatsapp_auto_reminders = true receive messages.
      *
      * @return array{customers: int, messages_sent: int, quota_charged: int, skipped: int}
      */
-    public function sendForMerchant(User $user, bool $includeDueSoon = true, bool $includeOverdue = true): array
+    public function sendForMerchant(User $user): array
     {
         $stats = [
             'customers' => 0,
@@ -46,14 +51,11 @@ class WhatsAppReminderService
             return $stats;
         }
 
-        /** @var Collection<int, InstallmentItem> $items */
-        $items = collect();
-        if ($includeDueSoon) {
-            $items = $items->merge($this->getDueSoonItems($user));
-        }
-        if ($includeOverdue) {
-            $items = $items->merge($this->getOverdueItems($user));
-        }
+        $items = collect()
+            ->merge($this->getItemsDueInDays($user, 2))   // Day -2
+            ->merge($this->getItemsDueToday($user))        // Day  0
+            ->merge($this->getItemsOverdueByDays($user, 2)); // Day +2
+
         $itemIds = $items->pluck('id')->unique()->filter()->values()->all();
 
         if ($itemIds === []) {
@@ -100,7 +102,6 @@ class WhatsAppReminderService
                     'customer_id' => $customer->id,
                 ]);
 
-                // Seller monthly quota exhausted — stop; later customers cannot send either.
                 break;
             }
 
@@ -147,9 +148,6 @@ class WhatsAppReminderService
         return $stats;
     }
 
-    /**
-     * Avoid hammering Meta by spacing consecutive sends.
-     */
     private function paceBeforeNextSend(bool $needsDelay): void
     {
         if (! $needsDelay) {
@@ -201,43 +199,73 @@ class WhatsAppReminderService
         $due = $item->due_date instanceof \DateTimeInterface
             ? $item->due_date->format('Y-m-d')
             : (string) $item->due_date;
-        $isOverdue = $item->due_date < now()->startOfDay();
-        $prefix = $isOverdue ? 'تذكير: قسط متأخر' : 'تذكير: قسط مستحق';
+
+        $dueDate = $item->due_date instanceof Carbon
+            ? $item->due_date
+            : Carbon::parse($item->due_date);
+
+        $diffDays = (int) now()->startOfDay()->diffInDays($dueDate->copy()->startOfDay(), false);
+
+        if ($diffDays > 0) {
+            $prefix = "تذكير: قسط مستحق بعد {$diffDays} " . ($diffDays === 1 ? 'يوم' : 'يومين');
+        } elseif ($diffDays === 0) {
+            $prefix = 'تذكير: قسط مستحق اليوم';
+        } else {
+            $daysPast = abs($diffDays);
+            $prefix = "تذكير: قسط متأخر منذ {$daysPast} " . ($daysPast === 1 ? 'يوم' : 'يومين');
+        }
 
         return "{$prefix} للعميل {$customer->name}. المبلغ {$amount} ج.م، تاريخ الاستحقاق {$due}.";
     }
 
     /**
+     * Items due exactly $days days from today (unpaid).
+     *
      * @return Collection<int, InstallmentItem>
      */
-    private function getDueSoonItems(User $user): Collection
+    private function getItemsDueInDays(User $user, int $days): Collection
     {
-        $twoDaysLater = now()->addDays(2)->endOfDay();
-        $oneDayLater = now()->addDays(1)->startOfDay();
+        $target = now()->addDays($days);
 
         return InstallmentItem::query()
-            ->whereHas('installment', function ($query) use ($user) {
-                $query->where('user_id', $user->id)->where('status', 'active');
-            })
+            ->whereHas('installment', fn ($q) => $q->where('user_id', $user->id)->where('status', 'active'))
             ->whereNull('paid_at')
             ->where('status', '!=', 'paid')
-            ->whereBetween('due_date', [$oneDayLater, $twoDaysLater])
+            ->whereBetween('due_date', [$target->copy()->startOfDay(), $target->copy()->endOfDay()])
             ->with(['installment.customer'])
             ->get();
     }
 
     /**
+     * Items due today (unpaid).
+     *
      * @return Collection<int, InstallmentItem>
      */
-    private function getOverdueItems(User $user): Collection
+    private function getItemsDueToday(User $user): Collection
     {
         return InstallmentItem::query()
-            ->whereHas('installment', function ($query) use ($user) {
-                $query->where('user_id', $user->id)->where('status', 'active');
-            })
+            ->whereHas('installment', fn ($q) => $q->where('user_id', $user->id)->where('status', 'active'))
             ->whereNull('paid_at')
             ->where('status', '!=', 'paid')
-            ->where('due_date', '<', now()->startOfDay())
+            ->whereBetween('due_date', [now()->startOfDay(), now()->endOfDay()])
+            ->with(['installment.customer'])
+            ->get();
+    }
+
+    /**
+     * Items overdue by exactly $days days (unpaid).
+     *
+     * @return Collection<int, InstallmentItem>
+     */
+    private function getItemsOverdueByDays(User $user, int $days): Collection
+    {
+        $target = now()->subDays($days);
+
+        return InstallmentItem::query()
+            ->whereHas('installment', fn ($q) => $q->where('user_id', $user->id)->where('status', 'active'))
+            ->whereNull('paid_at')
+            ->where('status', '!=', 'paid')
+            ->whereBetween('due_date', [$target->copy()->startOfDay(), $target->copy()->endOfDay()])
             ->with(['installment.customer'])
             ->get();
     }

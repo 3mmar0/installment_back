@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\SystemSettingsController;
 use App\Http\Controllers\Api\UnifiedAuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AdminLimitsController;
+use App\Http\Controllers\Api\NationalIdController;
 use App\Http\Controllers\Api\UserLimitController;
 use App\Http\Controllers\Api\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -208,6 +209,9 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::post('assistant/message', 'message')->middleware('throttle:30,1');
             Route::post('assistant/confirm', 'confirm')->middleware('throttle:30,1');
         });
+
+        // National ID extraction
+        Route::post('national-id/extract', [NationalIdController::class, 'extract']);
 
         // Customer routes
         Route::controller(CustomerController::class)->group(function () {
