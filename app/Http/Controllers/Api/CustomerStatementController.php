@@ -30,9 +30,11 @@ class CustomerStatementController extends Controller
         }
 
         $data = $request->validate([
-            'installment_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
-            'date_from'      => ['sometimes', 'nullable', 'date'],
-            'date_to'        => ['sometimes', 'nullable', 'date'],
+            'installment_id'    => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'installment_ids'   => ['sometimes', 'nullable', 'array'],
+            'installment_ids.*' => ['integer', 'min:1'],
+            'date_from'         => ['sometimes', 'nullable', 'date'],
+            'date_to'           => ['sometimes', 'nullable', 'date'],
         ]);
 
         $customer = Customer::with('user')->find($customerId);
@@ -159,8 +161,15 @@ class CustomerStatementController extends Controller
             }
         }])->orderBy('start_date');
 
-        if (! empty($filters['installment_id'])) {
-            $query->where('id', (int) $filters['installment_id']);
+        // Support both installment_ids (array) and legacy installment_id (single)
+        $ids = [];
+        if (! empty($filters['installment_ids']) && is_array($filters['installment_ids'])) {
+            $ids = array_map('intval', $filters['installment_ids']);
+        } elseif (! empty($filters['installment_id'])) {
+            $ids = [(int) $filters['installment_id']];
+        }
+        if (! empty($ids)) {
+            $query->whereIn('id', $ids);
         }
 
         return $query->get();
@@ -221,10 +230,10 @@ class CustomerStatementController extends Controller
     {$logoCell}
   </tr>
 </table>
-<div style="background:#1e3a8a;color:#fff;border-radius:8px;padding:12px 16px;margin-bottom:18px">
-  <div style="font-size:11pt;font-weight:bold">&#1603;&#1588;&#1601; &#1581;&#1587;&#1575;&#1576;</div>
-  <div style="font-size:10pt;color:#bfdbfe;margin-top:4px">&#1604;&#1604;&#1593;&#1605;&#1610;&#1604;: {$customerLine}{$filterNote}</div>
-  <div style="font-size:9pt;color:#93c5fd;margin-top:2px">&#1578;&#1575;&#1585;&#1610;&#1582; &#1575;&#1604;&#1573;&#1589;&#1583;&#1575;&#1585;: {$now}</div>
+<div style="background:#f0f7ff;border:2px solid #1e3a8a;border-radius:8px;padding:12px 16px;margin-bottom:18px">
+  <div style="font-size:11pt;font-weight:bold;color:#1e3a8a">&#1603;&#1588;&#1601; &#1581;&#1587;&#1575;&#1576;</div>
+  <div style="font-size:10pt;color:#1e40af;margin-top:4px">&#1604;&#1604;&#1593;&#1605;&#1610;&#1604;: {$customerLine}{$filterNote}</div>
+  <div style="font-size:9pt;color:#475569;margin-top:2px">&#1578;&#1575;&#1585;&#1610;&#1582; &#1575;&#1604;&#1573;&#1589;&#1583;&#1575;&#1585;: {$now}</div>
 </div>
 HTML;
 
@@ -246,10 +255,10 @@ HTML;
                     $isOver = $item->status !== 'paid' && $due->startOfDay()->lt($today);
 
                     [$statusText, $rowBg] = match (true) {
-                        $item->status === 'paid'               => ["\u{2713} \u{0645}\u{062F}\u{0641}\u{0648}\u{0639}", '#f0fdf4'],
-                        $item->status === 'partial'            => ["\u{25D1} \u{062C}\u{0632}\u{0626}\u{064A}", '#fff7ed'],
-                        $item->status === 'overdue' || $isOver => ["\u{2717} \u{0645}\u{062A}\u{0623}\u{062E}\u{0631}", '#fef2f2'],
-                        default                                => ["\u{23F3} \u{0645}\u{0639}\u{0644}\u{0642}", '#fefce8'],
+                        $item->status === 'paid'               => ['&#1605;&#1583;&#1601;&#1608;&#1593;',  '#f0fdf4'],
+                        $item->status === 'partial'            => ['&#1580;&#1586;&#1574;&#1610;',         '#fff7ed'],
+                        $item->status === 'overdue' || $isOver => ['&#1605;&#1578;&#1571;&#1582;&#1585;', '#fef2f2'],
+                        default                                => ['&#1605;&#1593;&#1604;&#1602;',         '#fefce8'],
                     };
 
                     $paidAt    = $item->paid_at ? \Carbon\Carbon::parse($item->paid_at)->format('Y-m-d') : '&mdash;';
