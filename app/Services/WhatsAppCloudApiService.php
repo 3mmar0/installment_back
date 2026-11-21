@@ -143,6 +143,27 @@ class WhatsAppCloudApiService
 
     private function normalizeRecipient(string $recipient): string
     {
-        return preg_replace('/\D+/', '', $recipient) ?: $recipient;
+        $digits = preg_replace('/\D+/', '', $recipient);
+
+        if (! $digits) {
+            return $recipient;
+        }
+
+        // Already in full international format (e.g. 201030122338)
+        if (str_starts_with($digits, '20') && strlen($digits) >= 12) {
+            return $digits;
+        }
+
+        // Egyptian mobile: 01XXXXXXXXX → 201XXXXXXXXX
+        if (str_starts_with($digits, '0') && strlen($digits) === 11) {
+            return '2' . $digits;
+        }
+
+        // Egyptian mobile without leading zero: 1XXXXXXXXX → 201XXXXXXXXX
+        if (str_starts_with($digits, '1') && strlen($digits) === 10) {
+            return '20' . $digits;
+        }
+
+        return $digits;
     }
 }
