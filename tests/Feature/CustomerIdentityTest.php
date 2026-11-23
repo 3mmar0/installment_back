@@ -3,6 +3,8 @@
 use App\Helpers\NationalIdHelper;
 use App\Helpers\PhoneHelper;
 use App\Models\Customer;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 it('normalizes a national id to 14 digits', function () {
     expect(NationalIdHelper::normalize('2900101-1234567'))->toBe('29001011234567')
@@ -132,4 +134,36 @@ it('finds a customer by national id in search', function () {
     $this->getJson('/api/customer-list?search=29201011234567')
         ->assertOk()
         ->assertJsonFragment(['name' => 'عميل البحث']);
+});
+
+it('returns national id image urls after upload and on show', function () {
+    Storage::fake('public');
+    actingAsMerchant();
+
+    $front = UploadedFile::fake()->image('front.jpg', 800, 500);
+    $back = UploadedFile::fake()->image('back.jpg', 800, 500);
+
+    $create = $this->post('/api/customer-create', [
+        'name' => 'عميل بالبطاقة',
+        'phone' => '01088888888',
+        'national_id' => '29301011234567',
+        'national_id_front' => $front,
+        'national_id_back' => $back,
+    ], ['Accept' => 'application/json']);
+
+    $create->assertCreated()
+        ->assertJsonPath('data.name', 'عميل بالبطاقة');
+
+    $frontUrl = $create->json('data.national_id_front_url');
+    $backUrl = $create->json('data.national_id_back_url');
+    expect($frontUrl)->not->toBeNull()
+        ->and($backUrl)->not->toBeNull()
+        ->and($frontUrl)->toContain('/storage/national_ids/')
+        ->and($backUrl)->toContain('/storage/national_ids/');
+
+    $customerId = $create->json('data.id');
+    $this->getJson("/api/customer-show/{$customerId}")
+        ->assertOk()
+        ->assertJsonPath('data.national_id_front_url', $frontUrl)
+        ->assertJsonPath('data.national_id_back_url', $backUrl);
 });

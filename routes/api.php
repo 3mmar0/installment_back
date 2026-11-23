@@ -219,7 +219,7 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::get('customer-for-select', 'forSelect');
             Route::post('customer-create', 'store');
             Route::get('customer-show/{id}', 'show');
-            Route::put('customer-update/{id}', 'update');
+            Route::match(['put', 'post'], 'customer-update/{id}', 'update');
             Route::delete('customer-delete/{id}', 'destroy');
             Route::get('customer-stats/{id}', 'stats');
             Route::post('customer-send-reminders/{id}', 'sendReminders');

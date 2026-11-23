@@ -68,6 +68,7 @@ class CustomerController extends Controller
         );
 
         $this->storeNationalIdImages($request, $customer);
+        $customer->refresh();
 
         return $this->createdResponse(
             new CustomerResource($customer),
@@ -129,6 +130,7 @@ class CustomerController extends Controller
         );
 
         $this->storeNationalIdImages($request, $customer);
+        $customer->refresh();
 
         return $this->successResponse(
             new CustomerResource($customer),

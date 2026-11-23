@@ -20,6 +20,12 @@ class CustomerResource extends JsonResource
             'email' => $this->email,
             'phone' => $this->phone,
             'national_id' => $this->national_id,
+            'national_id_front_url' => $this->national_id_front_path
+                ? asset('storage/'.$this->national_id_front_path)
+                : null,
+            'national_id_back_url' => $this->national_id_back_path
+                ? asset('storage/'.$this->national_id_back_path)
+                : null,
             'address' => $this->address,
             'governorate' => $this->governorate,
             'job' => $this->job,
