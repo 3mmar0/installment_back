@@ -136,6 +136,18 @@ class InstallmentService implements InstallmentServiceInterface
                 : null;
         }
 
+        if (array_key_exists('invoice_price', $data)) {
+            $installment->invoice_price = $data['invoice_price'] !== null
+                ? round((float) $data['invoice_price'], 2)
+                : null;
+        }
+
+        if (array_key_exists('down_payment', $data)) {
+            $installment->down_payment = $data['down_payment'] !== null
+                ? round((float) $data['down_payment'], 2)
+                : null;
+        }
+
         $installment->save();
 
         return $installment->refresh()->load(['customer', 'items']);
