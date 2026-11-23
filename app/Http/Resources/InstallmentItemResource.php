@@ -35,10 +35,6 @@ class InstallmentItemResource extends JsonResource
                 $this->relationLoaded('installment'),
                 fn () => $this->installment?->name
             ),
-            'customer_id' => $this->when(
-                $this->relationLoaded('installment'),
-                fn () => $this->installment?->customer_id
-            ),
             'customer_name' => $this->when(
                 $this->relationLoaded('installment'),
                 fn () => $this->installment?->customer?->name
