@@ -29,8 +29,39 @@ class InstallmentPaymentApplier
         $alreadyPaid = round((float) ($locked->paid_amount ?? 0), 2);
         $remaining = round($scheduled - $alreadyPaid, 2);
 
+        // Overpayment: pay off this item fully, then apply excess to next items
         if ($paidAmount > $remaining + 0.001) {
-            throw PaymentException::amountMismatch($remaining);
+            $excess = round($paidAmount - $remaining, 2);
+
+            $paymentNote = $this->mergeNote(
+                $locked->note,
+                $this->mergeNote(
+                    $note,
+                    sprintf('دفعة %s ج.م.', number_format($paidAmount, 2))
+                )
+            );
+
+            // Mark current item as fully paid
+            $locked->update([
+                'paid_at' => now(),
+                'paid_amount' => $scheduled,
+                'status' => 'paid',
+                'reference' => $reference,
+                'note' => $this->mergeNote(
+                    $paymentNote,
+                    sprintf('تم تطبيق %s ج.م على الأقساط التالية.', number_format($excess, 2))
+                ),
+            ]);
+
+            // Apply excess to subsequent unpaid items
+            $this->applyExcessToNextItems($locked, $excess, $reference);
+
+            $installment = $locked->installment;
+            if ($installment && $installment->items()->where('status', '!=', 'paid')->count() === 0) {
+                $installment->update(['status' => 'completed']);
+            }
+
+            return $locked->refresh();
         }
 
         $newPaid = round($alreadyPaid + $paidAmount, 2);
@@ -139,6 +170,65 @@ class InstallmentPaymentApplier
         }
 
         return $locked->refresh();
+    }
+
+    private function applyExcessToNextItems(InstallmentItem $source, float $excess, ?string $reference): void
+    {
+        $nextItems = InstallmentItem::query()
+            ->where('installment_id', $source->installment_id)
+            ->where('id', '!=', $source->id)
+            ->where('status', '!=', 'paid')
+            ->where(function ($query) use ($source) {
+                $query->where('due_date', '>', $source->due_date)
+                    ->orWhere(function ($sameDay) use ($source) {
+                        $sameDay->whereDate('due_date', $source->due_date)
+                            ->where('id', '>', $source->id);
+                    });
+            })
+            ->orderBy('due_date')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $remaining = round($excess, 2);
+
+        foreach ($nextItems as $next) {
+            if ($remaining <= 0.001) {
+                break;
+            }
+
+            $nextScheduled = round((float) $next->amount, 2);
+            $nextAlreadyPaid = round((float) ($next->paid_amount ?? 0), 2);
+            $nextRemaining = round($nextScheduled - $nextAlreadyPaid, 2);
+
+            if ($nextRemaining <= 0.001) {
+                continue;
+            }
+
+            $applyToThis = min($remaining, $nextRemaining);
+            $newPaid = round($nextAlreadyPaid + $applyToThis, 2);
+            $stillOwed = round($nextScheduled - $newPaid, 2);
+
+            $excessNote = sprintf('يشمل %s ج.م من دفعة مقدّمة.', number_format($applyToThis, 2));
+
+            if ($stillOwed <= 0.001) {
+                $next->update([
+                    'paid_at' => now(),
+                    'paid_amount' => $newPaid,
+                    'status' => 'paid',
+                    'reference' => $reference,
+                    'note' => $this->mergeNote($next->note, $excessNote),
+                ]);
+            } else {
+                $next->update([
+                    'paid_amount' => $newPaid,
+                    'status' => 'partial',
+                    'note' => $this->mergeNote($next->note, $excessNote),
+                ]);
+            }
+
+            $remaining = round($remaining - $applyToThis, 2);
+        }
     }
 
     private function carryRemainder(InstallmentItem $locked, float $remainder): void
