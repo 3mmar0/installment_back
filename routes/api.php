@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\SubscriptionPurchaseRequestController;
 use App\Http\Controllers\Api\SubscriptionTrialController;
 use App\Http\Controllers\Api\SystemSettingsController;
+use App\Http\Controllers\Api\AdminClientAccountController;
 use App\Http\Controllers\Api\UnifiedAuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AdminLimitsController;
@@ -165,6 +166,12 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::get('admin/system/announcements/{broadcastId}/viewers', 'announcementViewers');
             Route::post('admin/system/broadcast-notification', 'broadcastNotification');
             Route::post('admin/system/sync-free-plan', 'syncFreePlan');
+        });
+
+        Route::controller(AdminClientAccountController::class)->group(function () {
+            Route::get('admin/client-accounts', 'index');
+            Route::get('admin/client-accounts/{id}', 'show')->whereNumber('id');
+            Route::delete('admin/client-accounts/{id}', 'destroy')->whereNumber('id');
         });
 
         Route::get('settings/onboarding-admin', [SettingsController::class, 'onboardingAdmin']);

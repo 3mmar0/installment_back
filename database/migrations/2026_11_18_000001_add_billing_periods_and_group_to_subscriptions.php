@@ -9,8 +9,10 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Extend the duration enum on subscriptions to include quarterly and semi_annual
-        DB::statement("ALTER TABLE subscriptions MODIFY COLUMN duration ENUM('monthly','quarterly','semi_annual','yearly') NOT NULL DEFAULT 'monthly'");
+        // MySQL enum expansion — SQLite stores duration as a plain string already.
+        if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+            DB::statement("ALTER TABLE subscriptions MODIFY COLUMN duration ENUM('monthly','quarterly','semi_annual','yearly') NOT NULL DEFAULT 'monthly'");
+        }
 
         Schema::table('subscriptions', function (Blueprint $table) {
             $table->string('group_name')->nullable()->after('slug');
@@ -24,6 +26,8 @@ return new class extends Migration
             $table->dropColumn(['group_name', 'original_price']);
         });
 
-        DB::statement("ALTER TABLE subscriptions MODIFY COLUMN duration ENUM('monthly','yearly') NOT NULL DEFAULT 'monthly'");
+        if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+            DB::statement("ALTER TABLE subscriptions MODIFY COLUMN duration ENUM('monthly','yearly') NOT NULL DEFAULT 'monthly'");
+        }
     }
 };
