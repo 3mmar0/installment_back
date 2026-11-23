@@ -172,6 +172,8 @@ class InstallmentService implements InstallmentServiceInterface
                     ? trim((string) $data['name'])
                     : null,
                 'total_amount' => $total,
+                'invoice_price' => isset($data['invoice_price']) ? round((float) $data['invoice_price'], 2) : null,
+                'down_payment' => isset($data['down_payment']) ? round((float) $data['down_payment'], 2) : null,
                 'products' => $data['products'] ?? [],
                 'start_date' => $start->toDateString(),
                 'months' => $months,
