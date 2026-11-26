@@ -166,6 +166,9 @@ Route::middleware(['auth:sanctum', 'vendor', 'track.activity'])->group(function 
             Route::get('admin/system/announcements/{broadcastId}/viewers', 'announcementViewers');
             Route::post('admin/system/broadcast-notification', 'broadcastNotification');
             Route::post('admin/system/sync-free-plan', 'syncFreePlan');
+            Route::get('admin/features/stats', 'featureStats');
+            Route::get('admin/features/users', 'featureUsers');
+            Route::post('admin/features/toggle', 'featureToggle');
         });
 
         Route::controller(AdminClientAccountController::class)->group(function () {

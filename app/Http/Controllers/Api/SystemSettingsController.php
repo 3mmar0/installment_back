@@ -7,8 +7,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Http\Traits\ApiResponse;
 use App\Jobs\BroadcastNotificationJob;
+use App\Models\Customer;
 use App\Models\Notification;
 use App\Models\User;
+use App\Models\UserLimit;
 use App\Services\QueueManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -280,6 +282,145 @@ class SystemSettingsController extends Controller
         return $this->successResponse(
             $result,
             "تم تحديث {$result['synced']} مستخدم إلى {$result['plan']}"
+        );
+    }
+
+    public function featureStats(): JsonResponse
+    {
+        $limits = UserLimit::query()
+            ->join('users', 'users.id', '=', 'user_limits.user_id')
+            ->where('users.role', UserRole::User->value)
+            ->select('user_limits.*')
+            ->get();
+
+        $totalUsers = $limits->count();
+
+        $assistantEnabled = $limits->filter(fn (UserLimit $l) => !empty(($l->features ?? [])['assistant']))->count();
+        $whatsappEnabled = $limits->filter(fn (UserLimit $l) => !empty(($l->features ?? [])['whatsapp']))->count();
+
+        $assistantActiveUsers = $limits->filter(fn (UserLimit $l) => ($l->assistant_messages_used ?? 0) > 0)->count();
+        $whatsappActiveUsers = $limits->filter(fn (UserLimit $l) => ($l->whatsapp_messages_used ?? 0) > 0)->count();
+
+        $totalAssistantMessages = $limits->sum('assistant_messages_used');
+        $totalWhatsappMessages = $limits->sum('whatsapp_messages_used');
+
+        $whatsappCustomersEnabled = Customer::query()
+            ->where('whatsapp_auto_reminders', true)
+            ->count();
+        $whatsappCustomersTotal = Customer::query()->count();
+
+        return $this->successResponse([
+            'total_users' => $totalUsers,
+            'assistant' => [
+                'enabled_count' => $assistantEnabled,
+                'disabled_count' => $totalUsers - $assistantEnabled,
+                'active_users' => $assistantActiveUsers,
+                'total_messages' => $totalAssistantMessages,
+            ],
+            'whatsapp' => [
+                'enabled_count' => $whatsappEnabled,
+                'disabled_count' => $totalUsers - $whatsappEnabled,
+                'active_users' => $whatsappActiveUsers,
+                'total_messages' => $totalWhatsappMessages,
+                'customers_with_auto_reminders' => $whatsappCustomersEnabled,
+                'customers_total' => $whatsappCustomersTotal,
+            ],
+        ], 'تم جلب إحصائيات المميزات بنجاح');
+    }
+
+    public function featureUsers(Request $request): JsonResponse
+    {
+        $feature = $request->query('feature');
+        $sortBy = $request->query('sort', 'usage');
+
+        $query = UserLimit::query()
+            ->with('user:id,name,email,phone,last_active_at')
+            ->whereHas('user', fn ($q) => $q->where('role', UserRole::User->value));
+
+        $limits = $query->get();
+
+        $mapped = $limits->map(function (UserLimit $limit) {
+            $features = $limit->features ?? [];
+            $user = $limit->user;
+
+            return [
+                'user_id' => $limit->user_id,
+                'name' => $user?->name,
+                'email' => $user?->email,
+                'phone' => $user?->phone,
+                'last_active_at' => $user?->last_active_at?->toISOString(),
+                'subscription_name' => $limit->subscription_name,
+                'assistant' => [
+                    'enabled' => !empty($features['assistant']),
+                    'messages_used' => $limit->assistant_messages_used ?? 0,
+                    'messages_limit' => $limit->getEffectiveCap('assistant_messages'),
+                    'messages_bonus' => $limit->assistant_messages_bonus ?? 0,
+                ],
+                'whatsapp' => [
+                    'enabled' => !empty($features['whatsapp']),
+                    'messages_used' => $limit->whatsapp_messages_used ?? 0,
+                    'messages_limit' => $limit->getEffectiveCap('whatsapp_messages'),
+                    'messages_bonus' => $limit->whatsapp_messages_bonus ?? 0,
+                ],
+                'usage_period' => $limit->usage_period,
+            ];
+        });
+
+        if ($feature === 'assistant') {
+            $mapped = $mapped->filter(fn ($u) => $u['assistant']['enabled']);
+        } elseif ($feature === 'whatsapp') {
+            $mapped = $mapped->filter(fn ($u) => $u['whatsapp']['enabled']);
+        }
+
+        if ($sortBy === 'usage') {
+            $mapped = $mapped->sortByDesc(fn ($u) => $u['assistant']['messages_used'] + $u['whatsapp']['messages_used']);
+        } else {
+            $mapped = $mapped->sortBy('name');
+        }
+
+        return $this->successResponse(
+            $mapped->values(),
+            'تم جلب بيانات المستخدمين بنجاح'
+        );
+    }
+
+    public function featureToggle(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'feature' => ['required', 'string', 'in:assistant,whatsapp'],
+            'enabled' => ['required', 'boolean'],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['integer', 'distinct', Rule::exists('users', 'id')],
+        ]);
+
+        $feature = $data['feature'];
+        $enabled = $data['enabled'];
+        $userIds = $data['user_ids'] ?? null;
+
+        $query = UserLimit::query()
+            ->whereHas('user', fn ($q) => $q->where('role', UserRole::User->value));
+
+        if ($userIds !== null) {
+            $query->whereIn('user_id', $userIds);
+        }
+
+        $updated = 0;
+        $query->chunkById(100, function ($limits) use ($feature, $enabled, &$updated) {
+            foreach ($limits as $limit) {
+                $features = $limit->features ?? [];
+                $features[$feature] = $enabled;
+                $limit->update(['features' => $features]);
+                $updated++;
+            }
+        });
+
+        $status = $enabled ? 'تفعيل' : 'تعطيل';
+        $featureLabel = $feature === 'assistant' ? 'المساعد الذكي' : 'رسائل الواتساب';
+        $scope = $userIds !== null ? "لـ {$updated} مستخدم" : "لجميع المستخدمين ({$updated})";
+
+        return $this->successResponse(
+            ['updated' => $updated, 'feature' => $feature, 'enabled' => $enabled],
+            "تم {$status} {$featureLabel} {$scope}"
         );
     }
 }
