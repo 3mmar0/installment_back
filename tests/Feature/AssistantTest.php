@@ -375,6 +375,8 @@ it('asks for missing installment fields with needs_input instead of inventing su
     expect($result['ok'])->toBeTrue()
         ->and($result['result']['status'] ?? null)->toBe('needs_input')
         ->and($result['result']['missing'] ?? [])->toContain('total_amount')
+        ->and($result['result']['next_question_ar'] ?? '')->toContain('ابعتها مرة واحدة')
+        ->and($result['result']['next_question_ar'] ?? '')->toContain('المبلغ الإجمالي')
         ->and($result['pending_action'] ?? null)->toBeNull();
 });
 
@@ -451,7 +453,10 @@ it('exposes egyptian dialect guidance and timezone in the system prompt memory',
         ->and($prompt)->toContain('ممنوع تقول')
         ->and($prompt)->toContain('ممنوع تعرض أي id رقمي')
         ->and($prompt)->toContain('الاسم + رقم التليفون')
-        ->and($prompt)->toContain('العميل المختار حالياً');
+        ->and($prompt)->toContain('العميل المختار حالياً')
+        ->and($prompt)->toContain('إضافة عميل جديد')
+        ->and($prompt)->toContain('ممنوع تماماً أثناء إضافة عميل جديد')
+        ->and($prompt)->toContain('دفعة واحدة');
 });
 
 it('never disables gemini tls verification in production', function () {

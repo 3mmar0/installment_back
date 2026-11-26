@@ -35,7 +35,7 @@ class AssistantToolRunner
         return [
             [
                 'name' => 'search_customers',
-                'description' => 'Search this merchant\'s customers only by name/phone/national id/id. If count=0 ask to clarify. If count>1 return status=ambiguous and ask user to pick by id. Never invent customers.',
+                'description' => 'Search EXISTING customers only (lookup / pay / summarize). NEVER use while creating a NEW customer — when the user is adding a customer, treat their reply as the new name. If count=0 say honestly none found. If count>1 return status=ambiguous with real rows only. Never invent customers or example names.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -129,7 +129,7 @@ class AssistantToolRunner
             ],
             [
                 'name' => 'propose_create_customer',
-                'description' => 'Propose creating a customer only. Does not save until the user confirms.',
+                'description' => 'Propose creating a NEW customer. Ask for all customer fields in ONE checklist message (name required; phone/national_id/governorate/address/job/notes optional). When the user gives a name during create flow, accept it as the new customer name — do not search existing customers. Does not save until the user confirms.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -147,7 +147,7 @@ class AssistantToolRunner
             ],
             [
                 'name' => 'propose_create_installment',
-                'description' => 'Propose creating an installment for an EXISTING customer after an interactive chat gathered the fields. Call ONLY when you already have customer (id or clear unique name), total_amount, and months. Ask the user step-by-step first; do not call this on the first vague "create installment" message. Supports prepaid_months. Does not save until the user confirms in the app.',
+                'description' => 'Propose creating an installment for an EXISTING customer after chat gathered the fields. Call ONLY when you already have customer (id or clear unique name), total_amount, and months. Ask for ALL missing fields in ONE numbered checklist (not one field per message). Do not call on the first vague "create installment" message. Supports prepaid_months. Does not save until the user confirms in the app.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -173,7 +173,7 @@ class AssistantToolRunner
             ],
             [
                 'name' => 'propose_create_customer_with_installment',
-                'description' => 'Propose creating a NEW customer and an installment in one confirmation AFTER gathering customer+installment fields interactively in chat. Use when the user wants a new customer with an installment together. Do not call until name, total_amount, and months are known.',
+                'description' => 'Propose creating a NEW customer and an installment in one confirmation AFTER gathering customer+installment fields in chat. Ask for ALL missing fields in ONE checklist. Do not search_customers for the new customer name. Use when the user wants a new customer with an installment together. Do not call until name, total_amount, and months are known.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -763,7 +763,7 @@ class AssistantToolRunner
                     'interactive' => true,
                     'missing' => ['customer'],
                     'missing_fields' => ['customer'],
-                    'next_question_ar' => 'أنهي عميل؟ قول الاسم أو اختار من قائمة العملاء.',
+                    'next_question_ar' => "ناقص بيانات القسط — ابعتها مرة واحدة:\n1) اسم العميل (عميل موجود)\n2) المبلغ الإجمالي\n3) عدد الأشهر",
                 ],
             ];
         }
@@ -1294,14 +1294,25 @@ class AssistantToolRunner
      */
     private function nextInstallmentQuestion(array $missing): string
     {
-        $first = $missing[0] ?? '';
+        if ($missing === []) {
+            return 'كمّل بيانات القسط الناقصة.';
+        }
 
-        return match ($first) {
-            'customer' => 'أنهي عميل للقسط؟ قول اسم العميل.',
-            'total_amount' => 'المبلغ الإجمالي للقسط كام؟',
-            'months' => 'عدد الأشهر كام؟',
-            default => 'كمّل بيانات القسط الناقصة.',
-        };
+        $labels = [
+            'customer' => 'اسم العميل (عميل موجود)',
+            'total_amount' => 'المبلغ الإجمالي',
+            'months' => 'عدد الأشهر',
+        ];
+
+        $lines = ['ناقص البيانات دي — ابعتها مرة واحدة:'];
+        $index = 1;
+        foreach ($missing as $field) {
+            $label = $labels[$field] ?? $field;
+            $lines[] = $index.') '.$label;
+            $index++;
+        }
+
+        return implode("\n", $lines);
     }
 
     /**
