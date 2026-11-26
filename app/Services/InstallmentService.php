@@ -444,14 +444,14 @@ class InstallmentService implements InstallmentServiceInterface
 
         $collectionGrowth = $lastMonth->isSameMonth($now) ? 0 : ($collectedLastMonth > 0 ? (($collectedThisMonth - $collectedLastMonth) / $collectedLastMonth) * 100 : 0);
 
-        // Detailed upcoming payments table
-        $upcoming = $baseQuery->clone()
+        // Detailed upcoming payments table — show next-7-days first, fall back to nearest
+        $upcomingBaseBuilder = fn () => $baseQuery->clone()
             ->join('installment_items', 'installment_items.installment_id', '=', 'installments.id')
             ->join('customers', 'customers.id', '=', 'installments.customer_id')
             ->whereNull('installment_items.paid_at')
             ->where('installment_items.status', '!=', 'paid')
             ->where('installments.status', 'active')
-            ->whereBetween('installment_items.due_date', [$now, $soon])
+            ->where('installment_items.due_date', '>=', $now)
             ->orderBy('installment_items.due_date')
             ->select(
                 'installments.id as installment_id',
@@ -466,10 +466,18 @@ class InstallmentService implements InstallmentServiceInterface
                 'customers.name as customer_name',
                 'customers.email as customer_email',
                 'customers.phone as customer_phone'
-            )
+            );
+
+        $upcoming = $upcomingBaseBuilder()
+            ->where('installment_items.due_date', '<=', $soon)
             ->limit(20)
-            ->get()
-            ->map(function ($item) {
+            ->get();
+
+        if ($upcoming->isEmpty()) {
+            $upcoming = $upcomingBaseBuilder()->limit(10)->get();
+        }
+
+        $upcoming = $upcoming->map(function ($item) {
                 return [
                     'item_id' => $item->item_id,
                     'installment_id' => $item->installment_id,
