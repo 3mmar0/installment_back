@@ -248,7 +248,7 @@ class AssistantToolRunner
                 'description' => 'Get overall business stats: total customers, installments, amounts, overdue count, collection rate. Use for dashboard-style questions like «إيه الأخبار» or «ملخص الشغل» or «إيه آخر الأرقام».',
                 'parameters' => [
                     'type' => 'object',
-                    'properties' => [],
+                    'properties' => (object) [],
                 ],
             ],
         ];
