@@ -238,8 +238,7 @@ class CustomerStatementController extends Controller
 HTML;
 
         // ── Installments ─────────────────────────────────────────────────────
-        $multipleInstallments = $installments->count() > 1;
-        $installmentsHtml     = '';
+        $installmentsHtml = '';
 
         if ($installments->isEmpty()) {
             $installmentsHtml = '<p style="color:#64748b;text-align:center;padding:20px">&#1604;&#1575; &#1578;&#1608;&#1580;&#1583; &#1576;&#1610;&#1575;&#1606;&#1575;&#1578; &#1576;&#1575;&#1604;&#1601;&#1578;&#1585;&#1577; &#1575;&#1604;&#1605;&#1581;&#1583;&#1583;&#1577;</p>';
@@ -283,16 +282,22 @@ TR;
                     $tbody = '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:14px">&#1604;&#1575; &#1578;&#1608;&#1580;&#1583; &#1583;&#1601;&#1593;&#1575;&#1578; &#1601;&#1610; &#1575;&#1604;&#1601;&#1578;&#1585;&#1577; &#1575;&#1604;&#1605;&#1581;&#1583;&#1583;&#1577;</td></tr>';
                 }
 
-                // Installment name subheader (only when multiple)
-                $instHeader = '';
-                if ($multipleInstallments) {
-                    $instName   = $e($inst->name ?: ('&#1602;&#1587;&#1591; #' . $inst->id));
-                    $instHeader = <<<HEAD
+                $instName = $e($inst->name ?: ('&#1602;&#1587;&#1591; #' . $inst->id));
+                $metaParts = [];
+                $metaParts[] = '&#1587;&#1593;&#1585; &#1575;&#1604;&#1602;&#1587;&#1591;: '.$this->fmt((float) $inst->total_amount);
+                if ($inst->invoice_price !== null) {
+                    $metaParts[] = '&#1587;&#1593;&#1585; &#1575;&#1604;&#1601;&#1575;&#1578;&#1608;&#1585;&#1577;: '.$this->fmt((float) $inst->invoice_price);
+                }
+                if ($inst->down_payment !== null) {
+                    $metaParts[] = '&#1575;&#1604;&#1605;&#1602;&#1583;&#1605;: '.$this->fmt((float) $inst->down_payment);
+                }
+                $metaHtml = implode(' &nbsp;&middot;&nbsp; ', $metaParts);
+                $instHeader = <<<HEAD
 <div style="margin-top:16px;margin-bottom:6px;border-right:4px solid #2563eb;padding:7px 12px;background:#eff6ff;border-radius:0 8px 8px 0">
   <strong style="font-size:11.5pt;color:#1e3a8a">{$instName}</strong>
+  <div style="font-size:9.5pt;color:#334155;margin-top:4px">{$metaHtml}</div>
 </div>
 HEAD;
-                }
 
                 $installmentsHtml .= $instHeader . <<<TABLE
 <table class="data">
@@ -365,14 +370,21 @@ HTML;
             $instSheet = $spreadsheet->createSheet();
             $instSheet->setTitle($title);
 
+            $instSheet->setCellValue('A1', 'سعر القسط');
+            $instSheet->setCellValue('B1', (float) $inst->total_amount);
+            $instSheet->setCellValue('A2', 'سعر الفاتورة');
+            $instSheet->setCellValue('B2', $inst->invoice_price !== null ? (float) $inst->invoice_price : '');
+            $instSheet->setCellValue('A3', 'المقدم');
+            $instSheet->setCellValue('B3', $inst->down_payment !== null ? (float) $inst->down_payment : '');
+
             $headers = ['#', 'تاريخ الاستحقاق', 'المبلغ', 'المدفوع', 'تاريخ السداد', 'المرجع', 'الحالة'];
             $col     = 1;
             foreach ($headers as $h) {
-                $instSheet->setCellValue(Coordinate::stringFromColumnIndex($col).'1', $h);
+                $instSheet->setCellValue(Coordinate::stringFromColumnIndex($col).'5', $h);
                 $col++;
             }
 
-            $rowNum = 2;
+            $rowNum = 6;
             $itemNum = 1;
             foreach ($inst->items as $item) {
                 $due    = \Carbon\Carbon::parse($item->due_date);

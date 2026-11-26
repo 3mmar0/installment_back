@@ -89,6 +89,7 @@ class AssistantOrchestrator
         $messages = $this->toLlmMessages($turns);
         $pendingAction = null;
         $navigation = null;
+        $clientAction = null;
         $reply = '';
         $sawFailedTool = false;
         $billableReadSuccess = false;
@@ -162,6 +163,9 @@ class AssistantOrchestrator
                     if (! empty($toolResult['navigation'])) {
                         $navigation = $toolResult['navigation'];
                     }
+                    if (! empty($toolResult['client_action']) && is_array($toolResult['client_action'])) {
+                        $clientAction = $toolResult['client_action'];
+                    }
 
                     $responsePayload = [
                         'ok' => (bool) ($toolResult['ok'] ?? false),
@@ -170,6 +174,7 @@ class AssistantOrchestrator
                         'data' => $toolResult['result'] ?? null,
                         'pending_action' => $toolResult['pending_action'] ?? null,
                         'navigation' => $toolResult['navigation'] ?? null,
+                        'client_action' => $toolResult['client_action'] ?? null,
                     ];
 
                     $messages[] = [
@@ -237,7 +242,8 @@ class AssistantOrchestrator
             $sessionId,
             $pendingAction,
             $navigation,
-            $this->sessions->remainingMonthlyMessages($user->id)
+            $this->sessions->remainingMonthlyMessages($user->id),
+            $clientAction
         );
     }
 
@@ -462,8 +468,10 @@ class AssistantOrchestrator
 - «ورّيني العملاء» / «مين عندي» => list_customers — اعرض القائمة في الشات
 - «دور على محمد» / «ابحث عن عميل اسمه...» => search_customers (بحث عن عميل موجود فقط)
 - «ضيف عميل» / «عميل جديد» => اطلب بيانات العميل دفعة واحدة ثم propose_create_customer — ممنوع search_customers
-- «لخّص أقساط فلان» / «حساب فلان إيه» => summarize_customer_installments — اعرض الملخص في الشات
-- «ضيف قسط» / «اعمل تقسيطة» / «قسط جديد» => اطلب بيانات القسط دفعة واحدة ثم propose_create_installment
+- «لخّص أقساط فلان» / «حساب فلان إيه» / «كشف حساب» => summarize_customer_installments — اعرض الملخص الكامل في الشات (سعر الفاتورة + المقدم + سعر القسط + المرفقات إن وجدت)
+- «طلّع كشف حساب PDF/Excel» / «اطبع كشف الحساب» => export_customer_statement بعد تحديد العميل
+- «اطبع الوصل» / «ابعت وصل الدفع» / «فاتورة الدفعة» => prepare_payment_receipt
+- «ضيف قسط» / «اعمل تقسيطة» / «قسط جديد» => اطلب بيانات القسط دفعة واحدة (منها سعر الفاتورة والمقدم وسعر القسط) ثم propose_create_installment
 - «سدد لـ...» / «حط دفعة» => propose_pay_installment_item بعد التوضيح
 - «لا» / «عدّل المبلغ لـ...» / «الاسم غلط، خليه...» => عدّل المسودة فقط ومتبدأش جمع البيانات من الأول
 - «إيه الأخبار» / «ملخص الشغل» / «إيه آخر الأرقام» => get_business_summary
@@ -513,7 +521,7 @@ class AssistantOrchestrator
 ## إنشاء قسط / عميل+قسط (دفعة واحدة)
 لما المستخدم يطلب قسط جديد أو عميل مع قسط:
 1) اطلب كل البيانات الناقصة في رسالة واحدة كقائمة مرقّمة — مش سؤال واحد لكل حقل.
-2) بيانات القسط: العميل الموجود (أو بيانات عميل جديد) · اسم القسط · المبلغ الإجمالي · عدد الأشهر · شهور مقدمة (اختياري) · تاريخ البدء · ملاحظات (اختياري).
+2) بيانات القسط: العميل الموجود (أو بيانات عميل جديد) · اسم القسط · سعر الفاتورة (اختياري) · المقدم (اختياري) · سعر/إجمالي القسط · عدد الأشهر · شهور مقدمة (اختياري) · تاريخ البدء · ملاحظات (اختياري).
 3) لو المستخدم بعت بيانات ناقصة: أكّد اللي اتقبل («تمام الاسم والمبلغ») واطلب الباقي كله في نفس الرد كقائمة.
 4) بعد اكتمال المطلوب: لخّص ثم استدعِ propose_* مرة واحدة فقط.
 5) لو عميل+قسط معاً استخدم propose_create_customer_with_installment — وبرضه من غير search على اسم العميل الجديد.
@@ -528,7 +536,9 @@ class AssistantOrchestrator
   • أحمد محمد — 01012345678
   • سارة علي — 01123456789
 - ممنوع تخترع أمثلة عملاء أو تعرض أسماء مش راجعة من الأداة.
-- لما تعرض أقساط: اسم القسط + المبلغ/المتبقي/الحالة، من غير رقم id.
+- لما تعرض كشف حساب/أقساط: لكل قسط اذكر اسم القسط + سعر الفاتورة (لو موجود) + المقدم (لو موجود) + سعر القسط/الإجمالي + المدفوع + المتبقي + الحالة، ومن غير رقم id. لو في مرفق فاتورة أو صور بطاقة قول إنهم موجودين بصراحة من نتيجة الأداة فقط.
+- بعد ملخص كشف الحساب اسأل لو عايز تصدير PDF أو Excel.
+- بعد سداد ناجح اسأل لو عايز يعرض/يشارك وصل الدفع.
 - لو الأداة رجّعت status=ambiguous بعملاء حقيقيين: اعرض الاسم والتليفون واسأل «مين فيهم؟» — متسألش بالـ id.
 - لو count=0 أو مفيش نتائج: قول بصراحة مفيش عميل مطابق — متلفّقش أسماء.
 - متكتبش كلمات إنجليزي زي id / status / ok في الرد.
@@ -812,13 +822,15 @@ PROMPT;
         string $sessionId,
         ?array $pendingAction,
         ?array $navigation,
-        int $remaining
+        int $remaining,
+        ?array $clientAction = null
     ): array {
         return [
             'reply' => $reply,
             'session_id' => $sessionId,
             'pending_action' => $pendingAction,
             'navigation' => $navigation,
+            'client_action' => $clientAction,
             'remaining_today' => $remaining,
         ];
     }
@@ -859,6 +871,8 @@ PROMPT;
             'list_customers',
             'get_customer',
             'summarize_customer_installments',
+            'export_customer_statement',
+            'prepare_payment_receipt',
             'get_installment',
             'find_open_installment_item',
             'open_screen',

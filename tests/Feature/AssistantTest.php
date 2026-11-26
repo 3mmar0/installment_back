@@ -456,7 +456,48 @@ it('exposes egyptian dialect guidance and timezone in the system prompt memory',
         ->and($prompt)->toContain('العميل المختار حالياً')
         ->and($prompt)->toContain('إضافة عميل جديد')
         ->and($prompt)->toContain('ممنوع تماماً أثناء إضافة عميل جديد')
-        ->and($prompt)->toContain('دفعة واحدة');
+        ->and($prompt)->toContain('دفعة واحدة')
+        ->and($prompt)->toContain('export_customer_statement')
+        ->and($prompt)->toContain('سعر الفاتورة');
+});
+
+it('summarizes installment invoice price and down payment for account statements', function () {
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create(['name' => 'عميل كشف']);
+    Installment::factory()->forMerchant($merchant)->create([
+        'customer_id' => $customer->id,
+        'name' => 'موبايل',
+        'total_amount' => 12000,
+        'invoice_price' => 15000,
+        'down_payment' => 3000,
+        'months' => 12,
+    ]);
+
+    $runner = app(AssistantToolRunner::class);
+    $result = $runner->run('summarize_customer_installments', [
+        'customer_id' => $customer->id,
+    ], $merchant);
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['result']['plans'][0]['invoice_price'])->toBe(15000.0)
+        ->and($result['result']['plans'][0]['down_payment'])->toBe(3000.0)
+        ->and($result['result']['total_invoice_price'])->toBe(15000.0);
+});
+
+it('prepares customer statement export client action for pdf', function () {
+    $merchant = actingAsMerchant();
+    $customer = Customer::factory()->forMerchant($merchant)->create(['name' => 'عميل تصدير']);
+    $runner = app(AssistantToolRunner::class);
+
+    $result = $runner->run('export_customer_statement', [
+        'customer_id' => $customer->id,
+        'format' => 'pdf',
+    ], $merchant);
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['client_action']['type'] ?? null)->toBe('download_statement')
+        ->and($result['client_action']['format'] ?? null)->toBe('pdf')
+        ->and($result['client_action']['customer_id'] ?? null)->toBe($customer->id);
 });
 
 it('never disables gemini tls verification in production', function () {

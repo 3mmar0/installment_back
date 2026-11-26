@@ -3,6 +3,7 @@
 namespace App\Services\Assistant;
 
 use App\Helpers\GovernorateHelper;
+use App\Helpers\LimitsHelper;
 use App\Helpers\NationalIdHelper;
 use App\Models\Customer;
 use App\Models\Installment;
@@ -77,7 +78,7 @@ class AssistantToolRunner
             ],
             [
                 'name' => 'summarize_customer_installments',
-                'description' => 'Summarize installments for one owned customer. If multiple name matches, returns status=ambiguous instead of guessing.',
+                'description' => 'Full account summary for one owned customer (كشف حساب): plans with invoice_price, down_payment, installment total, months, attachment/id-card flags, and installment items. Use for «كشف حساب» / «لخّص أقساط». If multiple name matches, returns status=ambiguous instead of guessing.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -87,8 +88,44 @@ class AssistantToolRunner
                 ],
             ],
             [
+                'name' => 'export_customer_statement',
+                'description' => 'Prepare customer account statement export as PDF or Excel for the mobile app to download/share. Use when user asks to print/download/export كشف حساب. Requires a resolved customer.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'customer_id' => ['type' => 'integer'],
+                        'customer_query' => ['type' => 'string'],
+                        'format' => [
+                            'type' => 'string',
+                            'description' => 'pdf or excel (default pdf)',
+                        ],
+                        'installment_id' => [
+                            'type' => 'integer',
+                            'description' => 'Optional: limit statement to one installment',
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'name' => 'prepare_payment_receipt',
+                'description' => 'Prepare a paid installment-item receipt for the app to view or share (وصل دفع / فاتورة دفعة). Prefer after a payment, or when user asks to print/send a receipt.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'item_id' => ['type' => 'integer'],
+                        'installment_id' => ['type' => 'integer'],
+                        'customer_id' => ['type' => 'integer'],
+                        'customer_query' => ['type' => 'string'],
+                        'mode' => [
+                            'type' => 'string',
+                            'description' => 'view or share (default view)',
+                        ],
+                    ],
+                ],
+            ],
+            [
                 'name' => 'get_installment',
-                'description' => 'Get one installment by id and prepare navigation to installment details.',
+                'description' => 'Get one installment by id including invoice_price, down_payment, attachment flag, and prepare navigation to installment details.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -153,7 +190,9 @@ class AssistantToolRunner
                     'properties' => [
                         'customer_id' => ['type' => 'integer'],
                         'customer_query' => ['type' => 'string'],
-                        'total_amount' => ['type' => 'number'],
+                        'total_amount' => ['type' => 'number', 'description' => 'Installment plan total (سعر القسط / إجمالي الأقساط)'],
+                        'invoice_price' => ['type' => 'number', 'description' => 'Optional original invoice/sale price (سعر الفاتورة)'],
+                        'down_payment' => ['type' => 'number', 'description' => 'Optional down payment / مقدم'],
                         'months' => ['type' => 'integer'],
                         'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD absolute date; omit when using start_months_ago'],
                         'start_months_ago' => [
@@ -185,7 +224,9 @@ class AssistantToolRunner
                         'address' => ['type' => 'string'],
                         'notes' => ['type' => 'string'],
                         'job' => ['type' => 'string'],
-                        'total_amount' => ['type' => 'number'],
+                        'total_amount' => ['type' => 'number', 'description' => 'Installment plan total (سعر القسط)'],
+                        'invoice_price' => ['type' => 'number', 'description' => 'Optional invoice/sale price (سعر الفاتورة)'],
+                        'down_payment' => ['type' => 'number', 'description' => 'Optional down payment / مقدم'],
                         'months' => ['type' => 'integer'],
                         'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD absolute date; omit when using start_months_ago'],
                         'start_months_ago' => [
@@ -267,6 +308,8 @@ class AssistantToolRunner
             'list_customers' => $this->listCustomers($args, $user),
             'get_customer' => $this->getCustomer($args, $user),
             'summarize_customer_installments' => $this->summarizeCustomerInstallments($args, $user),
+            'export_customer_statement' => $this->exportCustomerStatement($args, $user),
+            'prepare_payment_receipt' => $this->preparePaymentReceipt($args, $user),
             'get_installment' => $this->getInstallment($args, $user),
             'find_open_installment_item' => $this->findOpenItem($args, $user),
             'open_screen' => $this->openScreen($args, $user),
@@ -407,6 +450,11 @@ class AssistantToolRunner
                 'governorate' => $customer->governorate,
                 'governorate_label' => GovernorateHelper::label($customer->governorate),
                 'address' => $customer->address,
+                'email' => $customer->email,
+                'job' => $customer->job,
+                'notes' => $customer->notes,
+                'has_national_id_front' => filled($customer->national_id_front_path),
+                'has_national_id_back' => filled($customer->national_id_back_path),
             ],
         ];
     }
@@ -436,6 +484,8 @@ class AssistantToolRunner
         $plans = [];
         $totalAmount = 0.0;
         $totalPaid = 0.0;
+        $totalInvoice = 0.0;
+        $totalDownPayment = 0.0;
         $overdueCount = 0;
 
         foreach ($installments as $installment) {
@@ -470,24 +520,54 @@ class AssistantToolRunner
                     'remaining' => $remaining,
                     'status' => $item->status,
                     'overdue' => $isOverdue,
+                    'paid_at' => $item->paid_at?->toDateString(),
+                    'reference' => $item->reference,
                 ];
             }
 
             $planTotal = round((float) $installment->total_amount, 2);
+            $invoicePrice = $installment->invoice_price !== null
+                ? round((float) $installment->invoice_price, 2)
+                : null;
+            $downPayment = $installment->down_payment !== null
+                ? round((float) $installment->down_payment, 2)
+                : null;
             $totalAmount += $planTotal;
             $totalPaid += $planPaid;
+            if ($invoicePrice !== null) {
+                $totalInvoice += $invoicePrice;
+            }
+            if ($downPayment !== null) {
+                $totalDownPayment += $downPayment;
+            }
 
             $planName = trim((string) ($installment->name ?: 'قسط'));
+            $labelBits = [
+                $planName,
+                'سعر القسط '.number_format($planTotal, 0),
+            ];
+            if ($invoicePrice !== null) {
+                $labelBits[] = 'فاتورة '.number_format($invoicePrice, 0);
+            }
+            if ($downPayment !== null) {
+                $labelBits[] = 'مقدم '.number_format($downPayment, 0);
+            }
+            $labelBits[] = 'متبقي '.number_format(round($planRemaining, 2), 0);
+
             $plans[] = [
                 'id' => $installment->id, // internal tool use only — never show in chat
                 'name' => $installment->name,
-                'label' => $planName.' — إجمالي '.number_format($planTotal, 0).' / متبقي '.number_format(round($planRemaining, 2), 0),
+                'label' => implode(' — ', $labelBits),
                 'status' => $installment->status,
                 'total_amount' => $planTotal,
+                'invoice_price' => $invoicePrice,
+                'down_payment' => $downPayment,
                 'paid_amount' => round($planPaid, 2),
                 'remaining_amount' => round($planRemaining, 2),
                 'months' => (int) $installment->months,
                 'start_date' => $installment->start_date?->toDateString() ?? (string) $installment->start_date,
+                'notes' => $installment->notes,
+                'has_attachment' => filled($installment->attachment_path),
                 'items' => $itemsSummary,
             ];
         }
@@ -499,13 +579,173 @@ class AssistantToolRunner
                     'id' => $customer->id,
                     'name' => $customer->name,
                     'phone' => $customer->phone,
+                    'national_id' => $customer->national_id,
+                    'governorate_label' => GovernorateHelper::label($customer->governorate),
+                    'address' => $customer->address,
+                    'job' => $customer->job,
+                    'has_national_id_front' => filled($customer->national_id_front_path),
+                    'has_national_id_back' => filled($customer->national_id_back_path),
                 ],
                 'plans_count' => count($plans),
                 'total_amount' => round($totalAmount, 2),
+                'total_invoice_price' => round($totalInvoice, 2),
+                'total_down_payment' => round($totalDownPayment, 2),
                 'total_paid' => round($totalPaid, 2),
                 'total_remaining' => round($totalAmount - $totalPaid, 2),
                 'overdue_items_count' => $overdueCount,
                 'plans' => $plans,
+                'hint_ar' => 'لو حابب تصدّر كشف الحساب PDF أو Excel قولّي.',
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{ok: bool, result?: array<string, mixed>, error?: string, client_action?: array<string, mixed>}
+     */
+    private function exportCustomerStatement(array $args, User $user): array
+    {
+        if (! $user->isOwner()) {
+            $limit = LimitsHelper::getUserLimits($user->id);
+            if ($limit === null || ! $limit->reports) {
+                return ['ok' => false, 'error' => LimitsHelper::getLimitExceededMessage('reports')];
+            }
+        }
+
+        $resolved = $this->resolveCustomer($args, $user);
+        if (! ($resolved['ok'] ?? false)) {
+            return $resolved;
+        }
+
+        /** @var Customer $customer */
+        $customer = $resolved['customer'];
+        $format = strtolower(trim((string) ($args['format'] ?? 'pdf')));
+        if (! in_array($format, ['pdf', 'excel'], true)) {
+            return ['ok' => false, 'error' => 'صيغة التصدير لازم تكون pdf أو excel.'];
+        }
+
+        $installmentId = (int) ($args['installment_id'] ?? 0);
+        if ($installmentId > 0) {
+            $owned = $this->ownedInstallment($installmentId, $user);
+            if (! $owned || (int) $owned->customer_id !== (int) $customer->id) {
+                return ['ok' => false, 'error' => 'القسط مش تابع للعميل ده.'];
+            }
+        }
+
+        $clientAction = [
+            'type' => 'download_statement',
+            'format' => $format,
+            'customer_id' => $customer->id,
+            'customer_name' => $customer->name,
+            'installment_id' => $installmentId > 0 ? $installmentId : null,
+        ];
+
+        return [
+            'ok' => true,
+            'result' => [
+                'status' => 'ready',
+                'format' => $format,
+                'customer_name' => $customer->name,
+                'message_ar' => $format === 'excel'
+                    ? 'جاهز تصدير كشف الحساب Excel لـ '.$customer->name.'.'
+                    : 'جاهز تصدير كشف الحساب PDF لـ '.$customer->name.'.',
+            ],
+            'client_action' => $clientAction,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{ok: bool, result?: array<string, mixed>, error?: string, client_action?: array<string, mixed>, navigation?: array<string, mixed>|null}
+     */
+    private function preparePaymentReceipt(array $args, User $user): array
+    {
+        $itemId = (int) ($args['item_id'] ?? 0);
+        $installmentId = (int) ($args['installment_id'] ?? 0);
+        $mode = strtolower(trim((string) ($args['mode'] ?? 'view')));
+        if (! in_array($mode, ['view', 'share'], true)) {
+            $mode = 'view';
+        }
+
+        $item = null;
+        if ($itemId > 0) {
+            $item = InstallmentItem::query()
+                ->with(['installment.customer'])
+                ->find($itemId);
+        } elseif ($installmentId > 0) {
+            $item = InstallmentItem::query()
+                ->with(['installment.customer'])
+                ->where('installment_id', $installmentId)
+                ->where(function ($q) {
+                    $q->where('status', 'paid')
+                        ->orWhere('paid_amount', '>', 0);
+                })
+                ->orderByDesc('paid_at')
+                ->orderByDesc('id')
+                ->first();
+        } else {
+            $resolved = $this->resolveCustomer($args, $user);
+            if (! ($resolved['ok'] ?? false)) {
+                return $resolved;
+            }
+            /** @var Customer $customer */
+            $customer = $resolved['customer'];
+            $item = InstallmentItem::query()
+                ->with(['installment.customer'])
+                ->whereHas('installment', function ($q) use ($user, $customer) {
+                    $q->where('customer_id', $customer->id)
+                        ->when(! $user->canManageMerchantData(), fn ($inner) => $inner->where('user_id', $user->id));
+                })
+                ->where(function ($q) {
+                    $q->where('status', 'paid')
+                        ->orWhere('paid_amount', '>', 0);
+                })
+                ->orderByDesc('paid_at')
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        if (! $item || ! $item->installment) {
+            return ['ok' => false, 'error' => 'مفيش دفعة مدفوعة أقدر أطلع ليها وصل.'];
+        }
+
+        $installment = $this->ownedInstallment((int) $item->installment_id, $user);
+        if (! $installment) {
+            return ['ok' => false, 'error' => 'القسط مش تابع لحسابك.'];
+        }
+
+        $paid = round((float) ($item->paid_amount ?? 0), 2);
+        if ($item->status !== 'paid' && $paid <= 0) {
+            return ['ok' => false, 'error' => 'القسط ده لسه متدفعش — الوصل بيتطلع للمدفوع بس.'];
+        }
+
+        return [
+            'ok' => true,
+            'result' => [
+                'status' => 'ready',
+                'mode' => $mode,
+                'customer_name' => $installment->customer?->name,
+                'installment_name' => $installment->name,
+                'paid_amount' => $item->status === 'paid'
+                    ? round((float) $item->amount, 2)
+                    : $paid,
+                'paid_at' => $item->paid_at?->toDateString(),
+                'message_ar' => $mode === 'share'
+                    ? 'جاهز مشاركة وصل الدفع.'
+                    : 'جاهز عرض وصل الدفع.',
+            ],
+            'client_action' => [
+                'type' => 'payment_receipt',
+                'mode' => $mode,
+                'installment_id' => $installment->id,
+                'item_id' => $item->id,
+            ],
+            'navigation' => [
+                'screen' => 'InstallmentDetail',
+                'params' => [
+                    'id' => $installment->id,
+                    'openReceiptItemId' => $item->id,
+                ],
             ],
         ];
     }
@@ -529,8 +769,13 @@ class AssistantToolRunner
                 'customer_id' => $installment->customer_id,
                 'customer_name' => $installment->customer?->name,
                 'total_amount' => (float) $installment->total_amount,
+                'invoice_price' => $installment->invoice_price !== null ? (float) $installment->invoice_price : null,
+                'down_payment' => $installment->down_payment !== null ? (float) $installment->down_payment : null,
                 'months' => (int) $installment->months,
                 'status' => $installment->status,
+                'start_date' => $installment->start_date?->toDateString(),
+                'notes' => $installment->notes,
+                'has_attachment' => filled($installment->attachment_path),
             ],
         ];
     }
@@ -829,6 +1074,8 @@ class AssistantToolRunner
 
         $installmentArgs = [
             'total_amount' => $args['total_amount'] ?? null,
+            'invoice_price' => $args['invoice_price'] ?? null,
+            'down_payment' => $args['down_payment'] ?? null,
             'months' => $args['months'] ?? null,
             'start_date' => $args['start_date'] ?? null,
             'start_months_ago' => $args['start_months_ago'] ?? null,
@@ -866,6 +1113,8 @@ class AssistantToolRunner
             $this->customerPreview($customerPayload),
             [
                 'total_amount' => $installmentPayload['total_amount'],
+                'invoice_price' => $installmentPayload['invoice_price'] ?? null,
+                'down_payment' => $installmentPayload['down_payment'] ?? null,
                 'months' => $installmentPayload['months'],
                 'start_date' => $installmentPayload['start_date'],
                 'prepaid_months' => $prepaid,
@@ -1364,9 +1613,18 @@ class AssistantToolRunner
             return ['ok' => false, 'error' => $prepaid['error']];
         }
 
+        $invoicePrice = array_key_exists('invoice_price', $args) && $args['invoice_price'] !== null && $args['invoice_price'] !== ''
+            ? round((float) $args['invoice_price'], 2)
+            : null;
+        $downPayment = array_key_exists('down_payment', $args) && $args['down_payment'] !== null && $args['down_payment'] !== ''
+            ? round((float) $args['down_payment'], 2)
+            : null;
+
         $payload = [
             'customer_id' => $customerId,
             'total_amount' => round((float) ($args['total_amount'] ?? 0), 2),
+            'invoice_price' => $invoicePrice,
+            'down_payment' => $downPayment,
             'months' => $months,
             'start_date' => $startDate,
             'name' => $this->nullableString($args['name'] ?? null),
@@ -1377,6 +1635,8 @@ class AssistantToolRunner
 
         $rules = [
             'total_amount' => ['required', 'numeric', 'min:0.01'],
+            'invoice_price' => ['nullable', 'numeric', 'min:0'],
+            'down_payment' => ['nullable', 'numeric', 'min:0'],
             'months' => ['required', 'integer', 'min:1', 'max:120'],
             'start_date' => ['required', 'date'],
             'name' => ['nullable', 'string', 'max:255'],
