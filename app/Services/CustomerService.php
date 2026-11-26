@@ -293,17 +293,29 @@ class CustomerService implements CustomerServiceInterface
      */
     public function getCustomerStats(Customer $customer): array
     {
-        $installments = $customer->installments();
+        $allInstallments = $customer->installments()->with('items')->get();
+
+        $totalAmount = $allInstallments->sum(function ($inst) {
+            $invoice = (float) ($inst->invoice_price ?? 0);
+            return $invoice > 0 ? $invoice : (float) ($inst->total_amount ?? 0);
+        });
+
+        $totalDownPayment = $allInstallments->sum(fn ($inst) => (float) ($inst->down_payment ?? 0));
+
+        $paidItemsAmount = $allInstallments->sum(function ($inst) {
+            return $inst->items->sum(fn ($item) => (float) ($item->paid_amount ?? 0));
+        });
+
+        $paidAmount = $totalDownPayment + $paidItemsAmount;
+        $remainingAmount = max(0, $totalAmount - $paidAmount);
 
         $stats = [
-            'total_installments' => $installments->count(),
-            'active_installments' => $installments->where('status', 'active')->count(),
-            'total_amount' => $installments->sum('total_amount'),
-            'paid_amount' => $installments->with('items')
-                ->get()
-                ->sum(function ($installment) {
-                    return $installment->items->sum(fn ($item) => (float) ($item->paid_amount ?? 0));
-                }),
+            'total_installments' => $allInstallments->count(),
+            'active_installments' => $allInstallments->where('status', 'active')->count(),
+            'completed_installments' => $allInstallments->where('status', 'completed')->count(),
+            'total_amount' => round($totalAmount, 2),
+            'paid_amount' => round($paidAmount, 2),
+            'remaining_amount' => round($remainingAmount, 2),
         ];
 
         $portalBreakdown = $this->getClientPortalInstallmentBreakdown($customer);
