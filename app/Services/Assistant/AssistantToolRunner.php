@@ -10,6 +10,7 @@ use App\Models\InstallmentItem;
 use App\Models\User;
 use App\Services\CustomerService;
 use App\Services\InstallmentService;
+use App\Services\Reports\ReportQueryService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -23,6 +24,7 @@ class AssistantToolRunner
         private readonly CustomerService $customerService,
         private readonly InstallmentService $installmentService,
         private readonly PendingActionStore $pendingActionStore,
+        private readonly ReportQueryService $reportQueryService,
     ) {}
 
     /**
@@ -219,6 +221,36 @@ class AssistantToolRunner
                     'required' => ['paid_amount'],
                 ],
             ],
+            [
+                'name' => 'generate_report',
+                'description' => 'Generate a report inline in chat. Available reports: overdue (أقساط متأخرة), aging (أعمار المتأخرات), due_soon (مستحق قريباً). Returns summary + data rows to present in chat. Use this instead of open_screen for reports.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'report_key' => [
+                            'type' => 'string',
+                            'description' => 'One of: overdue, aging, due_soon',
+                        ],
+                        'days' => [
+                            'type' => 'integer',
+                            'description' => 'For due_soon only: number of days ahead (default 14)',
+                        ],
+                        'limit' => [
+                            'type' => 'integer',
+                            'description' => 'Max rows to show in chat (default 10, max 20)',
+                        ],
+                    ],
+                    'required' => ['report_key'],
+                ],
+            ],
+            [
+                'name' => 'get_business_summary',
+                'description' => 'Get overall business stats: total customers, installments, amounts, overdue count, collection rate. Use for dashboard-style questions like «إيه الأخبار» or «ملخص الشغل» or «إيه آخر الأرقام».',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [],
+                ],
+            ],
         ];
     }
 
@@ -242,6 +274,8 @@ class AssistantToolRunner
             'propose_create_installment' => $this->proposeCreateInstallment($args, $user),
             'propose_create_customer_with_installment' => $this->proposeCreateCustomerWithInstallment($args, $user),
             'propose_pay_installment_item' => $this->proposePay($args, $user),
+            'generate_report' => $this->generateReport($args, $user),
+            'get_business_summary' => $this->getBusinessSummary($user),
             default => ['ok' => false, 'error' => "Unknown tool: {$name}"],
         };
     }
@@ -349,9 +383,6 @@ class AssistantToolRunner
                 'count' => count($rows),
                 'customers' => $rows,
             ],
-            'navigation' => [
-                'screen' => 'CustomerList',
-            ],
         ];
     }
 
@@ -376,10 +407,6 @@ class AssistantToolRunner
                 'governorate' => $customer->governorate,
                 'governorate_label' => GovernorateHelper::label($customer->governorate),
                 'address' => $customer->address,
-            ],
-            'navigation' => [
-                'screen' => 'CustomerDetail',
-                'params' => ['id' => $customer->id],
             ],
         ];
     }
@@ -480,10 +507,6 @@ class AssistantToolRunner
                 'overdue_items_count' => $overdueCount,
                 'plans' => $plans,
             ],
-            'navigation' => [
-                'screen' => 'CustomerDetail',
-                'params' => ['id' => $customer->id],
-            ],
         ];
     }
 
@@ -508,10 +531,6 @@ class AssistantToolRunner
                 'total_amount' => (float) $installment->total_amount,
                 'months' => (int) $installment->months,
                 'status' => $installment->status,
-            ],
-            'navigation' => [
-                'screen' => 'InstallmentDetail',
-                'params' => ['id' => $installment->id],
             ],
         ];
     }
@@ -870,6 +889,101 @@ class AssistantToolRunner
                 'type' => 'create_customer_with_installment',
                 'summary_ar' => $summary,
                 'payload_preview' => $preview,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{ok: bool, result?: array<string, mixed>, error?: string}
+     */
+    private function generateReport(array $args, User $user): array
+    {
+        $key = strtolower(trim((string) ($args['report_key'] ?? '')));
+        if (! in_array($key, ['overdue', 'aging', 'due_soon'], true)) {
+            return ['ok' => false, 'error' => 'تقرير غير معروف. التقارير المتاحة: overdue, aging, due_soon'];
+        }
+
+        $limit = max(1, min(20, (int) ($args['limit'] ?? 10)));
+        $days = max(1, min(90, (int) ($args['days'] ?? 14)));
+
+        try {
+            $report = $this->reportQueryService->run($user, $key, [
+                'page' => 1,
+                'per_page' => $limit,
+                'days' => $days,
+            ]);
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'error' => 'فشل تحميل التقرير: '.$e->getMessage()];
+        }
+
+        $titles = [
+            'overdue' => 'أقساط متأخرة',
+            'aging' => 'أعمار المتأخرات',
+            'due_soon' => 'مستحق قريباً',
+        ];
+
+        return [
+            'ok' => true,
+            'result' => [
+                'report_title' => $titles[$key] ?? $key,
+                'summary' => $report['summary'] ?? [],
+                'columns' => $report['columns'] ?? [],
+                'rows' => $report['rows'] ?? [],
+                'total_rows' => $report['meta']['total'] ?? 0,
+                'showing' => min($limit, count($report['rows'] ?? [])),
+            ],
+        ];
+    }
+
+    /**
+     * @return array{ok: bool, result?: array<string, mixed>, error?: string}
+     */
+    private function getBusinessSummary(User $user): array
+    {
+        $isOwner = $user->canManageMerchantData();
+
+        $totalCustomers = Customer::query()
+            ->when(! $isOwner, fn ($q) => $q->where('user_id', $user->id))
+            ->count();
+
+        $installments = Installment::query()
+            ->when(! $isOwner, fn ($q) => $q->where('user_id', $user->id))
+            ->selectRaw('COUNT(*) as total_count')
+            ->selectRaw("SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_count")
+            ->selectRaw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_count")
+            ->selectRaw('SUM(total_amount) as total_amount')
+            ->first();
+
+        $today = now()->startOfDay();
+
+        $itemStats = InstallmentItem::query()
+            ->join('installments', 'installment_items.installment_id', '=', 'installments.id')
+            ->when(! $isOwner, fn ($q) => $q->where('installments.user_id', $user->id))
+            ->selectRaw('SUM(installment_items.paid_amount) as total_paid')
+            ->selectRaw("SUM(CASE WHEN installment_items.status IN ('pending','partial','overdue') AND installment_items.due_date < ? THEN 1 ELSE 0 END) as overdue_count", [$today])
+            ->selectRaw("SUM(CASE WHEN installment_items.status IN ('pending','partial','overdue') AND installment_items.due_date < ? THEN installment_items.amount - COALESCE(installment_items.paid_amount, 0) ELSE 0 END) as overdue_amount", [$today])
+            ->selectRaw("SUM(CASE WHEN installment_items.status IN ('pending','partial') AND installment_items.due_date >= ? AND installment_items.due_date <= ? THEN 1 ELSE 0 END) as due_soon_count", [$today, now()->addDays(7)->endOfDay()])
+            ->first();
+
+        $totalAmount = round((float) ($installments->total_amount ?? 0), 2);
+        $totalPaid = round((float) ($itemStats->total_paid ?? 0), 2);
+        $collectionRate = $totalAmount > 0 ? round(($totalPaid / $totalAmount) * 100, 1) : 0;
+
+        return [
+            'ok' => true,
+            'result' => [
+                'total_customers' => (int) $totalCustomers,
+                'total_installments' => (int) ($installments->total_count ?? 0),
+                'active_installments' => (int) ($installments->active_count ?? 0),
+                'completed_installments' => (int) ($installments->completed_count ?? 0),
+                'total_amount' => $totalAmount,
+                'total_paid' => $totalPaid,
+                'total_remaining' => round($totalAmount - $totalPaid, 2),
+                'collection_rate' => $collectionRate,
+                'overdue_items_count' => (int) ($itemStats->overdue_count ?? 0),
+                'overdue_amount' => round((float) ($itemStats->overdue_amount ?? 0), 2),
+                'due_soon_count' => (int) ($itemStats->due_soon_count ?? 0),
             ],
         ];
     }
